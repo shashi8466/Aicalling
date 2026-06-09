@@ -28,7 +28,9 @@ module.exports = {
 
   google: {
     clientEmail: process.env.GOOGLE_CLIENT_EMAIL,
-    privateKey:  (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+    privateKey:  (process.env.GOOGLE_PRIVATE_KEY || '')
+                   .replace(/^"|"$/g, '') // strip leading and trailing double quotes if added by cloud env managers
+                   .replace(/\\n/g, '\n'),
     sheetsId:    process.env.GOOGLE_SHEETS_ID,
     calendarId:  process.env.GOOGLE_CALENDAR_ID || 'primary',
   },
