@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Prep Pundits – AI Admissions Agent</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Login Screen -->
+  <div id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="logo-icon">🎓</div>
+        <h1>Test Prep Pundits</h1>
+        <p>AI Admissions Agent Dashboard</p>
+      </div>
+      <form id="loginForm">
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="loginEmail" placeholder="admin@testpreppundits.com" required>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="loginPassword" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn-primary btn-full">Sign In</button>
+        <p id="loginError" class="error-msg" style="display:none"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- Main Dashboard -->
+  <div id="dashboard" style="display:none">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <span class="logo-emoji">🎓</span>
+        <div>
+          <div class="sidebar-brand">Test Prep Pundits</div>
+          <div class="sidebar-sub">AI Admissions Agent</div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" data-view="overview">
+          <span class="nav-icon">📊</span> Overview
+        </a>
+        <a href="#" class="nav-item" data-view="leads">
+          <span class="nav-icon">👥</span> Leads
+          <span id="navHotCount" class="nav-badge hot" style="display:none">0</span>
+        </a>
+        <a href="#" class="nav-item" data-view="calls">
+          <span class="nav-icon">📞</span> Call Activity
+        </a>
+        <a href="#" class="nav-item" data-view="meetings">
+          <span class="nav-icon">📅</span> Meetings
+        </a>
+        <a href="#" class="nav-item admin-only" data-view="analytics">
+          <span class="nav-icon">📈</span> Analytics
+        </a>
+        <a href="#" class="nav-item admin-only" data-view="settings">
+          <span class="nav-icon">⚙️</span> Settings
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <div id="userInfo" class="user-info"></div>
+        <button id="logoutBtn" class="btn-logout">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Header -->
+      <header class="top-header">
+        <div class="header-left">
+          <h2 id="pageTitle">Overview</h2>
+          <div id="agentStatus" class="agent-status">
+            <span class="status-dot active"></span>
+            <span>Sarah (AI Agent) Active</span>
+          </div>
+        </div>
+        <div class="header-right">
+          <button class="btn-secondary" id="refreshBtn">↻ Refresh</button>
+          <button class="btn-primary admin-only" id="triggerPollBtn">⚡ Poll Sheets Now</button>
+        </div>
+      </header>
+
+      <!-- Overview View -->
+      <div id="viewOverview" class="view active">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon">👥</div>
+            <div class="stat-value" id="statTotal">—</div>
+            <div class="stat-label">Total Leads</div>
+          </div>
+          <div class="stat-card hot-card">
+            <div class="stat-icon">🔥</div>
+            <div class="stat-value" id="statHot">—</div>
+            <div class="stat-label">Hot Leads</div>
+          </div>
+          <div class="stat-card warm-card">
+            <div class="stat-icon">⚡</div>
+            <div class="stat-value" id="statWarm">—</div>
+            <div class="stat-label">Warm Leads</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">📅</div>
+            <div class="stat-value" id="statMeetings">—</div>
+            <div class="stat-label">Meetings Booked</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">📞</div>
+            <div class="stat-value" id="statCalling">—</div>
+            <div class="stat-label">Calls Active</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">⭐</div>
+            <div class="stat-value" id="statAvgScore">—</div>
+            <div class="stat-label">Avg Lead Score</div>
+          </div>
+        </div>
+
+        <!-- Recent Leads -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Recent Leads</h3>
+            <a href="#" class="view-all" data-view="leads">View All →</a>
+          </div>
+          <div id="recentLeads" class="leads-list"></div>
+        </div>
+
+        <!-- Activity Feed -->
+        <div class="card" style="margin-top:20px">
+          <div class="card-header"><h3>Live Activity Feed</h3></div>
+          <div id="activityFeed" class="activity-feed">
+            <div class="activity-empty">Monitoring for new leads and calls...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Leads View -->
+      <div id="viewLeads" class="view">
+        <div class="leads-toolbar">
+          <input type="text" id="leadSearch" class="search-input" placeholder="Search leads by name, email, phone...">
+          <select id="statusFilter" class="filter-select">
+            <option value="">All Statuses</option>
+            <option value="new">New</option>
+            <option value="queued">Queued</option>
+            <option value="calling">Calling</option>
+            <option value="contacted">Contacted</option>
+            <option value="qualified">Qualified</option>
+            <option value="meeting-scheduled">Meeting Scheduled</option>
+            <option value="meeting-completed">Meeting Completed</option>
+            <option value="enrolled">Enrolled</option>
+            <option value="lost">Lost</option>
+          </select>
+          <select id="categoryFilter" class="filter-select">
+            <option value="">All Categories</option>
+            <option value="hot">🔥 Hot</option>
+            <option value="warm">⚡ Warm</option>
+            <option value="cold">❄️ Cold</option>
+          </select>
+        </div>
+        <div class="card" style="padding:0">
+          <table class="leads-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Grade</th>
+                <th>Program</th>
+                <th>Phone</th>
+                <th>Score</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="leadsTableBody">
+              <tr><td colspan="7" class="loading-cell">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="leadsPagination" class="pagination"></div>
+      </div>
+
+      <!-- Calls View -->
+      <div id="viewCalls" class="view">
+        <div class="card">
+          <div class="card-header"><h3>Call History</h3></div>
+          <div id="callHistory" class="call-list"></div>
+        </div>
+      </div>
+
+      <!-- Meetings View -->
+      <div id="viewMeetings" class="view">
+        <div class="card">
+          <div class="card-header"><h3>Scheduled Consultations</h3></div>
+          <div id="meetingsList" class="meetings-list"></div>
+        </div>
+      </div>
+
+      <!-- Analytics View -->
+      <div id="viewAnalytics" class="view">
+        <div class="stats-grid" id="analyticsGrid"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Lead Detail Modal -->
+  <div id="leadModal" class="modal" style="display:none">
+    <div class="modal-backdrop" id="modalBackdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalLeadName">Lead Details</h3>
+        <button class="modal-close" id="modalClose">✕</button>
+      </div>
+      <div id="modalBody" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Toast notifications -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

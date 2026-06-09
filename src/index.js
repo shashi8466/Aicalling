@@ -1,0 +1,112 @@
+/**
+ * Test Prep Pundits – AI Admissions Agent
+ * Entry point — auto-starts localtunnel so Twilio webhooks always work.
+ *
+ * Pipeline:
+ *   Google Sheets → Twilio call → OpenAI/Claude → Qualification
+ *   → Google Calendar booking → Sheet update → Email follow-up
+ */
+require('dotenv').config();
+const express  = require('express');
+const mongoose = require('mongoose');
+const cors     = require('cors');
+const helmet   = require('helmet');
+const path     = require('path');
+const fs       = require('fs');
+
+const cfg    = require('./config');
+const logger = require('./logger');
+const poller = require('./jobs/poller');
+
+const webhookRouter = require('./routes/webhook');
+
+const app = express();
+
+// ── Middleware ──────────────────────────────────────────────────────────────
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cors());
+app.use(express.urlencoded({ extended: false }));   // Twilio posts form-encoded
+app.use(express.json());
+
+app.use((req, res, next) => {
+  logger.debug(`${req.method} ${req.path}`);
+  next();
+});
+
+// ── Routes ──────────────────────────────────────────────────────────────────
+app.use('/webhook', webhookRouter);
+
+app.get('/health', (_req, res) =>
+  res.json({ status: 'ok', uptime: Math.round(process.uptime()), ts: new Date() })
+);
+
+app.post('/admin/poll', (_req, res) => {
+  poller.pollOnce();
+  res.json({ message: 'Poll triggered' });
+});
+
+const dashDir = path.join(__dirname, '../dashboard');
+if (fs.existsSync(dashDir)) app.use('/', express.static(dashDir));
+
+// ── Global error handler ────────────────────────────────────────────────────
+app.use((err, req, res, _next) => {
+  logger.error('Unhandled error', { msg: err.message, path: req.path });
+  res.status(500).send('<Response><Say>We are experiencing a technical issue. Please call back shortly.</Say><Hangup/></Response>');
+});
+
+// ── Tunnel (serveo.net SSH — no browser bypass, no account needed) ───────────
+const tunnelMgr = require('./utils/tunnel');
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+async function boot() {
+  try {
+    // 1. MongoDB
+    await mongoose.connect(cfg.db.uri);
+    logger.info('MongoDB connected ✅');
+
+    // 2. Google Sheet headers
+    const sheetsSvc = require('./services/sheetsService');
+    await sheetsSvc.ensureHeaders().catch(() => {});
+
+    // 3. HTTP server
+    await new Promise((resolve) => {
+      app.listen(cfg.server.port, () => {
+        logger.info(`🚀 Agent listening on port ${cfg.server.port}`);
+        resolve();
+      });
+    });
+
+    // 4. SSH Tunnel via serveo.net (no bypass page — Twilio webhooks work directly)
+    logger.info('Starting public tunnel (serveo.net)…');
+    const tunnelUrl = await tunnelMgr.startTunnel(cfg.server.port).catch(e => {
+      logger.error('Tunnel error:', e.message);
+      return null;
+    });
+    if (tunnelUrl) {
+      logger.info(`📡 Twilio webhooks → ${tunnelUrl}/webhook/call/start`);
+    } else {
+      logger.warn(`⚠️  Tunnel not started — using BASE_URL from .env: ${cfg.server.baseUrl}`);
+    }
+
+    logger.info(`📞 Twilio caller ID : ${cfg.twilio.phoneNumber}`);
+
+    // 5. Background jobs (sheets polling, reminders)
+    poller.start();
+
+  } catch (err) {
+    logger.error('Boot failed', { msg: err.message });
+    process.exit(1);
+  }
+}
+
+async function shutdown(signal) {
+  logger.info(`${signal} received — shutting down…`);
+  tunnelMgr.stopTunnel();
+  poller.stop();
+  await mongoose.connection.close();
+  process.exit(0);
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));
+
+boot();
