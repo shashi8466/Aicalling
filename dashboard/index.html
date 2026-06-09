@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Test Prep Pundits — Admin Dashboard</title>
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<link rel="alternate icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/favicon.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -30,14 +30,20 @@
   --danger:  #ef4444;
 }
 body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-.app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+.app { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
 
 /* Sidebar */
 .sidebar { background: var(--panel); border-right: 1px solid var(--border); padding: 24px 16px; position: sticky; top: 0; height: 100vh; }
-.brand { display:flex; align-items:center; gap:10px; padding: 0 8px 24px; border-bottom: 1px solid var(--border); }
-.brand .emoji { font-size: 28px; }
-.brand-text .title { font-size: 15px; font-weight: 700; }
-.brand-text .sub { font-size: 11px; color: var(--muted); }
+.brand { display:flex; flex-direction:column; align-items:center; gap:10px; padding: 8px 8px 24px; border-bottom: 1px solid var(--border); }
+.brand img.logo { width: 180px; height: auto; max-width: 100%; background: #fff; padding: 8px; border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+.brand-text { text-align: center; }
+.brand-text .title { font-size: 13px; font-weight: 700; color: var(--text); }
+.brand-text .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+/* Header logo */
+.header-logo { display:flex; align-items:center; gap:14px; }
+.header-logo img { width: 48px; height: 48px; background: #fff; padding: 4px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+.header-logo .head-text h1 { font-size: 20px; font-weight: 700; line-height: 1.2; }
 .nav { margin-top: 20px; }
 .nav a {
   display:flex; align-items:center; gap:12px; padding:11px 14px;
@@ -199,10 +205,10 @@ audio { width: 100%; margin-top: 10px; }
   <!-- ─── SIDEBAR ─── -->
   <aside class="sidebar">
     <div class="brand">
-      <div class="emoji">🎓</div>
+      <img src="/assets/logo.png" alt="Test Prep Pundits AI Admissions Agent" class="logo">
       <div class="brand-text">
-        <div class="title">Test Prep Pundits</div>
-        <div class="sub">Admin Dashboard</div>
+        <div class="title">Admin Dashboard</div>
+        <div class="sub">AI Admissions Agent</div>
       </div>
     </div>
     <nav class="nav">
@@ -218,9 +224,12 @@ audio { width: 100%; margin-top: 10px; }
   <!-- ─── MAIN ─── -->
   <main class="main">
     <header class="header">
-      <div>
-        <h1 id="pageTitle">Overview</h1>
-        <span class="status-pill"><span class="status-dot"></span> Agent Active · Shashi Online</span>
+      <div class="header-logo">
+        <img src="/assets/logo.png" alt="Logo">
+        <div class="head-text">
+          <h1 id="pageTitle">Overview</h1>
+          <span class="status-pill"><span class="status-dot"></span> Agent Active · Shashi Online</span>
+        </div>
       </div>
       <div class="toolbar">
         <button class="btn btn-secondary btn-sm" onclick="refreshAll()">↻ Refresh</button>

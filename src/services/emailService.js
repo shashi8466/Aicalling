@@ -137,8 +137,9 @@ li{margin-bottom:6px}
 <body>
 <div class="wrap">
   <div class="hdr">
-    <h1>🎓 Test Prep Pundits</h1>
-    <p>Your Path to Academic Excellence</p>
+    <img src="${cfg.server.baseUrl || cfg.company.website}/assets/logo.png" alt="Test Prep Pundits" style="width:120px;height:auto;background:#fff;padding:10px;border-radius:12px;display:inline-block;margin-bottom:8px"/>
+    <h1>Test Prep Pundits</h1>
+    <p>AI Admissions Agent · Your Path to Academic Excellence</p>
   </div>
   <div class="body">${inner}</div>
   <div class="ftr">
