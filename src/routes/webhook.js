@@ -94,18 +94,62 @@ router.post('/call/respond', async (req, res) => {
       ));
     }
 
-    // Detect end-call intent
-    const endPhrases = ['goodbye','bye','hang up','not interested','stop calling','remove me','do not call','not right now and i mean it'];
-    if (endPhrases.some(p => speech.toLowerCase().includes(p))) {
-      await _finaliseCall(lead, session, req.body.CallSid, 'ended-by-caller');
+    // Detect ONLY explicit decline — never end the call on weak signals.
+    // The caller must clearly and unambiguously refuse.
+    // Soft signals ("maybe", "let me think") are intentionally NOT here — we keep trying.
+    const explicitDecline = [
+      'not interested',
+      'remove me',
+      'do not call',
+      "don't call",
+      'stop calling',
+      'never call',
+      'take me off',
+      "i'm not interested",
+      "i am not interested",
+    ];
+    const meetingBooked = !!session.meetingBooked;
+    const lowSpeech = speech.toLowerCase();
+
+    // Allow goodbye/bye to end ONLY if meeting is already booked
+    if (meetingBooked && /\b(goodbye|bye|thanks bye|all done|that's it|nothing else|no questions)\b/.test(lowSpeech)) {
+      await _finaliseCall(lead, session, req.body.CallSid, 'completed-after-booking');
+      const studentFirst = lead.fullName.split(' ')[0];
       return res.send(twilioSvc.twimlHangup(
-        `Thank you for your time, ${lead.fullName}. If you'd like to reconnect in the future, just visit ${cfg.company.website}. Have a wonderful day!`
+        `Thank you so much, ${studentFirst}'s consultation is all set! Have a wonderful day!`
+      ));
+    }
+
+    // Explicit decline → end the call gracefully
+    if (explicitDecline.some(p => lowSpeech.includes(p))) {
+      await _finaliseCall(lead, session, req.body.CallSid, 'ended-by-caller-decline');
+      return res.send(twilioSvc.twimlHangup(
+        `No problem at all, ${lead.fullName}. Thanks for your time and have a wonderful day!`
       ));
     }
 
     // Add user turn to history
     session.history.push({ role: 'user', content: speech });
     session.turnCount++;
+
+    // If meeting NOT booked AND we've had many turns, proactively offer slots
+    const hasTimeMention = /\b(morning|afternoon|evening|monday|tuesday|wednesday|thursday|friday|saturday|sunday|am|pm|o'clock|tomorrow|today|weekend|weekday|next week)\b/i.test(speech);
+    if (!session.meetingBooked && hasTimeMention && session.turnCount > 2) {
+      logger.info(`Caller mentioned time — proactively offering slots`);
+      return res.send(twilioSvc.twimlStart(
+        `Great, let me pull up some times that work.`,
+        slotsUrl(cfg.server.baseUrl, leadId)
+      ));
+    }
+
+    // Safety net: too many turns without booking — escalate to slot offering
+    if (!session.meetingBooked && session.turnCount >= 12) {
+      logger.warn(`Reached turn ${session.turnCount} without booking. Forcing slot offering.`);
+      return res.send(twilioSvc.twimlStart(
+        `Let me share some times that would work for a quick 10-minute chat — that way ${lead.fullName.split(' ')[0]} doesn't lose any momentum.`,
+        slotsUrl(cfg.server.baseUrl, leadId)
+      ));
+    }
 
     // Get AI response
     const aiReply = await aiSvc.chat({ lead, history: session.history.slice(-12), userMessage: speech });
@@ -126,8 +170,20 @@ router.post('/call/respond', async (req, res) => {
 
     if (aiReply.includes('[END_CALL]')) {
       const clean = aiReply.replace('[END_CALL]', '').trim();
-      await _finaliseCall(lead, session, req.body.CallSid, 'completed');
-      return res.send(twilioSvc.twimlHangup(clean || 'Thank you for your time. Have a wonderful day!'));
+
+      // GOLDEN RULE: only allow [END_CALL] if meeting is booked OR they explicitly declined
+      if (session.meetingBooked) {
+        await _finaliseCall(lead, session, req.body.CallSid, 'completed-after-booking');
+        return res.send(twilioSvc.twimlHangup(clean || 'Thank you for your time. Have a wonderful day!'));
+      }
+
+      // No meeting yet — override the AI and PUSH for one instead of hanging up
+      logger.warn(`[END_CALL] suppressed — meeting not booked for ${lead.fullName}. Forcing slot offering.`);
+      const studentFirst = lead.fullName.split(' ')[0];
+      return res.send(twilioSvc.twimlStart(
+        `Before we wrap up, I'd really hate for ${studentFirst} to miss out on this opportunity. Let me find a time that works for you.`,
+        slotsUrl(cfg.server.baseUrl, leadId)
+      ));
     }
 
     res.send(twilioSvc.twimlRespond(aiReply, respondUrl(cfg.server.baseUrl, leadId)));
@@ -149,7 +205,7 @@ router.post('/call/slots', async (req, res) => {
     const lead  = await Lead.findById(leadId);
     if (!lead) return res.send(twilioSvc.twimlHangup());
 
-    const slots = await calendarSvc.getAvailableSlots(3);
+    const slots = await calendarSvc.getAvailableSlots(4);
     if (!slots.length) {
       return res.send(twilioSvc.twimlRespond(
         "I'm having trouble accessing our calendar right now. I'll have a counselor follow up with available times. Is email or a text message better for you?",
@@ -188,70 +244,192 @@ router.post('/call/book', async (req, res) => {
 
     if (!lead || !slots.length) return res.send(twilioSvc.twimlHangup());
 
-    // Determine which slot was chosen
+    // Determine which slot was chosen (supports up to 4 options + natural variants)
     let chosen = null;
-    if (speech.includes('first') || speech.includes('one') || speech.includes('1') || speech.includes('earlier') || speech.includes('sooner')) {
-      chosen = slots[0];
-    } else if (speech.includes('second') || speech.includes('two') || speech.includes('2') || speech.includes('later') || speech.includes('other')) {
-      chosen = slots[1] || slots[0];
-    } else if (speech.includes('third') || speech.includes('three') || speech.includes('3') || speech.includes('last')) {
-      chosen = slots[2] || slots[0];
-    } else if (speech.includes('yes') || speech.includes('sure') || speech.includes('ok') || speech.includes('works') || speech.includes('good')) {
+    const s = ' ' + speech + ' '; // pad for word boundary detection
+    if      (/\b(first|one|1|earlier|sooner)\b/.test(s))      chosen = slots[0];
+    else if (/\b(second|two|2|later)\b/.test(s))              chosen = slots[1] || slots[0];
+    else if (/\b(third|three|3)\b/.test(s))                   chosen = slots[2] || slots[0];
+    else if (/\b(fourth|four|4|last)\b/.test(s))              chosen = slots[3] || slots[slots.length - 1];
+    else if (/\b(today)\b/.test(s)) chosen = slots.find(sl => sl.displayTime.toLowerCase().includes('today'));
+    else if (/\b(tomorrow)\b/.test(s)) chosen = slots.find(sl => sl.displayTime.toLowerCase().includes('tomorrow'));
+    else if (/\b(yes|sure|ok|okay|works|good|sounds great|perfect)\b/.test(s)) chosen = slots[0];
+
+    // ── If caller says they want DIFFERENT times, offer fresh slots ───────
+    const wantsDifferent = /\b(different|other|another|else|next|later than|earlier than|change|reschedule)\b/.test(s);
+    if (!chosen && wantsDifferent) {
+      // Fetch a NEW set of slots — skip the ones already offered, pull from later in the week
+      const newSlots = await calendarSvc.getAvailableSlots(8);
+      const offered  = new Set(slots.map(sl => sl.start));
+      const fresh    = newSlots.filter(sl => !offered.has(sl.start)).slice(0, 4);
+
+      if (fresh.length) {
+        session.slots = fresh;
+        sessions.set(leadId, session);
+        return res.send(twilioSvc.twimlOfferSlots(
+          `Of course! Let me find some different options for you.`,
+          fresh,
+          bookUrl(cfg.server.baseUrl, leadId)
+        ));
+      }
+    }
+
+    // ── If caller hesitates ("maybe", "I'll think") — keep pressing gently ──
+    const isHesitant = /\b(maybe|think about|not sure|let me check|i'll get back|i need to)\b/.test(s);
+    if (!chosen && isHesitant) {
+      // Increment hesitation counter
+      session.hesitationCount = (session.hesitationCount || 0) + 1;
+      sessions.set(leadId, session);
+
+      if (session.hesitationCount === 1) {
+        return res.send(twilioSvc.twimlOfferSlots(
+          `Totally understand. These are just tentative — you can always reschedule. Here are the options again.`,
+          slots,
+          bookUrl(cfg.server.baseUrl, leadId)
+        ));
+      }
+      if (session.hesitationCount === 2) {
+        // Offer to find any time at all
+        return res.send(twilioSvc.twimlStart(
+          `No worries. Just tell me roughly when works for you — morning, afternoon, or evening — and what day, and I'll find a slot.`,
+          respondUrl(cfg.server.baseUrl, leadId)
+        ));
+      }
+      // After 3+ hesitations, last-resort: just book the first slot tentatively
       chosen = slots[0];
     }
 
+    // ── Still no choice → ask again WITHOUT hanging up ─────────────────
     if (!chosen) {
-      return res.send(twilioSvc.twimlStart(
-        `I'm sorry, I didn't catch which time you preferred. Please say "first", "second", or "third" to choose your slot.`,
-        bookUrl(cfg.server.baseUrl, leadId)
+      const attempts = (session.slotAttempts || 0) + 1;
+      session.slotAttempts = attempts;
+      sessions.set(leadId, session);
+
+      // On attempt 1: gentle re-ask with the same slots
+      if (attempts <= 2) {
+        return res.send(twilioSvc.twimlOfferSlots(
+          `I'm sorry, I didn't quite catch that. Could you just say option one, option two, option three, or option four?`,
+          slots,
+          bookUrl(cfg.server.baseUrl, leadId)
+        ));
+      }
+
+      // On attempt 3+: ask them to describe the time they want in their own words
+      if (attempts === 3) {
+        return res.send(twilioSvc.twimlStart(
+          `No worries — when would you like to chat? Just tell me a day and time that works, like "Friday afternoon" or "Tuesday morning".`,
+          respondUrl(cfg.server.baseUrl, leadId)
+        ));
+      }
+
+      // On attempt 4+: tentatively book the first slot, with permission to change
+      chosen = slots[0];
+      session.tentativeBooking = true;
+    }
+
+    // Book it — try calendar, but never crash the call if it fails
+    let booking = null;
+    let bookingError = null;
+    try {
+      booking = await calendarSvc.bookMeeting(lead, chosen);
+      logger.info(`✅ Meeting booked for ${lead.fullName}: ${booking.scheduledAt} (calendar: ${booking.calendarUsed})`);
+    } catch (err) {
+      bookingError = err.message;
+      logger.error(`❌ Meeting booking FAILED for ${lead.fullName}`, { msg: err.message });
+    }
+
+    const studentFirst = lead.fullName.split(' ')[0];
+
+    if (booking) {
+      // ── Booking succeeded ──
+      lead.meeting = {
+        googleEventId: booking.googleEventId,
+        meetLink:      booking.meetLink,
+        scheduledAt:   booking.scheduledAt,
+        status:        'scheduled',
+      };
+      lead.status      = 'meeting-scheduled';
+      lead.isQualified = true;
+
+      const { score, category } = scoreLead(lead);
+      lead.leadScore    = score;
+      lead.leadCategory = category;
+      await lead.save();
+
+      // 🔑 GOLDEN RULE: mark session so future turns know meeting is booked
+      session.meetingBooked = true;
+      sessions.set(leadId, session);
+
+      setImmediate(async () => {
+        try {
+          const moment = require('moment-timezone');
+          const scheduledET = moment(booking.scheduledAt).tz('America/New_York');
+          await sheetsSvc.updateRow(lead.sheetRowIndex, {
+            status:      'Meeting Scheduled',
+            score,
+            summary:     `Meeting booked for ${scheduledET.format('MMM Do [at] h:mm A z')}. Lead qualified.`,
+            meetingDate: scheduledET.format('YYYY-MM-DD'),
+            meetingTime: scheduledET.format('h:mm A z'),
+            meetLink:    booking.meetLink || '',
+          });
+          await emailSvc.sendMeetingConfirmation(lead);
+        } catch (e) {
+          logger.error('Post-booking tasks failed', { msg: e.message });
+        }
+      });
+
+      const confirmMsg =
+        `Perfect! I've scheduled ${studentFirst}'s free consultation for ${chosen.displayTime}. ` +
+        `You'll receive a confirmation email shortly with the Google Meet link, meeting details, and advisor information. ` +
+        `Do you have any questions before we finish?`;
+      // Use respond TwiML so we can hear their reply, not hang up immediately
+      return res.send(twilioSvc.twimlRespond(
+        confirmMsg,
+        respondUrl(cfg.server.baseUrl, leadId)
       ));
     }
 
-    // Book it
-    const booking = await calendarSvc.bookMeeting(lead, chosen);
-
+    // ── Booking failed but we still want a graceful call end ──
+    // Save lead with intent-to-book status; counselor follows up manually
     lead.meeting = {
-      googleEventId: booking.googleEventId,
-      meetLink:      booking.meetLink,
-      scheduledAt:   booking.scheduledAt,
-      status:        'scheduled',
+      scheduledAt: new Date(chosen.start),
+      status:      'pending-manual',
     };
-    lead.status      = 'meeting-scheduled';
+    lead.status      = 'qualified';
     lead.isQualified = true;
-
-    // Score update
-    const { score, category, breakdown } = scoreLead(lead);
+    const { score, category } = scoreLead(lead);
     lead.leadScore    = score;
     lead.leadCategory = category;
     await lead.save();
 
-    // ── Post-call async tasks ──────────────────────────────────────
+    // Mark session so call can end gracefully after this confirmation
+    session.meetingBooked = true;
+    sessions.set(leadId, session);
+
     setImmediate(async () => {
       try {
-        // 1. Sheet update
         await sheetsSvc.updateRow(lead.sheetRowIndex, {
-          status:  'Meeting Scheduled',
+          status:  'Pending Booking',
           score,
-          summary: `Meeting booked: ${booking.scheduledAt.toLocaleString()}. Score: ${score}/100.`,
+          summary: `Caller agreed to ${chosen.displayTime} — booking pending manual confirmation. Reason: ${bookingError}`,
         });
-        // 2. Email confirmation
-        await emailSvc.sendMeetingConfirmation(lead);
+        // Send manual-follow-up email
+        await emailSvc.sendMeetingConfirmation(lead).catch(() => {});
       } catch (e) {
-        logger.error('Post-booking tasks failed', { msg: e.message });
+        logger.error('Manual-booking sheet update failed', { msg: e.message });
       }
     });
 
-    const studentFirst = lead.fullName.split(' ')[0];
-    const confirmMsg =
-      `Perfect! I've scheduled ${studentFirst}'s free consultation for ${chosen.displayTime}. ` +
-      `You'll receive a confirmation email with the Google Meet link and all details shortly. ` +
-      `We're really looking forward to working with ${studentFirst}. Have a wonderful day!`;
+    const fallbackMsg =
+      `Wonderful! I've noted down ${chosen.displayTime} for ${studentFirst}'s consultation. ` +
+      `Our team will send you the confirmation email with the Google Meet link within the next few minutes. ` +
+      `Thanks so much, and have a great day!`;
+    return res.send(twilioSvc.twimlBookingConfirm(fallbackMsg));
 
-    return res.send(twilioSvc.twimlBookingConfirm(confirmMsg));
   } catch (err) {
-    logger.error('webhook/book error', { msg: err.message });
+    logger.error('webhook/book error', { msg: err.message, stack: err.stack?.split('\n').slice(0,3) });
     res.send(twilioSvc.twimlHangup(
-      "I'm sorry, I had a problem booking that slot. Our team will follow up by email to confirm a time. Thank you!"
+      "Thank you so much! Our team will follow up shortly by email to confirm your consultation time. Have a great day!"
     ));
   }
 });
@@ -333,7 +511,7 @@ router.post('/call/recording', async (req, res) => {
 async function _finaliseCall(lead, session, callSid, reason) {
   try {
     const transcript = (session.history || [])
-      .map(m => `${m.role === 'user' ? 'Caller' : 'Shashi Kumar'}: ${m.content}`)
+      .map(m => `${m.role === 'user' ? 'Caller' : 'AGENT'}: ${m.content}`)
       .join('\n');
 
     const sentiment  = detectSentiment(transcript);

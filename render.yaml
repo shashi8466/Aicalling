@@ -1,0 +1,77 @@
+# Render.com deployment config
+# Push this repo to GitHub, then on Render: New → Blueprint → connect repo.
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: testpreppundits-ai-agent
+    runtime: node
+    plan: free                         # upgrade to "starter" ($7/mo) for always-on
+    region: oregon                     # or singapore / frankfurt
+    buildCommand: npm install
+    startCommand: node src/index.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Server
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000"                 # Render uses 10000 by default
+      - key: SKIP_TUNNEL
+        value: "true"
+      - key: BASE_URL
+        sync: false                    # set this manually after first deploy → e.g. https://testpreppundits-ai-agent.onrender.com
+
+      # Twilio
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_PHONE_NUMBER
+        sync: false
+
+      # OpenAI
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: LLM_PROVIDER
+        value: openai
+
+      # Brevo
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_FROM_EMAIL
+        sync: false
+      - key: BREVO_FROM_NAME
+        sync: false
+
+      # Google Service Account
+      - key: GOOGLE_CLIENT_EMAIL
+        sync: false
+      - key: GOOGLE_PRIVATE_KEY
+        sync: false
+      - key: GOOGLE_SHEETS_ID
+        sync: false
+      - key: GOOGLE_CALENDAR_ID
+        value: primary
+
+      # MongoDB Atlas
+      - key: MONGODB_URI
+        sync: false
+
+      # Company
+      - key: COUNSELOR_NAME
+        value: Shashi Kumar
+      - key: COUNSELOR_EMAIL
+        sync: false
+      - key: COUNSELOR_PHONE
+        sync: false
+      - key: COMPANY_WEBSITE
+        value: https://testpreppundits.com
+
+      # Behaviour
+      - key: SHEETS_POLL_INTERVAL_SECONDS
+        value: "30"
+      - key: CALL_MAX_ATTEMPTS
+        value: "3"
+      - key: CALL_RETRY_DELAY_MINUTES
+        value: "60"

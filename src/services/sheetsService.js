@@ -20,14 +20,14 @@ class SheetsService {
     this.sheets        = google.sheets({ version: 'v4', auth });
     this.spreadsheetId = cfg.google.sheetsId;
     this.cols          = cfg.sheets.cols;
-    this.lastRow       = 1; // row 1 = header; we start scanning from row 2
   }
 
   /**
-   * Return new lead rows since the last poll.
-   * Each item maps exactly to Lead fields.
+   * Read ALL rows from the sheet every poll.
+   * Deduplication is done in the poller against MongoDB.
+   * This way edits/new rows are always detected, even if the server restarted.
    */
-  async getNewLeads() {
+  async getAllLeads() {
     try {
       const res = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
@@ -40,7 +40,8 @@ class SheetsService {
       const c   = this.cols;
       const out = [];
 
-      for (let i = this.lastRow; i < rows.length; i++) {
+      // Start from row 2 (skip header)
+      for (let i = 1; i < rows.length; i++) {
         const r = rows[i];
         if (!r || r.length < 3) continue;
 
@@ -60,36 +61,56 @@ class SheetsService {
           courseInterest: (r[c.courseInterest] || '').trim(),
           submissionDate: r[c.submissionDate]  ? new Date(r[c.submissionDate]) : new Date(),
           sheetRowIndex:  i + 1,   // 1-based for Sheets API
+          aiStatus:       (r[c.aiStatus] || '').trim(),  // existing status in sheet
         });
       }
 
-      this.lastRow = rows.length;
       return out;
     } catch (err) {
-      logger.error('Sheets.getNewLeads error', { msg: err.message });
+      logger.error('Sheets.getAllLeads error', { msg: err.message });
       return [];
     }
   }
 
+  /** Backward-compat alias */
+  async getNewLeads() { return this.getAllLeads(); }
+
   /**
-   * Write AI status, lead score and summary back to the sheet.
-   * Columns I, J, K, L  (indices 8–11).
+   * Write AI status + scoring + meeting fields back to the sheet.
+   * Columns I–O.
+   *
+   * Accepts: {
+   *   status, score, summary,
+   *   meetingDate, meetingTime, meetLink   (optional — only set when booking)
+   * }
    */
-  async updateRow(rowIndex, { status, score, summary }) {
+  async updateRow(rowIndex, opts = {}) {
+    const {
+      status      = '',
+      score       = '',
+      summary     = '',
+      meetingDate = '',
+      meetingTime = '',
+      meetLink    = '',
+    } = opts;
+
     try {
       await this.sheets.spreadsheets.values.batchUpdate({
         spreadsheetId: this.spreadsheetId,
         requestBody: {
           valueInputOption: 'USER_ENTERED',
           data: [
-            { range: `Sheet1!I${rowIndex}`, values: [[status  || '']] },
-            { range: `Sheet1!J${rowIndex}`, values: [[score   ?? '']] },
-            { range: `Sheet1!K${rowIndex}`, values: [[summary || '']] },
-            { range: `Sheet1!L${rowIndex}`, values: [[new Date().toLocaleString()]] },
+            { range: `Sheet1!I${rowIndex}`, values: [[status]] },
+            { range: `Sheet1!J${rowIndex}`, values: [[score]] },
+            { range: `Sheet1!K${rowIndex}`, values: [[summary]] },
+            ...(meetingDate ? [{ range: `Sheet1!L${rowIndex}`, values: [[meetingDate]] }] : []),
+            ...(meetingTime ? [{ range: `Sheet1!M${rowIndex}`, values: [[meetingTime]] }] : []),
+            ...(meetLink    ? [{ range: `Sheet1!N${rowIndex}`, values: [[meetLink]] }]    : []),
+            { range: `Sheet1!O${rowIndex}`, values: [[new Date().toLocaleString()]] },
           ],
         },
       });
-      logger.info(`Sheet row ${rowIndex} updated → status="${status}" score=${score}`);
+      logger.info(`Sheet row ${rowIndex} updated → "${status}" score=${score}${meetingDate ? ` | meeting=${meetingDate} ${meetingTime}` : ''}`);
     } catch (err) {
       logger.error('Sheets.updateRow error', { msg: err.message, rowIndex });
     }
@@ -100,9 +121,9 @@ class SheetsService {
     try {
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
-        range: 'Sheet1!I1:L1',
+        range: 'Sheet1!I1:O1',
         valueInputOption: 'USER_ENTERED',
-        requestBody: { values: [['AI Status', 'Lead Score', 'AI Summary', 'Last Updated']] },
+        requestBody: { values: [['AI Status', 'Lead Score', 'AI Summary', 'Meeting Date', 'Meeting Time', 'Meet Link', 'Last Updated']] },
       });
     } catch (_) {}
   }

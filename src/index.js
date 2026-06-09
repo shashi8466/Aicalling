@@ -19,6 +19,7 @@ const logger = require('./logger');
 const poller = require('./jobs/poller');
 
 const webhookRouter = require('./routes/webhook');
+const apiRouter     = require('./routes/api');
 
 const app = express();
 
@@ -35,6 +36,7 @@ app.use((req, res, next) => {
 
 // ── Routes ──────────────────────────────────────────────────────────────────
 app.use('/webhook', webhookRouter);
+app.use('/api',     apiRouter);
 
 app.get('/health', (_req, res) =>
   res.json({ status: 'ok', uptime: Math.round(process.uptime()), ts: new Date() })
@@ -50,8 +52,25 @@ if (fs.existsSync(dashDir)) app.use('/', express.static(dashDir));
 
 // ── Global error handler ────────────────────────────────────────────────────
 app.use((err, req, res, _next) => {
-  logger.error('Unhandled error', { msg: err.message, path: req.path });
-  res.status(500).send('<Response><Say>We are experiencing a technical issue. Please call back shortly.</Say><Hangup/></Response>');
+  logger.error('Unhandled error', { msg: err.message, stack: err.stack?.split('\n').slice(0,3), path: req.path });
+
+  // For Twilio webhooks, ALWAYS return valid TwiML (status 200) so the caller
+  // hears a polite message instead of "application error"
+  if (req.path.includes('/webhook/call/')) {
+    res.type('text/xml').status(200).send(
+      '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<Response>' +
+        '<Say voice="Polly.Matthew-Neural">' +
+          'I apologize, we are experiencing a brief technical issue. ' +
+          'A team member will call you back shortly. Thank you for your patience.' +
+        '</Say>' +
+        '<Hangup/>' +
+      '</Response>'
+    );
+    return;
+  }
+
+  res.status(500).json({ error: 'Internal server error', detail: err.message });
 });
 
 // ── Tunnel (serveo.net SSH — no browser bypass, no account needed) ───────────
@@ -76,16 +95,23 @@ async function boot() {
       });
     });
 
-    // 4. SSH Tunnel via serveo.net (no bypass page — Twilio webhooks work directly)
-    logger.info('Starting public tunnel (serveo.net)…');
-    const tunnelUrl = await tunnelMgr.startTunnel(cfg.server.port).catch(e => {
-      logger.error('Tunnel error:', e.message);
-      return null;
-    });
-    if (tunnelUrl) {
-      logger.info(`📡 Twilio webhooks → ${tunnelUrl}/webhook/call/start`);
+    // 4. Public URL: in production (Render/Railway/Fly/etc.) we already have a real HTTPS URL.
+    //    Only start a tunnel for local development.
+    const skipTunnel = cfg.server.env === 'production' || process.env.SKIP_TUNNEL === 'true';
+    if (skipTunnel) {
+      logger.info(`🌍 Production mode — using BASE_URL from environment: ${cfg.server.baseUrl}`);
+      logger.info(`📡 Twilio webhooks → ${cfg.server.baseUrl}/webhook/call/start`);
     } else {
-      logger.warn(`⚠️  Tunnel not started — using BASE_URL from .env: ${cfg.server.baseUrl}`);
+      logger.info('Starting public tunnel for local development…');
+      const tunnelUrl = await tunnelMgr.startTunnel(cfg.server.port).catch(e => {
+        logger.error('Tunnel error:', e.message);
+        return null;
+      });
+      if (tunnelUrl) {
+        logger.info(`📡 Twilio webhooks → ${tunnelUrl}/webhook/call/start`);
+      } else {
+        logger.warn(`⚠️  Tunnel not started — using BASE_URL from .env: ${cfg.server.baseUrl}`);
+      }
     }
 
     logger.info(`📞 Twilio caller ID : ${cfg.twilio.phoneNumber}`);

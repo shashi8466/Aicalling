@@ -80,13 +80,16 @@ class TwilioService {
   twimlOfferSlots(intro, slots, bookUrl) {
     const r = new VR();
 
-    // Build a natural spoken slot list with clear date AND time
-    const slotSpeech = slots.map((s, i) => {
-      const label = i === 0 ? 'Option one' : i === 1 ? 'Option two' : 'Option three';
-      return `${label}: ${s.displayTime}`;
-    }).join('. ');
+    // Build a natural spoken slot list
+    const optionWords = ['Option one', 'Option two', 'Option three', 'Option four'];
+    const slotSpeech = slots
+      .map((s, i) => `${optionWords[i] || `Option ${i+1}`}: ${s.displayTime}`)
+      .join('. ');
+    const choiceWords = slots.length === 4 ? 'option one, option two, option three, or option four'
+                      : slots.length === 3 ? 'option one, option two, or option three'
+                      : 'option one or option two';
 
-    const fullText = `${intro} I currently have these available times. ${slotSpeech}. Which option works best for you? You can say option one, option two, or option three.`;
+    const fullText = `${intro} I currently have the following available slots. ${slotSpeech}. Which option works best for you? You can say ${choiceWords}.`;
 
     const g = r.gather({
       input:        'speech',
@@ -96,7 +99,7 @@ class TwilioService {
       speechModel:  'phone_call',
       enhanced:     'true',
       language:     LANG,
-      timeout:      10,
+      timeout:      12,
     });
     g.say({ voice: VOICE, language: LANG }, fullText);
     r.redirect({ method: 'POST' }, bookUrl + '&noSpeech=1');

@@ -73,7 +73,10 @@ module.exports = {
       aiStatus:    8,   // column I
       leadScore:   9,   // column J
       aiSummary:   10,  // column K
-      lastUpdated: 11,  // column L
+      meetingDate: 11,  // column L
+      meetingTime: 12,  // column M
+      meetLink:    13,  // column N
+      lastUpdated: 14,  // column O
     },
   },
 };

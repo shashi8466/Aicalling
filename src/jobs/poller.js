@@ -26,13 +26,20 @@ async function pollOnce() {
   isPolling = true;
 
   try {
-    const rows = await sheetsSvc.getNewLeads();
+    const rows = await sheetsSvc.getAllLeads();
     if (!rows.length) { isPolling = false; return; }
 
-    logger.info(`Sheets poller: ${rows.length} new lead(s) detected`);
+    let newCount = 0, syncedCount = 0, skipCount = 0;
 
     for (const row of rows) {
-      await processNewLead(row);
+      const outcome = await processRow(row);
+      if (outcome === 'created')      newCount++;
+      else if (outcome === 'synced')  syncedCount++;
+      else                            skipCount++;
+    }
+
+    if (newCount || syncedCount) {
+      logger.info(`Poller: ${newCount} new | ${syncedCount} synced | ${skipCount} skipped`);
     }
   } catch (err) {
     logger.error('Sheets poller error', { msg: err.message });
@@ -41,16 +48,42 @@ async function pollOnce() {
   }
 }
 
-async function processNewLead(row) {
+/**
+ * Process one sheet row.
+ * Returns: 'created' | 'synced' | 'skipped'
+ */
+async function processRow(row) {
   try {
-    // Deduplicate by email or phone
-    const exists = await Lead.findOne({ $or: [{ email: row.email }, { phone: row.phone }] });
-    if (exists) {
-      logger.debug(`Skipped duplicate: ${row.email}`);
-      return;
+    // Look up by sheetRowIndex first (most reliable), then by email/phone
+    let exists = await Lead.findOne({ sheetRowIndex: row.sheetRowIndex });
+    if (!exists) {
+      exists = await Lead.findOne({ $or: [{ email: row.email }, { phone: row.phone }] });
     }
 
-    // 1. Create lead
+    // ── If exists: sync any changed fields from the sheet ─────────────────
+    if (exists) {
+      let changed = false;
+      const fieldsToSync = ['fullName', 'grade', 'email', 'phone', 'parentName', 'parentEmail', 'courseInterest'];
+      for (const f of fieldsToSync) {
+        if (row[f] && row[f] !== exists[f]) {
+          exists[f] = row[f];
+          changed = true;
+        }
+      }
+      // Always keep the sheet row index in sync
+      if (exists.sheetRowIndex !== row.sheetRowIndex) {
+        exists.sheetRowIndex = row.sheetRowIndex;
+        changed = true;
+      }
+      if (changed) {
+        await exists.save();
+        logger.info(`Lead synced from sheet: ${exists.fullName} (row ${row.sheetRowIndex})`);
+        return 'synced';
+      }
+      return 'skipped';
+    }
+
+    // ── Create new lead ───────────────────────────────────────────────────
     const lead = new Lead({ ...row, status: 'queued' });
 
     // Initial score before any call data
@@ -74,15 +107,19 @@ async function processNewLead(row) {
     );
 
     // 4. Place call after delay
-    //    Hot leads → 2 min  |  Others → 5 min
-    const delayMs = category === 'hot' ? 2 * 60_000 : 5 * 60_000;
+    //    Hot leads → 2 min  |  Others → 3 min
+    const delayMs = category === 'hot' ? 2 * 60_000 : 3 * 60_000;
     const timer = setTimeout(() => _placeCall(lead), delayMs);
     retryTimers.push(timer);
 
+    return 'created';
   } catch (err) {
-    logger.error('processNewLead error', { msg: err.message, email: row.email });
+    logger.error('processRow error', { msg: err.message, email: row.email });
+    return 'skipped';
   }
 }
+// Keep legacy name in module.exports for backward-compat
+const processNewLead = processRow;
 
 async function _placeCall(lead) {
   // Reload to get latest status (may have changed while waiting)
