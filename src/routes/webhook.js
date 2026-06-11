@@ -10,6 +10,7 @@
  */
 const express        = require('express');
 const router         = express.Router();
+const OpenAI         = require('openai');
 const Lead           = require('../models/Lead');
 const twilioSvc      = require('../services/twilioService');
 const aiSvc          = require('../services/aiService');
@@ -52,13 +53,13 @@ router.post('/call/start', async (req, res) => {
     }
 
     // Human answered
-    sessions.set(leadId, { history: [], turnCount: 0 });
+    const isFollowUp = req.query.followUp === '1';
+    sessions.set(leadId, { history: [], turnCount: 0, isFollowUp });
 
-    const hour   = new Date().getHours();
-    const greet  = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-    const who    = lead.parentName || lead.fullName;
     const studentFirst = lead.fullName.split(' ')[0];
-    const opener = `Hello, this is Shashi from Test Prep Pundits. Am I speaking with ${studentFirst}?`;
+    const opener = isFollowUp
+      ? `Hello, this is David from Test Prep Pundits. May I please speak with ${studentFirst} or their parent?`
+      : `Hello, this is Shashi from Test Prep Pundits. Am I speaking with ${studentFirst}?`;
 
     res.send(twilioSvc.twimlStart(opener, respondUrl(cfg.server.baseUrl, leadId)));
   } catch (err) {
@@ -151,8 +152,21 @@ router.post('/call/respond', async (req, res) => {
       ));
     }
 
-    // Get AI response
-    const aiReply = await aiSvc.chat({ lead, history: session.history.slice(-12), userMessage: speech });
+    // Get AI response — use follow-up script if this is a Day-3 follow-up call
+    let aiReply;
+    if (session.isFollowUp) {
+      const { buildFollowUpSystem } = aiSvc;
+      const _openai = new OpenAI({ apiKey: cfg.openai.apiKey });
+      const sysPrompt = buildFollowUpSystem(lead);
+      const msgs = [...session.history.slice(-12), { role: 'user', content: speech }];
+      const r = await _openai.chat.completions.create({
+        model: 'gpt-4o-mini', max_tokens: 250, temperature: 0.65,
+        messages: [{ role: 'system', content: sysPrompt }, ...msgs],
+      });
+      aiReply = r.choices[0].message.content.trim();
+    } else {
+      aiReply = await aiSvc.chat({ lead, history: session.history.slice(-12), userMessage: speech });
+    }
 
     // Add AI turn
     session.history.push({ role: 'assistant', content: aiReply });

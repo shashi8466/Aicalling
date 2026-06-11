@@ -49,8 +49,12 @@ const leadSchema = new mongoose.Schema({
   // CRM
   status: {
     type: String,
-    enum: ['new','queued','calling','contacted','qualified',
-           'meeting-scheduled','meeting-completed','enrolled','lost','do-not-call'],
+    enum: [
+      'new','queued','calling','contacted','qualified',
+      'meeting-scheduled','meeting-completed',
+      'proposal-sent','interested','enrollment-pending','payment-pending',
+      'enrolled','lost','do-not-call',
+    ],
     default: 'new',
   },
 

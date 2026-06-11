@@ -56,6 +56,24 @@ class EmailService {
     });
   }
 
+  async sendSuccessStories(lead) {
+    return this._send({
+      to:      lead.email,
+      cc:      lead.parentEmail,
+      subject: `🌟 ${lead.fullName}, see how students like you achieved their goals`,
+      html:    this._wrap(this._successStoriesBody(lead)),
+    });
+  }
+
+  async sendEnrollmentReminder(lead) {
+    return this._send({
+      to:      lead.email,
+      cc:      lead.parentEmail,
+      subject: `⏳ Last chance to secure ${lead.fullName}'s spot — enrollment closing soon`,
+      html:    this._wrap(this._enrollmentReminderBody(lead)),
+    });
+  }
+
   async sendEnrollmentFollowup(lead) {
     return this._send({
       to:      lead.email,
@@ -268,6 +286,68 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Google Meet</a>` : ''}
 <p>We're looking forward to discussing the best path for ${l.fullName}'s goals. If anything comes up, please let us know at least <strong>2 hours in advance</strong>.</p>
 
 ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : ''}
+
+<div class="sig">
+  <strong>Shashi Kumar</strong>
+  Admissions Counselor | Test Prep Pundits<br>
+  📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
+</div>`;
+  }
+
+  _successStoriesBody(l) {
+    const c = cfg.company;
+    return `
+<h2>See What Students Like ${l.fullName} Achieved 🌟</h2>
+<p>Hi ${l.parentName || l.fullName}! We wanted to share a few of our recent student success stories — because seeing real results speaks louder than any brochure.</p>
+
+<div class="box">
+  🎓 <strong>Sarah M. (Grade 11):</strong> Improved SAT from 1080 → 1360 in 8 weeks<br>
+  🎓 <strong>Rahul P. (Grade 10):</strong> ACT composite jumped from 22 → 29 after one prep cycle<br>
+  🎓 <strong>Emma L. (Grade 12):</strong> Scored 5s on AP Calculus and AP Chemistry<br>
+  🎓 <strong>James W. (Grade 11):</strong> Earned $40,000 merit scholarship with improved SAT score
+</div>
+
+<p><strong>The #1 reason students succeed with us:</strong></p>
+<ul>
+  <li>📊 Personalized study plan based on individual strength & weakness analysis</li>
+  <li>👩‍🏫 Expert tutors with 10+ years of test prep experience</li>
+  <li>📈 Weekly progress tracking with adaptive content</li>
+  <li>🕐 Flexible scheduling — 7 days/week, morning to evening</li>
+</ul>
+
+<p>We'd love to add <strong>${l.fullName}</strong> to our success stories. Let's get started!</p>
+
+<a href="${c.website}" class="btn">Schedule Your Free Consultation →</a>
+
+<div class="sig">
+  <strong>Shashi Kumar</strong>
+  Admissions Counselor | Test Prep Pundits<br>
+  📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
+</div>`;
+  }
+
+  _enrollmentReminderBody(l) {
+    const c = cfg.company;
+    return `
+<h2>⏳ Enrollment Closing Soon — Secure ${l.fullName}'s Spot Today</h2>
+<p>Hi ${l.parentName || l.fullName}! We wanted to reach out one more time regarding <strong>${l.fullName}'s</strong> ${l.courseInterest || 'test prep'} program.</p>
+
+<div class="box">
+  ⚠️ <strong>Limited spots available</strong> — especially for one-on-one and small-group formats.<br>
+  Current session enrollment is filling up fast heading into exam season.
+</div>
+
+<p>Here's a quick reminder of what's included:</p>
+<ul>
+  <li>✅ Personalized study plan tailored to ${l.fullName}'s goals</li>
+  <li>📊 Score improvement guarantee</li>
+  <li>💳 Flexible payment plans starting at 3 monthly installments</li>
+  <li>🆓 Free 45-minute kick-off consultation included</li>
+</ul>
+
+<p>To lock in ${l.fullName}'s spot at the current pricing, simply reply to this email or call us directly.</p>
+
+<a href="mailto:${c.counselorEmail}?subject=Enrollment – ${l.fullName}" class="btn">Confirm Enrollment →</a>
 
 <div class="sig">
   <strong>Shashi Kumar</strong>

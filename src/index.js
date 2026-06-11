@@ -18,8 +18,10 @@ const cfg    = require('./config');
 const logger = require('./logger');
 const poller = require('./jobs/poller');
 
-const webhookRouter = require('./routes/webhook');
-const apiRouter     = require('./routes/api');
+const webhookRouter  = require('./routes/webhook');
+const apiRouter      = require('./routes/api');
+const crmRouter      = require('./routes/crm');
+const followUpEngine = require('./jobs/followUpEngine');
 
 const app = express();
 
@@ -37,6 +39,7 @@ app.use((req, res, next) => {
 // ── Routes ──────────────────────────────────────────────────────────────────
 app.use('/webhook', webhookRouter);
 app.use('/api',     apiRouter);
+app.use('/api/crm', crmRouter);
 
 app.get('/health', (_req, res) =>
   res.json({ status: 'ok', uptime: Math.round(process.uptime()), ts: new Date() })
@@ -116,8 +119,9 @@ async function boot() {
 
     logger.info(`📞 Twilio caller ID : ${cfg.twilio.phoneNumber}`);
 
-    // 5. Background jobs (sheets polling, reminders)
+    // 5. Background jobs (sheets polling, reminders, follow-up engine)
     poller.start();
+    followUpEngine.start();
 
   } catch (err) {
     logger.error('Boot failed', { msg: err.message });

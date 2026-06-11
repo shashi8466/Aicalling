@@ -139,9 +139,60 @@ tbody tr:last-child td { border-bottom: none; }
 .status-badge.contacted          { background: rgba(245,158,11,.15);   color: var(--warm); }
 .status-badge.qualified          { background: rgba(139,92,246,.15);   color: var(--purple); }
 .status-badge.meeting-scheduled  { background: rgba(16,185,129,.15);   color: var(--success); }
-.status-badge.meeting-completed  { background: rgba(16,185,129,.25);   color: var(--success); }
-.status-badge.enrolled           { background: rgba(236,72,153,.15);   color: var(--pink); }
-.status-badge.lost               { background: rgba(239,68,68,.15);    color: var(--hot); }
+.status-badge.meeting-completed    { background: rgba(16,185,129,.25);   color: var(--success); }
+.status-badge.proposal-sent        { background: rgba(139,92,246,.2);    color: var(--purple); }
+.status-badge.interested           { background: rgba(59,130,246,.2);    color: var(--brand); }
+.status-badge.enrollment-pending   { background: rgba(245,158,11,.25);   color: var(--warm); }
+.status-badge.payment-pending      { background: rgba(16,185,129,.3);    color: #34d399; }
+.status-badge.enrolled             { background: rgba(236,72,153,.15);   color: var(--pink); }
+.status-badge.lost                 { background: rgba(239,68,68,.15);    color: var(--hot); }
+
+/* Pipeline / Kanban */
+.pipeline-board { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 12px; }
+.pipeline-col { min-width: 220px; background: var(--panel); border-radius: 10px; border: 1px solid var(--border); flex-shrink: 0; }
+.pipeline-col-header { padding: 12px 14px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.pipeline-col-body { padding: 10px; min-height: 80px; max-height: 600px; overflow-y: auto; }
+.pipeline-card { background: var(--panel2); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; border-left: 3px solid transparent; transition: all .15s; font-size: 13px; }
+.pipeline-card:hover { border-left-color: var(--brand); background: #334155; }
+.pipeline-card .card-name { font-weight: 600; margin-bottom: 4px; }
+.pipeline-card .card-meta { font-size: 11px; color: var(--muted); }
+.pipeline-badge { background: var(--panel); padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+
+/* Revenue metrics */
+.metric-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 22px; }
+.metric-card { background: var(--panel); border-radius: 10px; border: 1px solid var(--border); padding: 20px; text-align: center; }
+.metric-card .metric-value { font-size: 32px; font-weight: 800; color: var(--brand); }
+.metric-card .metric-label { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.metric-card .metric-sub { font-size: 11px; color: var(--success); margin-top: 4px; }
+.conv-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+.conv-row:last-child { border-bottom: none; }
+.conv-pct { font-size: 22px; font-weight: 800; color: var(--brand); }
+
+/* Outcome form */
+.outcome-form { background: var(--panel2); border-radius: 10px; padding: 18px; margin-bottom: 14px; }
+.outcome-form h4 { margin-bottom: 12px; font-size: 14px; }
+.form-row { margin-bottom: 12px; }
+.form-row label { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px; font-weight: 600; }
+.form-row select, .form-row textarea, .form-row input { width: 100%; }
+.form-row textarea { resize: vertical; min-height: 70px; }
+
+/* Objection chips */
+.objection-chip { display: inline-flex; align-items: center; gap: 6px; background: rgba(239,68,68,.1); color: var(--hot); border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 600; margin: 3px; }
+.objection-chip.resolved { background: rgba(16,185,129,.1); color: var(--success); }
+.followup-item { background: var(--panel2); border-radius: 8px; padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+.followup-item .fu-type { font-weight: 600; }
+.followup-item .fu-date { color: var(--muted); font-size: 12px; }
+.followup-item .fu-status { font-size: 11px; }
+
+/* Enrollment form */
+.enroll-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media(max-width:700px){ .enroll-grid { grid-template-columns: 1fr; } }
+.payment-row { background: var(--panel2); border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+.payment-status-badge { padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+.payment-status-badge.paid           { background: rgba(16,185,129,.15); color: var(--success); }
+.payment-status-badge.partial-paid   { background: rgba(245,158,11,.15); color: var(--warm); }
+.payment-status-badge.pending        { background: rgba(148,163,184,.15); color: var(--muted); }
+.payment-status-badge.refunded       { background: rgba(239,68,68,.1);   color: var(--hot); }
 
 /* Modal */
 .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.75); backdrop-filter: blur(4px); display: none; align-items: flex-start; justify-content: center; z-index: 100; padding: 24px; overflow-y: auto; }
@@ -217,6 +268,10 @@ audio { width: 100%; margin-top: 10px; }
       <a data-view="calls"><span class="icon">📞</span> Call Activity <span class="nav-badge" id="navCallCount">0</span></a>
       <a data-view="meetings"><span class="icon">📅</span> Meetings <span class="nav-badge" id="navMeetCount">0</span></a>
       <a data-view="analytics"><span class="icon">📈</span> Analytics</a>
+      <a data-view="counselor"><span class="icon">🏥</span> Counselor Hub</a>
+      <a data-view="pipeline"><span class="icon">🔄</span> Pipeline</a>
+      <a data-view="enrollments"><span class="icon">📋</span> Enrollments <span class="nav-badge" id="navEnrollCount">0</span></a>
+      <a data-view="revenue"><span class="icon">💰</span> Revenue</a>
       <a data-view="settings"><span class="icon">⚙️</span> System</a>
     </nav>
   </aside>
@@ -288,6 +343,10 @@ audio { width: 100%; margin-top: 10px; }
                 <option value="qualified">Qualified</option>
                 <option value="meeting-scheduled">Meeting Scheduled</option>
                 <option value="meeting-completed">Meeting Completed</option>
+                <option value="proposal-sent">Proposal Sent</option>
+                <option value="interested">Interested</option>
+                <option value="enrollment-pending">Enrollment Pending</option>
+                <option value="payment-pending">Payment Pending</option>
                 <option value="enrolled">Enrolled</option>
                 <option value="lost">Lost</option>
               </select>
@@ -347,6 +406,158 @@ audio { width: 100%; margin-top: 10px; }
         </div>
       </section>
 
+      <!-- ─── COUNSELOR DASHBOARD ─── -->
+      <section class="view" id="view-counselor">
+        <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="loadCounselor('today')">Today</button>
+          <button class="btn btn-secondary btn-sm" onclick="loadCounselor('week')">This Week</button>
+          <button class="btn btn-secondary btn-sm" onclick="loadCounselor('month')">This Month</button>
+        </div>
+        <div class="stats" id="counselorStats">
+          <div class="stat-card brand"><div class="label">Meetings in Range</div><div class="value" id="cd_meetings">—</div></div>
+          <div class="stat-card hot"><div class="label">🔥 Hot Leads</div><div class="value" id="cd_hot">—</div></div>
+          <div class="stat-card warm"><div class="label">Enrollment Pending</div><div class="value" id="cd_enroll_pending">—</div></div>
+          <div class="stat-card success"><div class="label">Revenue Pipeline</div><div class="value" id="cd_revenue">—</div></div>
+        </div>
+        <div class="distribution">
+          <div class="card">
+            <div class="card-header"><h3>📅 Today's Meetings</h3></div>
+            <div id="cd_today_meetings" class="modal-body"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>⏰ Follow-ups Due</h3></div>
+            <div id="cd_followups" class="modal-body"></div>
+          </div>
+        </div>
+        <div class="distribution">
+          <div class="card">
+            <div class="card-header"><h3>🔥 Hot Leads</h3></div>
+            <div id="cd_hot_leads" class="modal-body"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>📋 Enrollment Pending</h3></div>
+            <div id="cd_enroll_list" class="modal-body"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── PIPELINE ─── -->
+      <section class="view" id="view-pipeline">
+        <div class="card" style="margin-bottom:18px">
+          <div class="card-header"><h3>Enrollment Pipeline</h3><button class="btn btn-secondary btn-sm" onclick="loadPipeline()">↻ Refresh</button></div>
+        </div>
+        <div id="pipelineBoard" class="pipeline-board"></div>
+      </section>
+
+      <!-- ─── ENROLLMENTS ─── -->
+      <section class="view" id="view-enrollments">
+        <div class="card" style="margin-bottom:18px">
+          <div class="card-header">
+            <h3>Enrollments</h3>
+            <div class="filters">
+              <select id="enrollStatusFilter" onchange="loadEnrollments()">
+                <option value="">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="active">Active</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+              <button class="btn btn-primary btn-sm" onclick="showEnrollForm(null)">+ New Enrollment</button>
+            </div>
+          </div>
+          <div id="enrollmentsTable"></div>
+        </div>
+
+        <!-- Enrollment Form -->
+        <div id="enrollFormWrap" style="display:none">
+          <div class="card">
+            <div class="card-header"><h3 id="enrollFormTitle">New Enrollment</h3><button class="btn btn-secondary btn-sm" onclick="hideEnrollForm()">✕ Cancel</button></div>
+            <div class="modal-body">
+              <div class="enroll-grid">
+                <div class="form-row"><label>Student Name *</label><input id="ef_studentName" placeholder="Full name"></div>
+                <div class="form-row"><label>Grade</label><input id="ef_grade" placeholder="e.g. 11"></div>
+                <div class="form-row"><label>Parent Name</label><input id="ef_parentName" placeholder="Parent/Guardian"></div>
+                <div class="form-row"><label>Parent Email</label><input id="ef_parentEmail" type="email" placeholder="parent@email.com"></div>
+                <div class="form-row"><label>Parent Phone</label><input id="ef_parentPhone" placeholder="+1..."></div>
+                <div class="form-row"><label>Program *</label>
+                  <select id="ef_program">
+                    <option value="">Select program…</option>
+                    <option value="SAT Prep">SAT Prep</option>
+                    <option value="ACT Prep">ACT Prep</option>
+                    <option value="AP Courses">AP Courses</option>
+                    <option value="College Admissions">College Admissions</option>
+                    <option value="PSAT">PSAT</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div class="form-row"><label>Exam Date</label><input id="ef_examDate" type="date"></div>
+                <div class="form-row"><label>Learning Mode</label>
+                  <select id="ef_learningMode">
+                    <option value="online">Online</option>
+                    <option value="in-person">In-Person</option>
+                    <option value="hybrid">Hybrid</option>
+                    <option value="group">Group</option>
+                    <option value="one-on-one">One-on-One</option>
+                  </select>
+                </div>
+                <div class="form-row"><label>Payment Plan</label>
+                  <select id="ef_paymentPlan">
+                    <option value="full">Full Payment</option>
+                    <option value="2-installments">2 Installments</option>
+                    <option value="3-installments">3 Installments</option>
+                    <option value="6-installments">6 Installments</option>
+                  </select>
+                </div>
+                <div class="form-row"><label>Program Fee ($)</label><input id="ef_programFee" type="number" placeholder="e.g. 1499"></div>
+              </div>
+              <div class="form-row"><label>Lead ID (optional)</label><input id="ef_leadId" placeholder="MongoDB ID"></div>
+              <div class="form-row"><label>Notes</label><textarea id="ef_notes" rows="3" placeholder="Any additional notes…"></textarea></div>
+              <button class="btn btn-primary" onclick="saveEnrollment()" style="margin-top:6px">💾 Save Enrollment</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── REVENUE ─── -->
+      <section class="view" id="view-revenue">
+        <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="loadRevenue(30)">Last 30 Days</button>
+          <button class="btn btn-secondary btn-sm" onclick="loadRevenue(90)">Last 90 Days</button>
+          <button class="btn btn-secondary btn-sm" onclick="loadRevenue(365)">This Year</button>
+        </div>
+        <div class="metric-cards">
+          <div class="metric-card"><div class="metric-value" id="rv_revenue">$0</div><div class="metric-label">Total Revenue Collected</div></div>
+          <div class="metric-card"><div class="metric-value" id="rv_pending">$0</div><div class="metric-label">Pending Revenue</div></div>
+          <div class="metric-card"><div class="metric-value" id="rv_enrolled">0</div><div class="metric-label">Total Enrollments</div></div>
+          <div class="metric-card"><div class="metric-value" id="rv_overall_conv">0%</div><div class="metric-label">Overall Conversion</div></div>
+        </div>
+        <div class="distribution">
+          <div class="card">
+            <div class="card-header"><h3>Conversion Metrics</h3></div>
+            <div class="modal-body" id="rv_conv_metrics"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Revenue by Program</h3></div>
+            <div class="modal-body" id="rv_by_program"></div>
+          </div>
+        </div>
+        <div class="distribution">
+          <div class="card">
+            <div class="card-header"><h3>Enrollments by Program</h3></div>
+            <div class="modal-body" id="rv_enroll_prog"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Pipeline Status Counts</h3></div>
+            <div class="modal-body" id="rv_pipeline"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>Revenue Trend</h3></div>
+          <div class="modal-body" id="rv_trend"></div>
+        </div>
+      </section>
+
       <!-- ─── SETTINGS ─── -->
       <section class="view" id="view-settings">
         <div class="card">
@@ -374,6 +585,64 @@ audio { width: 100%; margin-top: 10px; }
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- Meeting Outcome Modal -->
+<div class="modal-bg" id="outcomeModal" onclick="if(event.target===this)closeOutcomeModal()">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div><h2>Log Meeting Outcome</h2><div class="sub" id="outcomeLeadName"></div></div>
+      <button class="modal-close" onclick="closeOutcomeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="outcomeLeadId">
+      <div class="form-row"><label>Outcome *</label>
+        <select id="outcomeResult">
+          <option value="">Select outcome…</option>
+          <option value="interested">Interested</option>
+          <option value="need-follow-up">Need Follow-up</option>
+          <option value="not-interested">Not Interested</option>
+          <option value="parent-wants-discussion">Parent Wants Discussion</option>
+          <option value="ready-to-enroll">Ready to Enroll</option>
+        </select>
+      </div>
+      <div class="form-row"><label>Notes</label>
+        <textarea id="outcomeNotes" rows="4" placeholder="What was discussed? Key points…"></textarea>
+      </div>
+      <button class="btn btn-primary" onclick="saveOutcome()" style="margin-top:6px">💾 Save Outcome</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Objection Modal -->
+<div class="modal-bg" id="objectionModal" onclick="if(event.target===this)closeObjModal()">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div><h2>Log Objection</h2><div class="sub" id="objLeadName"></div></div>
+      <button class="modal-close" onclick="closeObjModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="objLeadId">
+      <div class="form-row"><label>Objection Type *</label>
+        <select id="objType">
+          <option value="">Select type…</option>
+          <option value="too-expensive">Too Expensive</option>
+          <option value="need-parent-approval">Need Parent Approval</option>
+          <option value="comparing-competitors">Comparing Competitors</option>
+          <option value="exam-date-not-decided">Exam Date Not Decided</option>
+          <option value="need-more-information">Need More Information</option>
+          <option value="already-have-tutor">Already Have a Tutor</option>
+          <option value="not-ready-yet">Not Ready Yet</option>
+          <option value="busy-schedule">Busy Schedule</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-row"><label>Notes</label>
+        <textarea id="objNotes" rows="3" placeholder="Context about this objection…"></textarea>
+      </div>
+      <button class="btn btn-primary" onclick="saveObjection()" style="margin-top:6px">💾 Log Objection</button>
+    </div>
   </div>
 </div>
 
@@ -413,16 +682,23 @@ function showView(name) {
   document.querySelectorAll('.nav a').forEach(a => a.classList.remove('active'));
   document.getElementById('view-' + name).classList.add('active');
   document.querySelectorAll(`[data-view="${name}"]`).forEach(a => a.classList.add('active'));
-  document.getElementById('pageTitle').textContent = {
+  const titles = {
     overview: 'Overview', leads: 'All Leads', calls: 'Call Activity',
-    meetings: 'Scheduled Meetings', analytics: 'Reports & Analytics', settings: 'System Settings',
-  }[name];
-  if (name === 'overview')  loadOverview();
-  if (name === 'leads')     renderLeadsTable();
-  if (name === 'calls')     loadCalls();
-  if (name === 'meetings')  loadMeetings();
-  if (name === 'analytics') loadAnalytics();
-  if (name === 'settings')  loadSystem();
+    meetings: 'Scheduled Meetings', analytics: 'Reports & Analytics',
+    counselor: 'Counselor Dashboard', pipeline: 'Enrollment Pipeline',
+    enrollments: 'Enrollments', revenue: 'Revenue & Analytics', settings: 'System Settings',
+  };
+  document.getElementById('pageTitle').textContent = titles[name] || name;
+  if (name === 'overview')    loadOverview();
+  if (name === 'leads')       renderLeadsTable();
+  if (name === 'calls')       loadCalls();
+  if (name === 'meetings')    loadMeetings();
+  if (name === 'analytics')   loadAnalytics();
+  if (name === 'counselor')   loadCounselor('today');
+  if (name === 'pipeline')    loadPipeline();
+  if (name === 'enrollments') loadEnrollments();
+  if (name === 'revenue')     loadRevenue(30);
+  if (name === 'settings')    loadSystem();
 }
 
 // ─── Overview ──────────────────────────────────────
@@ -742,13 +1018,42 @@ async function openLead(id) {
       `).join('');
     }
 
+    // Objections & Follow-ups
+    try {
+      const [objections, followUps] = await Promise.all([
+        fetch('/api/crm/objections?leadId=' + l._id).then(r => r.json()).catch(() => []),
+        fetch('/api/crm/follow-ups?leadId=' + l._id).then(r => r.json()).catch(() => []),
+      ]);
+      if (objections.length) {
+        body += `<div class="section-title">⚠️ Objections (${objections.length})</div>`;
+        body += `<div style="margin-bottom:12px">${objections.map(o => `
+          <span class="objection-chip ${o.resolved ? 'resolved' : ''}">
+            ${o.resolved ? '✓' : '!'} ${fmtStatus(o.objectionType)}
+            ${o.notes ? ` — ${esc(o.notes.slice(0,40))}` : ''}
+          </span>`).join('')}
+        </div>`;
+      }
+      if (followUps.length) {
+        body += `<div class="section-title">🔔 Follow-up Schedule (${followUps.length})</div>`;
+        followUps.forEach(f => {
+          body += `<div class="followup-item">
+            <div><div class="fu-type">${fmtFollowupType(f.followupType)}</div><div class="fu-date">📅 ${new Date(f.scheduledDate).toLocaleDateString()}</div></div>
+            <span class="fu-status ${f.completed ? 'status-badge meeting-completed' : 'status-badge queued'}">${f.completed ? '✓ Done' : '⏳ Pending'}</span>
+          </div>`;
+        });
+      }
+    } catch(_) {}
+
     body += `
       <div class="action-bar">
         <button class="btn btn-primary" onclick="callLead('${l._id}')">📞 Call Now</button>
         <button class="btn btn-secondary" onclick="sendEmail('${l._id}', 'welcome')">📧 Welcome</button>
         ${m.scheduledAt ? `<button class="btn btn-secondary" onclick="sendEmail('${l._id}', 'reminder')">⏰ Reminder</button>` : ''}
-        ${m.scheduledAt ? `<button class="btn btn-secondary" onclick="sendEmail('${l._id}', 'confirmation')">✅ Confirmation</button>` : ''}
+        ${m.scheduledAt ? `<button class="btn btn-secondary" onclick="logOutcome('${l._id}', '${esc(l.fullName)}')">📝 Log Outcome</button>` : ''}
+        <button class="btn btn-secondary" onclick="addObjection('${l._id}', '${esc(l.fullName)}')">⚠️ Log Objection</button>
+        <button class="btn btn-secondary" onclick="scheduleFollowUps('${l._id}')">🔔 Schedule Follow-ups</button>
         <button class="btn btn-secondary" onclick="sendEmail('${l._id}', 'enrollment')">🎯 Enrollment</button>
+        <button class="btn btn-success btn-sm" onclick="showEnrollFromLead('${l._id}', '${esc(l.fullName)}', '${esc(l.grade||'')}', '${esc(l.parentName||'')}', '${esc(l.parentEmail||'')}', '${esc(l.phone||'')}', '${esc(l.courseInterest||'')}')">✅ Enroll</button>
       </div>
     `;
 
@@ -820,6 +1125,386 @@ function exportLeads() {
   toast('Downloading CSV…', 'info');
 }
 
+// ─── Counselor Dashboard ────────────────────────────
+async function loadCounselor(range = 'today') {
+  try {
+    const d = await fetch('/api/crm/counselor-dashboard?range=' + range).then(r => r.json());
+    document.getElementById('cd_meetings').textContent = d.meetingsInRange;
+    document.getElementById('cd_hot').textContent = d.hotLeads.length;
+    document.getElementById('cd_enroll_pending').textContent = d.enrollmentPending.length;
+    document.getElementById('cd_revenue').textContent = '$' + (d.revenuePipeline || 0).toLocaleString();
+
+    // Today's meetings
+    const el1 = document.getElementById('cd_today_meetings');
+    if (d.todayMeetings.length) {
+      el1.innerHTML = d.todayMeetings.map(l => `
+        <div class="followup-item" onclick="openLead('${l._id}')" style="cursor:pointer">
+          <div><div class="fu-type">${esc(l.fullName)}</div><div class="fu-date">🕐 ${l.meeting?.scheduledAt ? new Date(l.meeting.scheduledAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—'} · ${esc(l.courseInterest || '—')}</div></div>
+          ${l.meeting?.meetLink ? `<a href="${l.meeting.meetLink}" target="_blank" onclick="event.stopPropagation()" class="btn btn-primary btn-sm">🎥 Join</a>` : ''}
+        </div>`).join('');
+    } else {
+      el1.innerHTML = '<div class="empty"><div class="icon">📅</div>No meetings today</div>';
+    }
+
+    // Follow-ups due
+    const el2 = document.getElementById('cd_followups');
+    if (d.pendingFollowUps.length) {
+      el2.innerHTML = d.pendingFollowUps.map(f => `
+        <div class="followup-item">
+          <div><div class="fu-type">${fmtFollowupType(f.followupType)}</div><div class="fu-date">📅 ${new Date(f.scheduledDate).toLocaleDateString()}</div></div>
+          <button class="btn btn-secondary btn-sm" onclick="markFollowUpDone('${f._id}')">✓ Done</button>
+        </div>`).join('');
+    } else {
+      el2.innerHTML = '<div class="empty"><div class="icon">✅</div>All caught up!</div>';
+    }
+
+    // Hot leads
+    const el3 = document.getElementById('cd_hot_leads');
+    if (d.hotLeads.length) {
+      el3.innerHTML = d.hotLeads.map(l => `
+        <div class="followup-item" onclick="openLead('${l._id}')" style="cursor:pointer">
+          <div><div class="fu-type">${esc(l.fullName)} <span class="score-badge hot">${l.leadScore}🔥</span></div><div class="fu-date">${esc(l.courseInterest || '—')} · ${esc(l.phone || '—')}</div></div>
+          <span class="status-badge ${l.status}">${fmtStatus(l.status)}</span>
+        </div>`).join('');
+    } else {
+      el3.innerHTML = '<div class="empty">No hot leads</div>';
+    }
+
+    // Enrollment pending
+    const el4 = document.getElementById('cd_enroll_list');
+    if (d.enrollmentPending.length) {
+      el4.innerHTML = d.enrollmentPending.map(l => `
+        <div class="followup-item" onclick="openLead('${l._id}')" style="cursor:pointer">
+          <div><div class="fu-type">${esc(l.fullName)}</div><div class="fu-date">${esc(l.courseInterest || '—')}</div></div>
+          <span class="status-badge ${l.status}">${fmtStatus(l.status)}</span>
+        </div>`).join('');
+    } else {
+      el4.innerHTML = '<div class="empty">No pending enrollments</div>';
+    }
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function markFollowUpDone(fuId) {
+  try {
+    await fetch('/api/crm/follow-ups/' + fuId + '/complete', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ result: 'completed-from-dashboard' }) });
+    toast('Follow-up marked done ✓', 'success');
+    loadCounselor('today');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ─── Pipeline ───────────────────────────────────────
+async function loadPipeline() {
+  try {
+    const data = await fetch('/api/crm/pipeline').then(r => r.json());
+    const COLS = [
+      { key: 'new',                label: '🆕 New',                 color: 'var(--info)' },
+      { key: 'contacted',          label: '📞 Contacted',            color: 'var(--warm)' },
+      { key: 'qualified',          label: '✅ Qualified',            color: 'var(--purple)' },
+      { key: 'meeting-scheduled',  label: '📅 Meeting Scheduled',    color: 'var(--success)' },
+      { key: 'meeting-completed',  label: '🎙 Meeting Completed',    color: '#34d399' },
+      { key: 'proposal-sent',      label: '📄 Proposal Sent',        color: 'var(--purple)' },
+      { key: 'interested',         label: '🙋 Interested',           color: 'var(--brand)' },
+      { key: 'enrollment-pending', label: '⏳ Enrollment Pending',   color: 'var(--warm)' },
+      { key: 'payment-pending',    label: '💳 Payment Pending',      color: '#f59e0b' },
+      { key: 'enrolled',           label: '🎓 Enrolled',             color: 'var(--pink)' },
+      { key: 'lost',               label: '❌ Lost',                 color: 'var(--hot)' },
+    ];
+    const board = document.getElementById('pipelineBoard');
+    board.innerHTML = COLS.map(col => {
+      const col_data = data[col.key] || { count: 0, leads: [] };
+      return `<div class="pipeline-col">
+        <div class="pipeline-col-header" style="border-top:3px solid ${col.color}">
+          ${col.label} <span class="pipeline-badge">${col_data.count}</span>
+        </div>
+        <div class="pipeline-col-body">
+          ${col_data.leads.length ? col_data.leads.slice(0,20).map(l => `
+            <div class="pipeline-card" onclick="openLead('${l._id}')">
+              <div class="card-name">${esc(l.fullName)}</div>
+              <div class="card-meta">${esc(l.courseInterest || '—')} · Grade ${esc(l.grade || '?')}</div>
+              <div class="card-meta" style="margin-top:4px"><span class="score-badge ${l.leadCategory}">${l.leadScore} ${catEmoji(l.leadCategory)}</span></div>
+            </div>`).join('') : '<div style="color:var(--muted);font-size:12px;text-align:center;padding:16px">Empty</div>'}
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ─── Enrollments ────────────────────────────────────
+let ENROLLMENTS = [];
+async function loadEnrollments() {
+  try {
+    const status = document.getElementById('enrollStatusFilter')?.value || '';
+    ENROLLMENTS = await fetch('/api/crm/enrollments' + (status ? '?status=' + status : '')).then(r => r.json());
+    document.getElementById('navEnrollCount').textContent = ENROLLMENTS.length;
+    renderEnrollmentsTable();
+  } catch(e) { toast(e.message, 'error'); }
+}
+function renderEnrollmentsTable() {
+  const el = document.getElementById('enrollmentsTable');
+  if (!ENROLLMENTS.length) { el.innerHTML = '<div class="empty"><div class="icon">📋</div>No enrollments yet</div>'; return; }
+  el.innerHTML = `<table>
+    <thead><tr><th>Student</th><th>Program</th><th>Learning Mode</th><th>Exam Date</th><th>Fee</th><th>Status</th><th></th></tr></thead>
+    <tbody>${ENROLLMENTS.map(e => `<tr>
+      <td><strong>${esc(e.studentName)}</strong><br><span style="color:var(--muted);font-size:12px">Grade ${esc(e.grade || '—')}</span></td>
+      <td>${esc(e.program)}</td>
+      <td>${esc(e.learningMode || '—')}</td>
+      <td>${e.examDate ? new Date(e.examDate).toLocaleDateString() : '—'}</td>
+      <td>$${(e.programFee || 0).toLocaleString()}</td>
+      <td><span class="status-badge">${fmtStatus(e.enrollmentStatus)}</span></td>
+      <td><button class="btn btn-secondary btn-sm" onclick="openEnrollment('${e._id}')">View</button></td>
+    </tr>`).join('')}
+    </tbody></table>`;
+}
+
+let _enrollEditId = null;
+function showEnrollForm(id) {
+  _enrollEditId = id;
+  document.getElementById('enrollFormTitle').textContent = id ? 'Edit Enrollment' : 'New Enrollment';
+  document.getElementById('ef_studentName').value = '';
+  document.getElementById('ef_grade').value = '';
+  document.getElementById('ef_parentName').value = '';
+  document.getElementById('ef_parentEmail').value = '';
+  document.getElementById('ef_parentPhone').value = '';
+  document.getElementById('ef_program').value = '';
+  document.getElementById('ef_examDate').value = '';
+  document.getElementById('ef_learningMode').value = 'online';
+  document.getElementById('ef_paymentPlan').value = 'full';
+  document.getElementById('ef_programFee').value = '';
+  document.getElementById('ef_leadId').value = '';
+  document.getElementById('ef_notes').value = '';
+  document.getElementById('enrollFormWrap').style.display = 'block';
+  document.getElementById('enrollFormWrap').scrollIntoView({ behavior: 'smooth' });
+}
+function showEnrollFromLead(id, name, grade, parentName, parentEmail, phone, program) {
+  showView('enrollments');
+  setTimeout(() => {
+    showEnrollForm(null);
+    document.getElementById('ef_studentName').value = name;
+    document.getElementById('ef_grade').value = grade;
+    document.getElementById('ef_parentName').value = parentName;
+    document.getElementById('ef_parentEmail').value = parentEmail;
+    document.getElementById('ef_parentPhone').value = phone;
+    const progMap = { 'sat': 'SAT Prep', 'act': 'ACT Prep', 'ap': 'AP Courses', 'college': 'College Admissions' };
+    const prog = Object.keys(progMap).find(k => (program || '').toLowerCase().includes(k));
+    if (prog) document.getElementById('ef_program').value = progMap[prog];
+    document.getElementById('ef_leadId').value = id;
+  }, 200);
+}
+function hideEnrollForm() { document.getElementById('enrollFormWrap').style.display = 'none'; }
+async function saveEnrollment() {
+  const name = document.getElementById('ef_studentName').value.trim();
+  const program = document.getElementById('ef_program').value;
+  if (!name || !program) { toast('Student name and program are required', 'error'); return; }
+  const body = {
+    leadId:       document.getElementById('ef_leadId').value || undefined,
+    studentName:  name,
+    grade:        document.getElementById('ef_grade').value,
+    parentName:   document.getElementById('ef_parentName').value,
+    parentEmail:  document.getElementById('ef_parentEmail').value,
+    parentPhone:  document.getElementById('ef_parentPhone').value,
+    program,
+    examDate:     document.getElementById('ef_examDate').value || undefined,
+    learningMode: document.getElementById('ef_learningMode').value,
+    paymentPlan:  document.getElementById('ef_paymentPlan').value,
+    programFee:   document.getElementById('ef_programFee').value,
+    notes:        document.getElementById('ef_notes').value,
+  };
+  try {
+    await fetch('/api/crm/enrollments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    toast('Enrollment saved ✓', 'success');
+    hideEnrollForm();
+    loadEnrollments();
+  } catch(e) { toast(e.message, 'error'); }
+}
+async function openEnrollment(id) {
+  try {
+    const { enrollment: e, payments } = await fetch('/api/crm/enrollments/' + id).then(r => r.json());
+    let html = `<div class="section-title">📋 Enrollment Details</div>
+      <div class="detail-grid">
+        <div class="detail-cell"><div class="lbl">Student</div><div class="val">${esc(e.studentName)}</div></div>
+        <div class="detail-cell"><div class="lbl">Grade</div><div class="val">${esc(e.grade || '—')}</div></div>
+        <div class="detail-cell"><div class="lbl">Program</div><div class="val">${esc(e.program)}</div></div>
+        <div class="detail-cell"><div class="lbl">Mode</div><div class="val">${esc(e.learningMode)}</div></div>
+        <div class="detail-cell"><div class="lbl">Payment Plan</div><div class="val">${esc(e.paymentPlan)}</div></div>
+        <div class="detail-cell"><div class="lbl">Fee</div><div class="val">$${(e.programFee||0).toLocaleString()}</div></div>
+        <div class="detail-cell"><div class="lbl">Status</div><div class="val"><span class="status-badge">${fmtStatus(e.enrollmentStatus)}</span></div></div>
+        ${e.examDate ? `<div class="detail-cell"><div class="lbl">Exam Date</div><div class="val">${new Date(e.examDate).toLocaleDateString()}</div></div>` : ''}
+      </div>`;
+    if (payments.length) {
+      html += `<div class="section-title">💳 Payments</div>`;
+      payments.forEach(p => {
+        html += `<div class="payment-row">
+          <div><strong>$${p.amount.toLocaleString()}</strong> total · $${p.amountPaid.toLocaleString()} paid</div>
+          <div>${p.paymentDate ? new Date(p.paymentDate).toLocaleDateString() : '—'}</div>
+          <span class="payment-status-badge ${p.paymentStatus}">${fmtStatus(p.paymentStatus)}</span>
+        </div>`;
+      });
+    }
+    html += `<div class="action-bar">
+      <button class="btn btn-primary btn-sm" onclick="addPayment('${e._id}', '${e.leadId || ''}', '${e.programFee || 0}', '${e.program}')">💳 Add Payment</button>
+      <select onchange="if(this.value)updateEnrollStatus('${e._id}', this.value)" style="padding:8px 12px;border-radius:8px">
+        <option value="">Change Status…</option>
+        <option value="pending">Pending</option>
+        <option value="confirmed">Confirmed</option>
+        <option value="active">Active</option>
+        <option value="completed">Completed</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+    </div>`;
+    document.getElementById('modalBody').innerHTML = html;
+    document.getElementById('modalName').textContent = e.studentName;
+    document.getElementById('modalMeta').textContent = e.program + ' · ' + fmtStatus(e.enrollmentStatus);
+    document.getElementById('leadModal').classList.add('active');
+  } catch(e) { toast(e.message, 'error'); }
+}
+async function updateEnrollStatus(id, status) {
+  try {
+    await fetch('/api/crm/enrollments/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enrollmentStatus: status }) });
+    toast('Status updated ✓', 'success');
+    loadEnrollments();
+    closeModal();
+  } catch(e) { toast(e.message, 'error'); }
+}
+async function addPayment(enrollId, leadId, totalFee, program) {
+  const amountStr = prompt(`Enter amount paid for this enrollment (Total fee: $${totalFee}):`, totalFee);
+  if (!amountStr) return;
+  const amount = parseFloat(amountStr);
+  if (isNaN(amount) || amount <= 0) { toast('Invalid amount', 'error'); return; }
+  const method = prompt('Payment method (e.g. Credit Card, Check, Wire):') || '';
+  try {
+    await fetch('/api/crm/payments', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enrollmentId: enrollId, leadId, amount: totalFee || amount, amountPaid: amount, paymentDate: new Date().toISOString(), paymentMethod: method, program }),
+    });
+    toast('Payment recorded ✓', 'success');
+    openEnrollment(enrollId);
+    loadEnrollments();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ─── Revenue ────────────────────────────────────────
+async function loadRevenue(days = 30) {
+  try {
+    const d = await fetch('/api/crm/revenue?range=' + days).then(r => r.json());
+    document.getElementById('rv_revenue').textContent = '$' + (d.totalRevenue || 0).toLocaleString();
+    document.getElementById('rv_pending').textContent = '$' + (d.pendingRevenue || 0).toLocaleString();
+    document.getElementById('rv_enrolled').textContent = d.metrics.enrolled;
+    document.getElementById('rv_overall_conv').textContent = d.conversion.overallConversion + '%';
+
+    // Conversion metrics
+    document.getElementById('rv_conv_metrics').innerHTML = `
+      <div class="conv-row"><span>Total Leads</span><span class="conv-pct">${d.metrics.totalLeads}</span></div>
+      <div class="conv-row"><span>Qualified Leads</span><span class="conv-pct">${d.metrics.qualifiedLeads}</span></div>
+      <div class="conv-row"><span>Meetings Scheduled</span><span class="conv-pct">${d.metrics.meetingsScheduled}</span></div>
+      <div class="conv-row"><span>Meetings Completed</span><span class="conv-pct">${d.metrics.meetingsCompleted}</span></div>
+      <div class="conv-row"><span>Enrolled</span><span class="conv-pct" style="color:var(--pink)">${d.metrics.enrolled}</span></div>
+      <hr style="border-color:var(--border);margin:12px 0">
+      <div class="conv-row"><span>Lead → Meeting %</span><span class="conv-pct">${d.conversion.leadToMeeting}%</span></div>
+      <div class="conv-row"><span>Meeting → Enrolled %</span><span class="conv-pct">${d.conversion.meetingToEnroll}%</span></div>
+      <div class="conv-row"><span>Overall Conversion</span><span class="conv-pct" style="color:var(--success)">${d.conversion.overallConversion}%</span></div>`;
+
+    // Revenue by program
+    const el1 = document.getElementById('rv_by_program');
+    if (d.revByProgram.length) {
+      const maxR = Math.max(...d.revByProgram.map(p => p.revenue));
+      el1.innerHTML = d.revByProgram.map(p => `
+        <div class="bar-row">
+          <div class="label"><span>${esc(p._id || 'Unknown')}</span><strong>$${p.revenue.toLocaleString()}</strong></div>
+          <div class="bar"><div class="bar-fill" style="width:${(p.revenue/maxR)*100}%"></div></div>
+        </div>`).join('');
+    } else {
+      el1.innerHTML = '<div class="empty"><div class="icon">💰</div>No payments yet</div>';
+    }
+
+    // Enrollments by program
+    const el2 = document.getElementById('rv_enroll_prog');
+    if (d.enrollByProgram.length) {
+      const maxE = Math.max(...d.enrollByProgram.map(p => p.count));
+      el2.innerHTML = d.enrollByProgram.map(p => `
+        <div class="bar-row">
+          <div class="label"><span>${esc(p._id || 'Unknown')}</span><strong>${p.count}</strong></div>
+          <div class="bar"><div class="bar-fill" style="width:${(p.count/maxE)*100}%;background:var(--pink)"></div></div>
+        </div>`).join('');
+    } else {
+      el2.innerHTML = '<div class="empty">No enrollments yet</div>';
+    }
+
+    // Pipeline status counts
+    const el3 = document.getElementById('rv_pipeline');
+    const pipe = d.pipeline;
+    el3.innerHTML = Object.entries(pipe).map(([k, v]) => `
+      <div class="conv-row"><span><span class="status-badge ${k}">${fmtStatus(k)}</span></span><span class="conv-pct">${v}</span></div>`).join('');
+
+    // Revenue trend
+    const el4 = document.getElementById('rv_trend');
+    if (d.revTrend.length) {
+      const maxT = Math.max(...d.revTrend.map(x => x.revenue));
+      el4.innerHTML = `<div style="display:flex;gap:4px;align-items:flex-end;height:120px;padding:8px 0;border-bottom:1px solid var(--border);overflow-x:auto">
+        ${d.revTrend.map(x => `
+          <div style="flex:1;min-width:20px;display:flex;flex-direction:column;align-items:center;gap:4px">
+            <div style="font-size:9px;color:var(--muted)">$${x.revenue>999?Math.round(x.revenue/1000)+'k':x.revenue}</div>
+            <div style="width:100%;background:var(--success);height:${maxT>0?Math.max(4,(x.revenue/maxT)*100):2}px;border-radius:2px"></div>
+            <div style="font-size:8px;color:var(--muted);transform:rotate(-45deg);transform-origin:left;white-space:nowrap;margin-top:6px">${x._id.slice(5)}</div>
+          </div>`).join('')}
+      </div>`;
+    } else {
+      el4.innerHTML = '<div class="empty"><div class="icon">📈</div>No payment data yet</div>';
+    }
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ─── Meeting Outcome ────────────────────────────────
+function logOutcome(leadId, name) {
+  document.getElementById('outcomeLeadId').value = leadId;
+  document.getElementById('outcomeLeadName').textContent = name;
+  document.getElementById('outcomeResult').value = '';
+  document.getElementById('outcomeNotes').value = '';
+  closeModal();
+  document.getElementById('outcomeModal').classList.add('active');
+}
+function closeOutcomeModal() { document.getElementById('outcomeModal').classList.remove('active'); }
+async function saveOutcome() {
+  const leadId  = document.getElementById('outcomeLeadId').value;
+  const outcome = document.getElementById('outcomeResult').value;
+  const notes   = document.getElementById('outcomeNotes').value;
+  if (!outcome) { toast('Please select an outcome', 'error'); return; }
+  try {
+    await fetch('/api/crm/meeting-outcomes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ leadId, outcome, notes }) });
+    toast('Outcome saved ✓ Follow-ups scheduled', 'success');
+    closeOutcomeModal();
+    setTimeout(loadLeads, 1000);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ─── Objection ──────────────────────────────────────
+function addObjection(leadId, name) {
+  document.getElementById('objLeadId').value = leadId;
+  document.getElementById('objLeadName').textContent = name;
+  document.getElementById('objType').value = '';
+  document.getElementById('objNotes').value = '';
+  closeModal();
+  document.getElementById('objectionModal').classList.add('active');
+}
+function closeObjModal() { document.getElementById('objectionModal').classList.remove('active'); }
+async function saveObjection() {
+  const leadId        = document.getElementById('objLeadId').value;
+  const objectionType = document.getElementById('objType').value;
+  const notes         = document.getElementById('objNotes').value;
+  if (!objectionType) { toast('Please select an objection type', 'error'); return; }
+  try {
+    await fetch('/api/crm/objections', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ leadId, objectionType, notes }) });
+    toast('Objection logged ✓', 'success');
+    closeObjModal();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function scheduleFollowUps(leadId) {
+  try {
+    const r = await fetch('/api/crm/follow-ups/schedule/' + leadId, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(r => r.json());
+    toast(`✓ ${r.count} follow-ups scheduled`, 'success');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
 // ─── Helpers ────────────────────────────────────────
 function esc(s) { return (s || '').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 function catEmoji(c) { return { hot:'🔥', warm:'⚡', cold:'❄️' }[c] || ''; }
@@ -828,6 +1513,14 @@ function fmtStatus(s) { return (s || '').replace(/-/g,' ').replace(/\b\w/g, c =>
 function fmtUptime(sec) {
   const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60);
   return `${h}h ${m}m`;
+}
+function fmtFollowupType(t) {
+  const map = {
+    'email-day1': '📧 Email Follow-up (Day 1)', 'whatsapp-day1': '💬 WhatsApp (Day 1)',
+    'ai-call-day3': '🤖 AI Follow-up Call (Day 3)', 'success-stories-day5': '🌟 Success Stories Email (Day 5)',
+    'counselor-reminder-day7': '👤 Counselor Reminder (Day 7)', 'enrollment-reminder-day10': '🎓 Enrollment Reminder (Day 10)',
+  };
+  return map[t] || fmtStatus(t);
 }
 
 // Boot

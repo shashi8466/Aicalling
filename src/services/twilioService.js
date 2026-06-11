@@ -128,6 +128,31 @@ class TwilioService {
     return r.toString();
   }
 
+  /** Place a follow-up call (Day 3 AI re-engagement) */
+  async callFollowUp(lead, baseUrl) {
+    const leadId = lead._id.toString();
+    const params = new URLSearchParams({ leadId, followUp: '1' });
+
+    const call = await client.calls.create({
+      to:   lead.phone,
+      from: cfg.twilio.phoneNumber,
+      url:    `${baseUrl}/webhook/call/start?${params}`,
+      method: 'POST',
+      statusCallback:        `${baseUrl}/webhook/call/status?${params}`,
+      statusCallbackMethod:  'POST',
+      statusCallbackEvent:   ['initiated','ringing','answered','completed'],
+      record:                        true,
+      recordingStatusCallback:       `${baseUrl}/webhook/call/recording?${params}`,
+      recordingStatusCallbackMethod: 'POST',
+      machineDetection:        'DetectMessageEnd',
+      machineDetectionTimeout: 6000,
+      timeout: 30,
+    });
+
+    logger.info(`Follow-up call placed → ${lead.phone}  SID=${call.sid}`);
+    return { callSid: call.sid, status: call.status };
+  }
+
   /** End call gracefully */
   twimlHangup(text = 'Thank you for your time. Have a wonderful day! Goodbye.') {
     const r = new VR();
