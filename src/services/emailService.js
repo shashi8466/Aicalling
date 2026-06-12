@@ -211,7 +211,7 @@ ${this._programCards(l.courseInterest)}
     // ── Stripe Buy Now links ─────────────────────────────────────────
     const STRIPE = {
       prestigiousSAT:  'https://buy.stripe.com/6oEcO6baZb5w2HKcN9',
-      selfPacedSAT:    cfg.company.website,   // link not yet configured — falls back to website
+      selfPacedSAT:    'https://buy.stripe.com/3cs4hA6UJ8Xo968dRc',  // same $199 as Self-Paced ACT
       selfPacedACT:    'https://buy.stripe.com/3cs4hA6UJ8Xo968dRc',
       prestigiousACT:  'https://buy.stripe.com/7sI29s4MBgpQ6Y0bJ3',
     };
