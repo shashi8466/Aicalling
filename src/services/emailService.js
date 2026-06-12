@@ -208,6 +208,14 @@ ${this._programCards(l.courseInterest)}
     const isSAT = prog.includes('sat');
     const isACT = prog.includes('act');
 
+    // ── Stripe Buy Now links ─────────────────────────────────────────
+    const STRIPE = {
+      prestigiousSAT:  'https://buy.stripe.com/6oEcO6baZb5w2HKcN9',
+      selfPacedSAT:    cfg.company.website,   // link not yet configured — falls back to website
+      selfPacedACT:    'https://buy.stripe.com/3cs4hA6UJ8Xo968dRc',
+      prestigiousACT:  'https://buy.stripe.com/7sI29s4MBgpQ6Y0bJ3',
+    };
+
     // ── Shared card styles (inline, email-safe) ──────────────────────
     const wrap = `
       <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:24px 0">
@@ -242,7 +250,7 @@ ${this._programCards(l.courseInterest)}
             </ul>
             <p style="${priceStyle}">Price: $720 only</p>
             <p style="${noteStyle}">Includes 1-Year Digital License + 8 Full-Length Tests + 548-Page Digital Workbook + Registration Fee (worth $199)</p>
-            <a href="${cfg.company.website}" style="${btnStyle}">BUY NOW</a>
+            <a href="${STRIPE.prestigiousSAT}" style="${btnStyle}">BUY NOW</a>
           </div>
         </td>
         ${divider}
@@ -258,7 +266,7 @@ ${this._programCards(l.courseInterest)}
               <li>Score with Detailed Analytics</li>
               <li>Learn Your Strengths &amp; Weaknesses</li>
             </ul>
-            <a href="${cfg.company.website}" style="${btnStyle}">BUY NOW</a>
+            <a href="${STRIPE.selfPacedSAT}" style="${btnStyle}">BUY NOW</a>
           </div>
         ${close}`;
     }
@@ -276,7 +284,7 @@ ${this._programCards(l.courseInterest)}
               <li>18-week structured course</li>
               <li>Learn from your mistakes with expert teacher videos</li>
             </ul>
-            <a href="${cfg.company.website}" style="${btnStyle}">BUY NOW</a>
+            <a href="${STRIPE.selfPacedACT}" style="${btnStyle}">BUY NOW</a>
           </div>
         </td>
         ${divider}
@@ -290,7 +298,7 @@ ${this._programCards(l.courseInterest)}
             </ul>
             <p style="${priceStyle}">Price: $720 only</p>
             <p style="${noteStyle}">Includes 1-Year Digital License + 15 Full-Length Tests + 548-Page Digital Workbook + Registration Fee (worth $199)</p>
-            <a href="${cfg.company.website}" style="${btnStyle}">BUY NOW</a>
+            <a href="${STRIPE.prestigiousACT}" style="${btnStyle}">BUY NOW</a>
           </div>
         ${close}`;
     }
