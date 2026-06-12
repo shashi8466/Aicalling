@@ -256,6 +256,8 @@ router.post('/leads/:id/email', async (req, res) => {
     const { type } = req.body;
     const lead = await Lead.findById(req.params.id);
     if (!lead) return res.status(404).json({ error: 'Lead not found' });
+    if (!type) return res.status(400).json({ error: 'Email type required (welcome, confirmation, reminder, noAnswer, enrollment)' });
+
     const map = {
       welcome:      () => emailSvc.sendNewLeadWelcome(lead),
       confirmation: () => emailSvc.sendMeetingConfirmation(lead),
@@ -263,15 +265,19 @@ router.post('/leads/:id/email', async (req, res) => {
       noAnswer:     () => emailSvc.sendNoAnswer(lead),
       enrollment:   () => emailSvc.sendEnrollmentFollowup(lead),
     };
-    if (!map[type]) return res.status(400).json({ error: 'Invalid email type' });
+    if (!map[type]) return res.status(400).json({ error: `Invalid email type "${type}". Must be one of: welcome, confirmation, reminder, noAnswer, enrollment` });
+
     const result = await map[type]();
     if (result.ok) {
       lead.emailsSent.push({ type, sentAt: new Date() });
       await lead.save();
+    } else if (result.error) {
+      logger.warn(`Email send failed (not critical)`, { leadId: req.params.id, type, error: result.error });
     }
     res.json(result);
   } catch(e) {
-    res.status(500).json({ error: e.message });
+    logger.error('Email endpoint error', { leadId: req.params.id, type: req.body.type, msg: e.message, stack: e.stack?.split('\n').slice(0,5) });
+    res.status(500).json({ error: `Email service error: ${e.message}` });
   }
 });
 

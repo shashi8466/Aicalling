@@ -15,6 +15,11 @@ class EmailService {
   // ── Public senders ───────────────────────────────────────────────────
 
   async sendNewLeadWelcome(lead) {
+    if (!lead.email) {
+      const err = `Lead ${lead._id} missing email address`;
+      logger.error(err);
+      return { ok: false, error: err };
+    }
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
@@ -24,6 +29,16 @@ class EmailService {
   }
 
   async sendMeetingConfirmation(lead) {
+    if (!lead.email) {
+      const err = `Lead ${lead._id} missing email address`;
+      logger.error(err);
+      return { ok: false, error: err };
+    }
+    if (!lead.meeting?.scheduledAt) {
+      const err = `Lead ${lead._id} missing meeting.scheduledAt`;
+      logger.error(err);
+      return { ok: false, error: err };
+    }
     const t = moment(lead.meeting.scheduledAt)
       .tz('America/New_York')
       .format('dddd, MMMM Do [at] h:mm A [ET]');
@@ -36,6 +51,11 @@ class EmailService {
   }
 
   async sendNoAnswer(lead) {
+    if (!lead.email) {
+      const err = `Lead ${lead._id} missing email address`;
+      logger.error(err);
+      return { ok: false, error: err };
+    }
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
@@ -45,6 +65,16 @@ class EmailService {
   }
 
   async sendMeetingReminder(lead) {
+    if (!lead.email) {
+      const err = `Lead ${lead._id} missing email address`;
+      logger.error(err);
+      return { ok: false, error: err };
+    }
+    if (!lead.meeting?.scheduledAt) {
+      const err = `Lead ${lead._id} missing meeting.scheduledAt`;
+      logger.error(err);
+      return { ok: false, error: err };
+    }
     const t = moment(lead.meeting.scheduledAt)
       .tz('America/New_York')
       .format('dddd, MMMM Do [at] h:mm A [ET]');
@@ -57,6 +87,11 @@ class EmailService {
   }
 
   async sendSuccessStories(lead) {
+    if (!lead.email) {
+      const err = `Lead ${lead._id} missing email address`;
+      logger.error(err);
+      return { ok: false, error: err };
+    }
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
@@ -66,6 +101,11 @@ class EmailService {
   }
 
   async sendEnrollmentReminder(lead) {
+    if (!lead.email) {
+      const err = `Lead ${lead._id} missing email address`;
+      logger.error(err);
+      return { ok: false, error: err };
+    }
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
@@ -75,6 +115,11 @@ class EmailService {
   }
 
   async sendEnrollmentFollowup(lead) {
+    if (!lead.email) {
+      const err = `Lead ${lead._id} missing email address`;
+      logger.error(err);
+      return { ok: false, error: err };
+    }
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
@@ -86,6 +131,30 @@ class EmailService {
   // ── Core Brevo API call ──────────────────────────────────────────────
 
   async _send({ to, cc, subject, html }) {
+    // Validate required config
+    if (!cfg.brevo.apiKey) {
+      const err = 'BREVO_API_KEY not configured in environment';
+      logger.error(err);
+      return { ok: false, error: err };
+    }
+    if (!cfg.brevo.fromEmail) {
+      const err = 'BREVO_FROM_EMAIL not configured in environment';
+      logger.error(err);
+      return { ok: false, error: err };
+    }
+
+    // Validate email addresses
+    if (!to || !to.includes('@')) {
+      const err = `Invalid recipient email: "${to}"`;
+      logger.error(err);
+      return { ok: false, error: err };
+    }
+    if (cc && !cc.includes('@')) {
+      const err = `Invalid cc email: "${cc}"`;
+      logger.error(err);
+      return { ok: false, error: err };
+    }
+
     const toArr = [{ email: to }];
     const ccArr = cc ? [{ email: cc }] : undefined;
 
@@ -111,7 +180,7 @@ class EmailService {
       return { ok: true, messageId: msgId };
     } catch (err) {
       const detail = err.response?.data?.message || err.message;
-      logger.error('Brevo email failed', { to, subject, detail });
+      logger.error('Brevo email failed', { to, subject, detail, status: err.response?.status });
       return { ok: false, error: detail };
     }
   }
