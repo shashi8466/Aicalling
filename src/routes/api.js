@@ -252,12 +252,32 @@ router.post('/leads/:id/call', async (req, res) => {
 });
 
 router.post('/leads/:id/email', async (req, res) => {
-  try {
-    const { type } = req.body;
-    const lead = await Lead.findById(req.params.id);
-    if (!lead) return res.status(404).json({ error: 'Lead not found' });
-    if (!type) return res.status(400).json({ error: 'Email type required (welcome, confirmation, reminder, noAnswer, enrollment)' });
+  const { type } = req.body || {};
+  const leadId = req.params.id;
 
+  try {
+    // ── Env var check (most common cause of 500 on production) ──────────
+    const cfg2 = require('../config');
+    if (!cfg2.brevo.apiKey) {
+      logger.error('BREVO_API_KEY not set in environment');
+      return res.status(200).json({ ok: false, error: 'Email service not configured: BREVO_API_KEY missing. Please set it in Render environment variables.' });
+    }
+    if (!cfg2.brevo.fromEmail) {
+      logger.error('BREVO_FROM_EMAIL not set in environment');
+      return res.status(200).json({ ok: false, error: 'Email service not configured: BREVO_FROM_EMAIL missing. Please set it in Render environment variables.' });
+    }
+
+    // ── Input validation ─────────────────────────────────────────────────
+    if (!type) {
+      return res.status(400).json({ ok: false, error: 'Email type required. Use: welcome, confirmation, reminder, noAnswer, or enrollment' });
+    }
+
+    // ── Lead lookup ──────────────────────────────────────────────────────
+    const lead = await Lead.findById(leadId);
+    if (!lead) return res.status(404).json({ ok: false, error: 'Lead not found' });
+    if (!lead.email) return res.status(200).json({ ok: false, error: `Lead "${lead.fullName}" has no email address on file` });
+
+    // ── Email type map ───────────────────────────────────────────────────
     const map = {
       welcome:      () => emailSvc.sendNewLeadWelcome(lead),
       confirmation: () => emailSvc.sendMeetingConfirmation(lead),
@@ -265,19 +285,40 @@ router.post('/leads/:id/email', async (req, res) => {
       noAnswer:     () => emailSvc.sendNoAnswer(lead),
       enrollment:   () => emailSvc.sendEnrollmentFollowup(lead),
     };
-    if (!map[type]) return res.status(400).json({ error: `Invalid email type "${type}". Must be one of: welcome, confirmation, reminder, noAnswer, enrollment` });
-
-    const result = await map[type]();
-    if (result.ok) {
-      lead.emailsSent.push({ type, sentAt: new Date() });
-      await lead.save();
-    } else if (result.error) {
-      logger.warn(`Email send failed (not critical)`, { leadId: req.params.id, type, error: result.error });
+    if (!map[type]) {
+      return res.status(400).json({ ok: false, error: `Unknown email type "${type}". Valid types: welcome, confirmation, reminder, noAnswer, enrollment` });
     }
-    res.json(result);
+
+    // ── Send ─────────────────────────────────────────────────────────────
+    logger.info(`Sending "${type}" email to ${lead.email}`, { leadId });
+    const result = await map[type]();
+
+    if (result.ok) {
+      // Track sent email on lead (safe — won't throw)
+      try {
+        lead.emailsSent = lead.emailsSent || [];
+        lead.emailsSent.push({ type, sentAt: new Date() });
+        await lead.save();
+      } catch(saveErr) {
+        logger.warn('Could not save emailsSent to lead', { leadId, err: saveErr.message });
+      }
+      logger.info(`✅ Email sent: type="${type}" to=${lead.email}`, { leadId });
+    } else {
+      logger.warn(`Email not sent: ${result.error}`, { leadId, type });
+    }
+
+    // Always return 200 with ok/error — never 500 for email failures
+    return res.status(200).json(result);
+
   } catch(e) {
-    logger.error('Email endpoint error', { leadId: req.params.id, type: req.body.type, msg: e.message, stack: e.stack?.split('\n').slice(0,5) });
-    res.status(500).json({ error: `Email service error: ${e.message}` });
+    logger.error('Email endpoint unexpected error', {
+      leadId,
+      type,
+      msg: e.message,
+      stack: e.stack?.split('\n').slice(0, 6),
+    });
+    // Return 200 with error details so dashboard shows friendly message
+    return res.status(200).json({ ok: false, error: `Unexpected error: ${e.message}` });
   }
 });
 
@@ -378,6 +419,41 @@ router.get('/system', (req, res) => {
     uptime:        Math.round(process.uptime()),
     env:           cfg.server.env,
     timestamp:     new Date().toISOString(),
+  });
+});
+
+// ── Config check (no secrets exposed — only shows which vars are set) ────────
+router.get('/config-check', (req, res) => {
+  const check = (val) => val ? '✅ Set' : '❌ MISSING';
+  res.json({
+    info: 'Shows which environment variables are configured. No secret values are returned.',
+    environment: cfg.server.env,
+    email: {
+      BREVO_API_KEY:    check(cfg.brevo.apiKey),
+      BREVO_FROM_EMAIL: check(cfg.brevo.fromEmail),
+      BREVO_FROM_NAME:  check(cfg.brevo.fromName),
+    },
+    twilio: {
+      TWILIO_ACCOUNT_SID: check(cfg.twilio.accountSid),
+      TWILIO_AUTH_TOKEN:  check(cfg.twilio.authToken),
+      TWILIO_PHONE_NUMBER: cfg.twilio.phoneNumber || '❌ MISSING',
+    },
+    ai: {
+      OPENAI_API_KEY:  check(cfg.openai.apiKey),
+      LLM_PROVIDER:    cfg.llm.provider,
+    },
+    google: {
+      GOOGLE_CLIENT_EMAIL: check(cfg.google.clientEmail),
+      GOOGLE_PRIVATE_KEY:  check(cfg.google.privateKey),
+      GOOGLE_SHEETS_ID:    check(cfg.google.sheetsId),
+    },
+    db: {
+      MONGODB_URI: check(cfg.db.uri && cfg.db.uri !== 'mongodb://localhost:27017/testpreppundits'),
+    },
+    server: {
+      BASE_URL:  cfg.server.baseUrl,
+      PORT:      cfg.server.port,
+    },
   });
 });
 
