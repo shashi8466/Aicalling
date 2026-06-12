@@ -19,8 +19,11 @@ router.get('/meeting-outcomes', async (req, res) => {
   try {
     const { leadId } = req.query;
     const q = leadId ? { leadId } : {};
-    const outcomes = await MeetingOutcome.find(q).sort({ createdAt: -1 }).limit(200);
-    res.json(outcomes);
+    const outcomes = await MeetingOutcome.find(q)
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .populate('leadId', 'fullName email grade courseInterest _id');
+    res.json({ outcomes, total: outcomes.length });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

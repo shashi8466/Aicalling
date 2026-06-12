@@ -371,12 +371,22 @@ audio { width: 100%; margin-top: 10px; }
       <!-- ─── MEETINGS ─── -->
       <section class="view" id="view-meetings">
         <div class="card">
-          <div class="card-header"><h3>Upcoming Meetings</h3></div>
+          <div class="card-header">
+            <h3>Upcoming Meetings</h3>
+            <span style="font-size:12px;color:var(--muted)">Click <strong>✅ Complete Meeting</strong> after each session to log the outcome</span>
+          </div>
           <div id="meetingsUpcoming"></div>
         </div>
         <div class="card">
           <div class="card-header"><h3>Past Meetings</h3></div>
           <div id="meetingsPast"></div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3>📋 Meeting Outcomes</h3>
+            <button class="btn btn-secondary btn-sm" onclick="loadMeetingOutcomes()">↻ Refresh</button>
+          </div>
+          <div id="meetingOutcomesList"></div>
         </div>
       </section>
 
@@ -841,29 +851,101 @@ async function loadMeetings() {
   try {
     MEETINGS = await api('/meetings');
     document.getElementById('navMeetCount').textContent = MEETINGS.total;
-    renderMeetingList('meetingsUpcoming', MEETINGS.upcoming, 'No upcoming meetings');
-    renderMeetingList('meetingsPast',     MEETINGS.past,     'No past meetings');
+    renderMeetingList('meetingsUpcoming', MEETINGS.upcoming, 'No upcoming meetings', true);
+    renderMeetingList('meetingsPast',     MEETINGS.past,     'No past meetings',     false);
+    loadMeetingOutcomes();
   } catch(e) { toast(e.message, 'error'); }
 }
 
-function renderMeetingList(elId, list, emptyMsg) {
+function renderMeetingList(elId, list, emptyMsg, showAction) {
   const el = document.getElementById(elId);
   if (!list.length) { el.innerHTML = `<div class="empty"><div class="icon">📅</div>${emptyMsg}</div>`; return; }
   el.innerHTML = `
     <table>
-      <thead><tr><th>Student</th><th>Grade</th><th>Date / Time</th><th>Program</th><th>Meet Link</th><th>Status</th></tr></thead>
+      <thead><tr>
+        <th>Student</th><th>Grade</th><th>Date / Time</th><th>Program</th><th>Meet Link</th><th>Status</th>
+        ${showAction ? '<th>Action</th>' : ''}
+      </tr></thead>
       <tbody>${list.map(l => `
-        <tr onclick="openLead('${l._id}')">
-          <td><strong>${esc(l.fullName)}</strong><br><span style="color:var(--muted);font-size:12px">${esc(l.email)}</span></td>
+        <tr>
+          <td onclick="openLead('${l._id}')" style="cursor:pointer">
+            <strong>${esc(l.fullName)}</strong><br>
+            <span style="color:var(--muted);font-size:12px">${esc(l.email)}</span>
+          </td>
           <td>${esc(l.grade || '—')}</td>
           <td>${new Date(l.meeting.scheduledAt).toLocaleString()}</td>
           <td>${esc(l.courseInterest || '—')}</td>
-          <td>${l.meeting.meetLink ? `<a href="${l.meeting.meetLink}" target="_blank" style="color:var(--brand)" onclick="event.stopPropagation()">🎥 Join</a>` : '—'}</td>
-          <td><span class="status-badge meeting-scheduled">${l.meeting.status}</span></td>
+          <td>${l.meeting.meetLink ? `<a href="${l.meeting.meetLink}" target="_blank" style="color:var(--brand)">🎥 Join</a>` : '—'}</td>
+          <td><span class="status-badge ${(l.status||'').replace(/\s/g,'-')}">${fmtStatus(l.meeting.status || l.status)}</span></td>
+          ${showAction ? `
+          <td>
+            <button class="btn btn-sm" style="background:var(--success);color:#fff;white-space:nowrap"
+              onclick="completeMeeting('${l._id}','${esc(l.fullName)}')">
+              ✅ Complete Meeting
+            </button>
+          </td>` : ''}
         </tr>
       `).join('')}</tbody>
     </table>
   `;
+}
+
+async function loadMeetingOutcomes() {
+  const el = document.getElementById('meetingOutcomesList');
+  if (!el) return;
+  try {
+    const data = await api('/crm/meeting-outcomes');
+    const list = data.outcomes || data;
+    if (!list || !list.length) {
+      el.innerHTML = '<div class="empty"><div class="icon">📋</div>No outcomes logged yet</div>';
+      return;
+    }
+    const outcomeColor = {
+      'interested':              'var(--brand)',
+      'need-follow-up':          'var(--warm)',
+      'not-interested':          'var(--hot)',
+      'parent-wants-discussion': 'var(--purple)',
+      'ready-to-enroll':         'var(--success)',
+    };
+    const outcomeNext = {
+      'interested':              '→ Proposal Sent',
+      'need-follow-up':          '→ Follow-up Queue',
+      'not-interested':          '→ Lost',
+      'parent-wants-discussion': '→ Parent Follow-up',
+      'ready-to-enroll':         '→ Enrollment Pending',
+    };
+    el.innerHTML = `
+      <table>
+        <thead><tr><th>Student</th><th>Outcome</th><th>Pipeline Move</th><th>Notes</th><th>Logged</th></tr></thead>
+        <tbody>${list.map(o => {
+          const color = outcomeColor[o.outcome] || 'var(--muted)';
+          const next  = outcomeNext[o.outcome]  || '';
+          const name  = o.leadId?.fullName || '—';
+          const notes = o.notes ? esc(o.notes.slice(0, 80)) + (o.notes.length > 80 ? '…' : '') : '—';
+          return `<tr onclick="openLead('${o.leadId?._id || ''}')" style="cursor:pointer">
+            <td><strong>${esc(name)}</strong></td>
+            <td><span style="background:${color}22;color:${color};padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600">${fmtStatus(o.outcome)}</span></td>
+            <td style="color:var(--muted);font-size:12px">${next}</td>
+            <td style="color:var(--muted);font-size:12px;max-width:200px">${notes}</td>
+            <td style="color:var(--muted);font-size:12px">${o.createdAt ? new Date(o.createdAt).toLocaleDateString() : '—'}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    `;
+  } catch(e) {
+    el.innerHTML = '<div class="empty"><div class="icon">⚠️</div>Could not load outcomes</div>';
+  }
+}
+
+function completeMeeting(leadId, name) {
+  // Open the outcome modal — same modal used from lead detail view
+  document.getElementById('outcomeLeadId').value = leadId;
+  document.getElementById('outcomeLeadName').textContent = name;
+  document.getElementById('outcomeResult').value = '';
+  document.getElementById('outcomeNotes').value = '';
+  document.getElementById('outcomeModal').classList.add('active');
+  // Flag that we came from the meetings page so refresh is correct
+  document.getElementById('outcomeModal').dataset.fromMeetings = '1';
 }
 
 // ─── Analytics ─────────────────────────────────────
@@ -1461,18 +1543,46 @@ function logOutcome(leadId, name) {
   document.getElementById('outcomeNotes').value = '';
   closeModal();
   document.getElementById('outcomeModal').classList.add('active');
+  document.getElementById('outcomeModal').dataset.fromMeetings = '0';
 }
-function closeOutcomeModal() { document.getElementById('outcomeModal').classList.remove('active'); }
+function closeOutcomeModal() {
+  document.getElementById('outcomeModal').classList.remove('active');
+  document.getElementById('outcomeModal').dataset.fromMeetings = '0';
+}
 async function saveOutcome() {
   const leadId  = document.getElementById('outcomeLeadId').value;
   const outcome = document.getElementById('outcomeResult').value;
   const notes   = document.getElementById('outcomeNotes').value;
   if (!outcome) { toast('Please select an outcome', 'error'); return; }
+
+  // Backend /api/crm/meeting-outcomes POST handles the status update automatically.
+  // Mapping shown here for UI label only (mirrors server-side statusMap in crm.js):
+  //   interested              → proposal-sent
+  //   need-follow-up          → meeting-completed  (follow-ups auto-scheduled)
+  //   parent-wants-discussion → meeting-completed  (follow-ups auto-scheduled)
+  //   ready-to-enroll         → enrollment-pending
+  //   not-interested          → lost
+  const outcomeLabel = {
+    'interested':              '📄 Moved to Proposal Sent',
+    'need-follow-up':          '🔄 Follow-ups Scheduled (Day 1/3/5/7/10)',
+    'not-interested':          '❌ Marked as Lost',
+    'parent-wants-discussion': '👪 Follow-ups Scheduled for Parent Discussion',
+    'ready-to-enroll':         '🎓 Moved to Enrollment Pending',
+  };
+
   try {
-    await fetch('/api/crm/meeting-outcomes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ leadId, outcome, notes }) });
-    toast('Outcome saved ✓ Follow-ups scheduled', 'success');
+    await fetch('/api/crm/meeting-outcomes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ leadId, outcome, notes }),
+    });
+
+    toast(`Outcome saved! ${outcomeLabel[outcome] || ''}`, 'success');
     closeOutcomeModal();
-    setTimeout(loadLeads, 1000);
+    setTimeout(() => {
+      loadLeads();
+      loadMeetings();
+    }, 800);
   } catch(e) { toast(e.message, 'error'); }
 }
 
