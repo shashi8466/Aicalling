@@ -117,7 +117,7 @@ router.post('/call/respond', async (req, res) => {
       await _finaliseCall(lead, session, req.body.CallSid, 'completed-after-booking');
       const studentFirst = lead.fullName.split(' ')[0];
       return res.send(twilioSvc.twimlHangup(
-        `Thank you so much, ${studentFirst}'s consultation is all set! Have a wonderful day!`
+        `Thank you for choosing Test Prep Pundits. We look forward to helping ${studentFirst} achieve their goals. Have a wonderful day!`
       ));
     }
 
@@ -393,9 +393,9 @@ router.post('/call/book', async (req, res) => {
       });
 
       const confirmMsg =
-        `Perfect! I've scheduled ${studentFirst}'s free consultation for ${chosen.displayTime}. ` +
-        `You'll receive a confirmation email shortly with the Google Meet link, meeting details, and advisor information. ` +
-        `Do you have any questions before we finish?`;
+        `Great! Your consultation has been scheduled for ${chosen.displayTime}. ` +
+        `You will receive a meeting confirmation, a Google Meet link, program details, and a follow-up email shortly. ` +
+        `Is there anything else you'd like to know before we end the call?`;
       // Use respond TwiML so we can hear their reply, not hang up immediately
       return res.send(twilioSvc.twimlRespond(
         confirmMsg,

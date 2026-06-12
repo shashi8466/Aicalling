@@ -52,6 +52,23 @@ class TwilioService {
 
   // ── TwiML builders ──────────────────────────────────────────────────
 
+  /**
+   * Speak text with natural voice settings:
+   *  – 92% speaking rate (recommended 0.92x)
+   *  – 600ms pause after each question (recommended 500–800ms)
+   * Uses Twilio's SSML helper API (raw XML strings would be escaped).
+   */
+  _speak(parent, text) {
+    const say = parent.say({ voice: VOICE, language: LANG });
+    // Split on question marks so we can insert a natural pause after each question
+    const parts = String(text).split(/(?<=\?)\s+/).filter(Boolean);
+    parts.forEach((p, i) => {
+      say.prosody({ rate: '92%' }, p);
+      if (i < parts.length - 1) say.break({ strength: 'strong', time: '600ms' });
+    });
+    return say;
+  }
+
   /** Opening greeting – gathers first response */
   twimlStart(text, gatherUrl) {
     const r = new VR();
@@ -60,12 +77,10 @@ class TwilioService {
       action:       gatherUrl,
       method:       'POST',
       speechTimeout:'auto',
-      speechModel:  'phone_call',
-      enhanced:     'true',
       language:     LANG,
       timeout:      5,
     });
-    g.say({ voice: VOICE, language: LANG }, text);
+    this._speak(g, text);
     // Fallback if no speech detected
     r.redirect({ method: 'POST' }, gatherUrl + '&noSpeech=1');
     return r.toString();
@@ -89,19 +104,17 @@ class TwilioService {
                       : slots.length === 3 ? 'option one, option two, or option three'
                       : 'option one or option two';
 
-    const fullText = `${intro} I currently have the following available slots. ${slotSpeech}. Which option works best for you? You can say ${choiceWords}.`;
+    const fullText = `${intro} I currently have the following available times. ${slotSpeech}. Which works best for you? You can say ${choiceWords}.`;
 
     const g = r.gather({
       input:        'speech',
       action:       bookUrl,
       method:       'POST',
       speechTimeout:'auto',
-      speechModel:  'phone_call',
-      enhanced:     'true',
       language:     LANG,
       timeout:      12,
     });
-    g.say({ voice: VOICE, language: LANG }, fullText);
+    this._speak(g, fullText);
     r.redirect({ method: 'POST' }, bookUrl + '&noSpeech=1');
     return r.toString();
   }
@@ -109,7 +122,7 @@ class TwilioService {
   /** Meeting booked confirmation then hangup */
   twimlBookingConfirm(text) {
     const r = new VR();
-    r.say({ voice: VOICE, language: LANG }, text);
+    this._speak(r, text);
     r.pause({ length: 1 });
     r.hangup();
     return r.toString();
@@ -118,7 +131,7 @@ class TwilioService {
   /** Voicemail – say message then hang up */
   twimlVoicemail(lead) {
     const r = new VR();
-    r.say({ voice: VOICE, language: LANG },
+    this._speak(r,
       `Hello, this is Shashi from Test Prep Pundits. ` +
       `I'm calling for ${lead.fullName} to follow up on your recent demo test with us. ` +
       `Please call us back at ${cfg.company.counselorPhone} or visit ${cfg.company.website}. ` +
@@ -156,7 +169,7 @@ class TwilioService {
   /** End call gracefully */
   twimlHangup(text = 'Thank you for your time. Have a wonderful day! Goodbye.') {
     const r = new VR();
-    r.say({ voice: VOICE, language: LANG }, text);
+    this._speak(r, text);
     r.hangup();
     return r.toString();
   }
