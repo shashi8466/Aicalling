@@ -196,29 +196,63 @@ class EmailService {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Helvetica Neue',Arial,sans-serif;background:#f0f4f8;color:#374151}
-.wrap{max-width:600px;margin:28px auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.10)}
+body{font-family:'Helvetica Neue',Arial,sans-serif;background:#f0f4f8;color:#374151;-webkit-font-smoothing:antialiased}
+img{max-width:100%;height:auto;display:block}
+a{color:#2563eb}
+.wrap{max-width:600px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.10)}
 .hdr{background:linear-gradient(135deg,#1a3c6e 0%,#2563eb 100%);padding:32px 40px;text-align:center}
-.hdr h1{color:#fff;font-size:24px;font-weight:800;letter-spacing:-.3px}
-.hdr p{color:rgba(255,255,255,.82);font-size:13px;margin-top:6px}
+.hdr h1{color:#fff;font-size:24px;font-weight:800;letter-spacing:-.3px;margin:0}
+.hdr p{color:rgba(255,255,255,.82);font-size:13px;margin:6px 0 0}
 .body{padding:36px 40px;line-height:1.75;font-size:15px}
-h2{color:#1a3c6e;font-size:20px;font-weight:700;margin-bottom:14px}
-p{margin-bottom:12px}
-ul{margin:8px 0 14px 20px}
-li{margin-bottom:6px}
+h2{color:#1a3c6e;font-size:20px;font-weight:700;margin:0 0 14px;line-height:1.3}
+p{margin:0 0 12px;font-size:15px;line-height:1.6}
+ul{margin:8px 0 14px 20px;padding:0}
+li{margin:0 0 6px;font-size:15px;line-height:1.6}
 .box{background:#eff6ff;border-left:4px solid #2563eb;padding:16px 20px;border-radius:0 10px 10px 0;margin:20px 0;font-size:15px;line-height:1.7}
 .grid{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0}
 .cell{background:#f8fafc;padding:12px 16px;border-radius:10px;flex:1;min-width:130px}
-.lbl{font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.6px;font-weight:600}
-.val{font-weight:700;color:#1a3c6e;font-size:15px;margin-top:4px}
-.btn{display:inline-block;background:#2563eb;color:#fff!important;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:700;font-size:15px;margin:20px 0;letter-spacing:.2px}
-.sig{margin-top:32px;padding-top:20px;border-top:1px solid #e5e7eb;font-size:14px;color:#374151}
-.sig strong{color:#1a3c6e;display:block;font-size:15px;margin-bottom:4px}
-.ftr{background:#f8fafc;padding:22px 40px;text-align:center;color:#9ca3af;font-size:12px;border-top:1px solid #e5e7eb}
+.lbl{font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.6px;font-weight:600;margin:0;display:block}
+.val{font-weight:700;color:#1a3c6e;font-size:15px;margin:4px 0 0;display:block;word-break:break-word}
+.btn{display:inline-block;background:#2563eb;color:#fff!important;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:700;font-size:15px;margin:20px 0;letter-spacing:.2px;border:0;cursor:pointer;mso-padding-alt:14px 32px}
+.sig{margin:32px 0 0;padding:20px 0 0;border-top:1px solid #e5e7eb;font-size:14px;color:#374151;line-height:1.6}
+.sig strong{color:#1a3c6e;display:block;font-size:15px;margin:0 0 4px;font-weight:700}
+.ftr{background:#f8fafc;padding:22px 40px;text-align:center;color:#9ca3af;font-size:12px;border-top:1px solid #e5e7eb;line-height:1.6}
 .ftr a{color:#2563eb;text-decoration:none}
+/* Email client safe table styles */
+table{border-collapse:collapse;border-spacing:0;width:100%}
+td{border-collapse:collapse}
+/* Mobile responsiveness for email */
+@media only screen and (max-width:600px){
+  body{width:100% !important;min-width:100% !important}
+  .wrap{max-width:100% !important;width:100% !important;margin:0 !important;border-radius:0 !important}
+  .hdr{padding:24px 20px !important}
+  .hdr h1{font-size:20px !important}
+  .hdr p{font-size:12px !important}
+  .hdr img{width:100px !important}
+  .body{padding:24px 20px !important;font-size:14px !important}
+  h2{font-size:18px !important;margin-bottom:12px !important}
+  p{font-size:14px !important;margin-bottom:10px !important}
+  ul{margin:6px 0 12px 18px !important}
+  li{font-size:14px !important;margin-bottom:5px !important}
+  .box{padding:14px 16px !important;margin:16px 0 !important;font-size:14px !important}
+  .grid{flex-direction:column !important;gap:8px !important;margin:14px 0 !important}
+  .cell{min-width:100% !important}
+  .btn{display:block !important;width:100% !important;text-align:center !important;padding:12px 20px !important;font-size:14px !important;margin:16px 0 !important}
+  .sig{margin:24px 0 0 !important;padding:16px 0 0 !important;font-size:12px !important}
+  .sig strong{font-size:14px !important}
+  .ftr{padding:16px 20px !important;font-size:11px !important}
+}
+@media only screen and (max-width:480px){
+  .hdr{padding:20px 16px !important}
+  .hdr h1{font-size:18px !important}
+  .body{padding:16px !important}
+  .box{padding:12px 14px !important;border-radius:6px !important}
+  .btn{padding:10px 16px !important;font-size:13px !important;margin:12px 0 !important}
+}
 </style>
 </head>
 <body>
