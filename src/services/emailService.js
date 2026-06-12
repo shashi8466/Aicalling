@@ -190,13 +190,7 @@ li{margin-bottom:6px}
   <div class="cell"><div class="lbl">Counselor</div><div class="val">Shashi Kumar</div></div>
 </div>
 
-<p><strong>🌟 Our most popular programs:</strong></p>
-<ul>
-  <li><strong>SAT / ACT Prep</strong> — Group classes from $599 | Private tutoring from $150/hr</li>
-  <li><strong>AP Course Support</strong> — 10–16 week intensives from $749</li>
-  <li><strong>College Admissions Counseling</strong> — Complete package from $2,999</li>
-</ul>
-<p>Students see an average of <strong>150–200 SAT point</strong> improvement or <strong>4–6 ACT composite points</strong> with our programs.</p>
+${this._programCards(l.courseInterest)}
 
 <a href="${c.website}" class="btn">Explore All Programs</a>
 
@@ -206,6 +200,110 @@ li{margin-bottom:6px}
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}<br>
   🌐 <a href="${c.website}">${c.website}</a>
 </div>`;
+  }
+
+  /** Renders two program cards based on the student's course interest */
+  _programCards(courseInterest) {
+    const prog = (courseInterest || '').toLowerCase();
+    const isSAT = prog.includes('sat');
+    const isACT = prog.includes('act');
+
+    // ── Shared card styles (inline, email-safe) ──────────────────────
+    const wrap = `
+      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:24px 0">
+        <tr><td style="padding:0 0 14px">
+          <p style="font-size:16px;font-weight:700;color:#1a3c6e;margin:0">
+            🎯 Programs for ${isSAT ? 'SAT' : isACT ? 'ACT' : 'Your'} Preparation:
+          </p>
+        </td></tr>
+        <tr><td>
+          <table cellpadding="0" cellspacing="0" border="0" width="100%"><tr>`;
+
+    const cardStyle = `vertical-align:top;width:48%;padding:0 6px 0 0`;
+    const cardInner = `background:#f0f6ff;border:2px solid #2563eb;border-radius:14px;padding:22px 20px;font-size:14px;line-height:1.7;color:#374151`;
+    const titleStyle = `font-size:15px;font-weight:800;color:#1a3c6e;text-transform:uppercase;letter-spacing:.3px;margin:0 0 4px`;
+    const subtitleStyle = `font-size:13px;font-weight:700;color:#ea580c;margin:0 0 14px`;
+    const priceStyle = `font-size:17px;font-weight:800;color:#ea580c;margin:12px 0 4px`;
+    const noteStyle = `font-size:12px;color:#6b7280;margin:0 0 14px`;
+    const btnStyle = `display:inline-block;background:#ea580c;color:#fff;text-decoration:none;padding:10px 22px;border-radius:8px;font-weight:700;font-size:13px;margin-top:8px`;
+    const divider = `</td><td style="width:4%"></td><td style="${cardStyle}">`;
+    const close   = `</td></tr></table></td></tr></table>`;
+
+    if (isSAT) {
+      return `${wrap}
+        <td style="${cardStyle}">
+          <div style="${cardInner}">
+            <p style="${titleStyle}">Prestigious Digital SAT Prep</p>
+            <p style="${subtitleStyle}">66 Hours · Weekend Course</p>
+            <ul style="margin:0 0 10px 18px;padding:0">
+              <li>12–15 Students Per Group</li>
+              <li>8–12 Weeks · Weekly Twice</li>
+              <li>You pay only <strong>$10/hr</strong></li>
+            </ul>
+            <p style="${priceStyle}">Price: $720 only</p>
+            <p style="${noteStyle}">Includes 1-Year Digital License + 8 Full-Length Tests + 548-Page Digital Workbook + Registration Fee (worth $199)</p>
+            <a href="${cfg.company.website}" style="${btnStyle}">BUY NOW</a>
+          </div>
+        </td>
+        ${divider}
+          <div style="${cardInner}">
+            <p style="${titleStyle}">Self-Paced Digital SAT Prep</p>
+            <p style="${subtitleStyle}">Online $199 only</p>
+            <ul style="margin:0 0 10px 18px;padding:0">
+              <li>Learn when it is convenient for you</li>
+              <li>548-Page Digital Workbook</li>
+              <li>Expert Video Solutions</li>
+              <li>Math, Reading &amp; Writing</li>
+              <li>5 Full-Length Tests</li>
+              <li>Score with Detailed Analytics</li>
+              <li>Learn Your Strengths &amp; Weaknesses</li>
+            </ul>
+            <a href="${cfg.company.website}" style="${btnStyle}">BUY NOW</a>
+          </div>
+        ${close}`;
+    }
+
+    if (isACT) {
+      return `${wrap}
+        <td style="${cardStyle}">
+          <div style="${cardInner}">
+            <p style="${titleStyle}">Splendid Self-Paced ACT Prep</p>
+            <p style="${subtitleStyle}">Go at Your Own Pace @ $199</p>
+            <ul style="margin:0 0 10px 18px;padding:0">
+              <li>Well-designed course for sequential growth</li>
+              <li>Learn anywhere, anytime</li>
+              <li>You are the boss of your schedule</li>
+              <li>18-week structured course</li>
+              <li>Learn from your mistakes with expert teacher videos</li>
+            </ul>
+            <a href="${cfg.company.website}" style="${btnStyle}">BUY NOW</a>
+          </div>
+        </td>
+        ${divider}
+          <div style="${cardInner}">
+            <p style="${titleStyle}">Prestigious ACT Prep</p>
+            <p style="${subtitleStyle}">66 Hours · Weekend Course</p>
+            <ul style="margin:0 0 10px 18px;padding:0">
+              <li>12–15 Students Per Group</li>
+              <li>8–12 Weeks · Weekly Twice</li>
+              <li>You pay only <strong>$10/hr</strong></li>
+            </ul>
+            <p style="${priceStyle}">Price: $720 only</p>
+            <p style="${noteStyle}">Includes 1-Year Digital License + 15 Full-Length Tests + 548-Page Digital Workbook + Registration Fee (worth $199)</p>
+            <a href="${cfg.company.website}" style="${btnStyle}">BUY NOW</a>
+          </div>
+        ${close}`;
+    }
+
+    // ── Fallback: generic program list (AP, College Admissions, or unknown) ──
+    return `
+<p><strong>🌟 Our most popular programs:</strong></p>
+<ul>
+  <li><strong>SAT / ACT Prep</strong> — Group classes from $599 | Private tutoring from $150/hr</li>
+  <li><strong>AP Course Support</strong> — 10–16 week intensives from $749</li>
+  <li><strong>College Admissions Counseling</strong> — Complete package from $2,999</li>
+</ul>
+<p>Students see an average of <strong>150–200 SAT point</strong> improvement or <strong>4–6 ACT composite points</strong> with our programs.</p>`;
   }
 
   _meetingConfBody(l, t) {
