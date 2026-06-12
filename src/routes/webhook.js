@@ -176,8 +176,9 @@ router.post('/call/respond', async (req, res) => {
     if (aiReply.includes('[OFFER_MEETING]')) {
       const clean = aiReply.replace('[OFFER_MEETING]', '').trim();
       // Transition to slot-offering step (handled in /slots)
+      // /slots announces: "I currently have the following available times…"
       return res.send(twilioSvc.twimlStart(
-        clean + ' Let me pull up our available times for a quick consultation.',
+        clean || 'Perfect.',
         slotsUrl(cfg.server.baseUrl, leadId)
       ));
     }
@@ -219,7 +220,7 @@ router.post('/call/slots', async (req, res) => {
     const lead  = await Lead.findById(leadId);
     if (!lead) return res.send(twilioSvc.twimlHangup());
 
-    const slots = await calendarSvc.getAvailableSlots(4);
+    const slots = await calendarSvc.getAvailableSlots(3);
     if (!slots.length) {
       return res.send(twilioSvc.twimlRespond(
         "I'm having trouble accessing our calendar right now. I'll have a counselor follow up with available times. Is email or a text message better for you?",
@@ -235,7 +236,7 @@ router.post('/call/slots', async (req, res) => {
     const bUrl = bookUrl(cfg.server.baseUrl, leadId);
     const studentFirst = lead.fullName.split(' ')[0];
     return res.send(twilioSvc.twimlOfferSlots(
-      `Great! I'm pulling up the next available slots for ${studentFirst}'s free 10 to 15 minute consultation.`,
+      ``,
       slots,
       bUrl
     ));
@@ -322,7 +323,7 @@ router.post('/call/book', async (req, res) => {
       // On attempt 1: gentle re-ask with the same slots
       if (attempts <= 2) {
         return res.send(twilioSvc.twimlOfferSlots(
-          `I'm sorry, I didn't quite catch that. Could you just say option one, option two, option three, or option four?`,
+          `I'm sorry, I didn't quite catch that. Could you just say option one, option two, or option three?`,
           slots,
           bookUrl(cfg.server.baseUrl, leadId)
         ));
