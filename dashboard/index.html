@@ -1399,7 +1399,7 @@ async function callLead(id) {
 async function sendEmail(id, type) {
   try {
     if (!id || !type) { toast('Invalid parameters', 'error'); return; }
-    const result = await api(`/api/leads/${id}/email`, {
+    const result = await api(`/leads/${id}/email`, {
       method: 'POST',
       body: JSON.stringify({ type })
     });
