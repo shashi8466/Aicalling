@@ -322,14 +322,82 @@ router.post('/leads/:id/email', async (req, res) => {
   }
 });
 
+// ── Create lead manually ──────────────────────────────────────────────────
+router.post('/leads', async (req, res) => {
+  try {
+    const { fullName, email, phone, grade, courseInterest, parentName, parentEmail, status, notes } = req.body;
+    if (!fullName?.trim()) return res.status(400).json({ error: 'Full name is required' });
+    if (!email?.trim())    return res.status(400).json({ error: 'Email is required' });
+    if (!phone?.trim())    return res.status(400).json({ error: 'Phone is required' });
+
+    const existing = await Lead.findOne({ email: email.trim().toLowerCase() });
+    if (existing) return res.status(409).json({ error: `A lead with email "${email}" already exists` });
+
+    const lead = await Lead.create({
+      fullName: fullName.trim(),
+      email:    email.trim().toLowerCase(),
+      phone:    phone.trim(),
+      grade:    grade?.trim() || '',
+      courseInterest: courseInterest?.trim() || '',
+      parentName:  parentName?.trim() || '',
+      parentEmail: parentEmail?.trim() || '',
+      status:  status || 'new',
+      notes:   notes?.trim() || '',
+      source:  'manual',
+    });
+    logger.info(`Lead created manually: ${lead.fullName} <${lead.email}>`);
+    res.status(201).json(lead);
+  } catch(e) {
+    if (e.code === 11000) return res.status(409).json({ error: 'A lead with this email already exists' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Update lead (all fields) ──────────────────────────────────────────────
 router.patch('/leads/:id', async (req, res) => {
   try {
-    const allowed = ['status','leadCategory','notes'];
+    const allowed = ['status', 'leadCategory', 'notes', 'fullName', 'email', 'phone',
+                     'grade', 'courseInterest', 'parentName', 'parentEmail', 'meeting.status'];
     const update = {};
     allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
     const lead = await Lead.findByIdAndUpdate(req.params.id, update, { new: true });
     if (!lead) return res.status(404).json({ error: 'Lead not found' });
     res.json(lead);
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Delete lead ───────────────────────────────────────────────────────────
+router.delete('/leads/:id', async (req, res) => {
+  try {
+    const lead = await Lead.findByIdAndDelete(req.params.id);
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
+    logger.info(`Lead deleted: ${lead.fullName} <${lead.email}>`);
+    res.json({ ok: true, message: `Lead "${lead.fullName}" deleted successfully` });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Delete a single call attempt ──────────────────────────────────────────
+router.delete('/leads/:id/calls/:callId', async (req, res) => {
+  try {
+    const lead = await Lead.findById(req.params.id);
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+    const before = lead.callAttempts.length;
+    lead.callAttempts = lead.callAttempts.filter(c => c._id.toString() !== req.params.callId);
+    if (lead.callAttempts.length === before) return res.status(404).json({ error: 'Call record not found' });
+
+    lead.totalCallAttempts = lead.callAttempts.length;
+    lead.lastCallAt = lead.callAttempts.length
+      ? lead.callAttempts[lead.callAttempts.length - 1].startTime
+      : null;
+    await lead.save();
+
+    logger.info(`Call deleted: leadId=${req.params.id} callId=${req.params.callId}`);
+    res.json({ ok: true, message: 'Call record deleted' });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
@@ -375,6 +443,7 @@ router.get('/calls', async (req, res) => {
           leadPhone: l.phone,
           leadScore: l.leadScore,
           leadStatus: l.status,
+          callId: c._id,          // ← needed for delete
           attemptIdx: idx,
           attemptNumber: c.attemptNumber,
           callSid: c.callSid,

@@ -566,6 +566,7 @@ audio { width: 100%; margin-top: 10px; }
                 <option value="">All Categories</option>
                 <option value="hot">🔥 Hot</option><option value="warm">⚡ Warm</option><option value="cold">❄️ Cold</option>
               </select>
+              <button class="btn btn-primary btn-sm" onclick="openAddLead()">➕ Add Lead</button>
             </div>
           </div>
           <div id="leadsTable"></div>
@@ -810,6 +811,130 @@ audio { width: 100%; margin-top: 10px; }
   </div>
 </div>
 
+<!-- ─── Add / Edit Lead Modal ─── -->
+<div class="modal-bg" id="leadFormModal" onclick="if(event.target===this)closeLeadForm()">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <div><h2 id="leadFormTitle">➕ Add New Lead</h2><div class="sub">Fill in the lead details below</div></div>
+      <button class="modal-close" onclick="closeLeadForm()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="leadFormId">
+      <div class="enroll-grid">
+        <div class="form-row">
+          <label>Full Name *</label>
+          <input type="text" id="lf_fullName" placeholder="e.g. John Smith">
+        </div>
+        <div class="form-row">
+          <label>Email *</label>
+          <input type="email" id="lf_email" placeholder="e.g. john@example.com">
+        </div>
+        <div class="form-row">
+          <label>Phone *</label>
+          <input type="tel" id="lf_phone" placeholder="e.g. +1 (555) 000-0000">
+        </div>
+        <div class="form-row">
+          <label>Grade</label>
+          <select id="lf_grade">
+            <option value="">Select grade…</option>
+            <option value="9">Grade 9</option><option value="10">Grade 10</option>
+            <option value="11">Grade 11</option><option value="12">Grade 12</option>
+            <option value="College">College</option><option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Program Interest</label>
+          <select id="lf_program">
+            <option value="">Select program…</option>
+            <option value="SAT">SAT Prep</option>
+            <option value="ACT">ACT Prep</option>
+            <option value="AP">AP Courses</option>
+            <option value="College Admissions">College Admissions Counseling</option>
+            <option value="PSAT">PSAT</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Status</label>
+          <select id="lf_status">
+            <option value="new">New</option>
+            <option value="queued">Queued</option>
+            <option value="contacted">Contacted</option>
+            <option value="qualified">Qualified</option>
+            <option value="meeting-scheduled">Meeting Scheduled</option>
+            <option value="interested">Interested</option>
+            <option value="enrollment-pending">Enrollment Pending</option>
+            <option value="enrolled">Enrolled</option>
+            <option value="lost">Lost</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Parent Name</label>
+          <input type="text" id="lf_parentName" placeholder="Parent / Guardian name">
+        </div>
+        <div class="form-row">
+          <label>Parent Email</label>
+          <input type="email" id="lf_parentEmail" placeholder="Parent email">
+        </div>
+      </div>
+      <div class="form-row" style="margin-top:4px">
+        <label>Notes</label>
+        <textarea id="lf_notes" rows="3" placeholder="Any additional notes about this lead…"></textarea>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button class="btn btn-primary" onclick="saveLeadForm()" style="flex:1" id="leadFormSaveBtn">💾 Save Lead</button>
+        <button class="btn btn-secondary" onclick="closeLeadForm()">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Delete Lead Confirmation ─── -->
+<div class="modal-bg" id="deleteLeadModal" onclick="if(event.target===this)closeDeleteLead()">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div><h2 style="color:var(--danger)">🗑️ Delete Lead</h2></div>
+      <button class="modal-close" onclick="closeDeleteLead()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="deleteLeadId">
+      <p style="margin-bottom:16px">Are you sure you want to delete lead <strong id="deleteLeadName"></strong>?</p>
+      <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:var(--hot)">
+        ⚠️ <strong>This action cannot be undone.</strong> All call history, meeting data, and enrollment records linked to this lead will be permanently removed.
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" onclick="closeDeleteLead()" style="flex:1">Cancel</button>
+        <button class="btn btn-danger" onclick="deleteLead()" style="flex:1">🗑️ Delete Permanently</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Delete Call Confirmation ─── -->
+<div class="modal-bg" id="deleteCallModal" onclick="if(event.target===this)closeDeleteCall()">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div><h2 style="color:var(--danger)">🗑️ Delete Call Record</h2></div>
+      <button class="modal-close" onclick="closeDeleteCall()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="deleteCallLeadId">
+      <input type="hidden" id="deleteCallId">
+      <p style="margin-bottom:16px">Are you sure you want to delete this call record?</p>
+      <div style="background:var(--panel2);border-radius:8px;padding:14px 16px;margin-bottom:20px;font-size:13px">
+        📞 <strong id="deleteCallDesc"></strong>
+      </div>
+      <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:var(--hot)">
+        ⚠️ <strong>This action cannot be undone.</strong> The call transcript, recording reference, and AI summary will be permanently deleted.
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" onclick="closeDeleteCall()" style="flex:1">Cancel</button>
+        <button class="btn btn-danger" onclick="deleteCall()" style="flex:1">🗑️ Delete Record</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Meeting Outcome Modal -->
 <div class="modal-bg" id="outcomeModal" onclick="if(event.target===this)closeOutcomeModal()">
   <div class="modal" style="max-width:520px">
@@ -1006,25 +1131,31 @@ function renderLeadsTable() { renderTable('leadsTable', LEADS, true); }
 
 function renderTable(elId, leads, full) {
   const el = document.getElementById(elId);
-  if (!leads.length) { el.innerHTML = '<div class="empty"><div class="icon">📭</div>No leads</div>'; return; }
+  if (!leads.length) { el.innerHTML = '<div class="empty"><div class="icon">📭</div>No leads yet. Click <strong>➕ Add Lead</strong> to get started.</div>'; return; }
   el.innerHTML = `
     <table>
-      <thead><tr><th>Name</th><th>Grade</th><th>Phone</th><th>Program</th><th>Score</th><th>Status</th><th>Calls</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Grade</th><th>Phone</th><th>Program</th><th>Score</th><th>Status</th><th>Calls</th><th>Actions</th></tr></thead>
       <tbody>${leads.map(l => {
         const phoneValid = isValidPhone(l.phone);
         return `
-        <tr onclick="openLead('${l._id}')">
-          <td><strong>${esc(l.fullName)}</strong><br><span style="color:var(--muted);font-size:12px">${esc(l.email)}</span></td>
-          <td>${esc(l.grade || '—')}</td>
-          <td style="font-family:monospace;font-size:12px;color:${phoneValid ? 'inherit' : 'var(--hot)'}" title="${phoneValid ? '' : 'Invalid phone — fix in sheet'}">${phoneValid ? '' : '⚠️ '}${esc(l.phone)}</td>
-          <td>${esc(l.courseInterest || '—')}</td>
-          <td><span class="score-badge ${l.leadCategory}">${l.leadScore} ${catEmoji(l.leadCategory)}</span></td>
-          <td><span class="status-badge ${l.status}">${fmtStatus(l.status)}</span></td>
-          <td>${l.totalCallAttempts || 0}</td>
-          <td>${phoneValid
-            ? `<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();callLead('${l._id}')">📞 Call</button>`
-            : `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();callLead('${l._id}')" title="Invalid phone — fix in sheet" style="opacity:.6">⚠️ Bad #</button>`
-          }</td>
+        <tr onclick="openLead('${l._id}')" style="cursor:pointer">
+          <td data-label="Name"><strong>${esc(l.fullName)}</strong><br><span style="color:var(--muted);font-size:12px">${esc(l.email)}</span></td>
+          <td data-label="Grade">${esc(l.grade || '—')}</td>
+          <td data-label="Phone" style="font-family:monospace;font-size:12px;color:${phoneValid ? 'inherit' : 'var(--hot)'}" title="${phoneValid ? '' : 'Invalid phone'}">${phoneValid ? '' : '⚠️ '}${esc(l.phone)}</td>
+          <td data-label="Program">${esc(l.courseInterest || '—')}</td>
+          <td data-label="Score"><span class="score-badge ${l.leadCategory}">${l.leadScore} ${catEmoji(l.leadCategory)}</span></td>
+          <td data-label="Status"><span class="status-badge ${l.status}">${fmtStatus(l.status)}</span></td>
+          <td data-label="Calls">${l.totalCallAttempts || 0}</td>
+          <td data-label="Actions" style="white-space:nowrap" onclick="event.stopPropagation()">
+            <div style="display:flex;gap:4px;flex-wrap:wrap">
+              ${phoneValid
+                ? `<button class="btn btn-primary btn-sm" onclick="callLead('${l._id}')">📞 Call</button>`
+                : `<button class="btn btn-secondary btn-sm" style="opacity:.6" title="Invalid phone">⚠️ Bad #</button>`
+              }
+              <button class="btn btn-secondary btn-sm" onclick="openEditLead('${l._id}')">✏️ Edit</button>
+              <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="confirmDeleteLead('${l._id}','${esc(l.fullName)}')">🗑️</button>
+            </div>
+          </td>
         </tr>
       `;}).join('')}</tbody>
     </table>
@@ -1040,17 +1171,20 @@ async function loadCalls() {
     if (!CALLS.length) { el.innerHTML = '<div class="empty"><div class="icon">📞</div>No call activity yet</div>'; return; }
     el.innerHTML = `
       <table>
-        <thead><tr><th>Lead</th><th>Phone</th><th>Date</th><th>Duration</th><th>Status</th><th>Sentiment</th><th>Recording</th><th></th></tr></thead>
+        <thead><tr><th>Lead</th><th>Phone</th><th>Date</th><th>Duration</th><th>Status</th><th>Sentiment</th><th>Recording</th><th>Actions</th></tr></thead>
         <tbody>${CALLS.map(c => `
-          <tr onclick="openLead('${c.leadId}')">
-            <td><strong>${esc(c.leadName)}</strong> · attempt #${c.attemptNumber}</td>
-            <td style="font-family:monospace;font-size:12px">${esc(c.leadPhone)}</td>
-            <td>${c.startTime ? new Date(c.startTime).toLocaleString() : '—'}</td>
-            <td>${c.duration ? c.duration + 's' : '—'}</td>
-            <td><span class="status-badge">${c.status || '—'}</span></td>
-            <td>${sentEmoji(c.sentiment)} ${c.sentiment || '—'}</td>
-            <td>${c.recordingUrl ? '🎙️ Yes' : '—'}</td>
-            <td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openLead('${c.leadId}')">View</button></td>
+          <tr>
+            <td data-label="Lead"><strong>${esc(c.leadName)}</strong> · attempt #${c.attemptNumber}</td>
+            <td data-label="Phone" style="font-family:monospace;font-size:12px">${esc(c.leadPhone)}</td>
+            <td data-label="Date">${c.startTime ? new Date(c.startTime).toLocaleString() : '—'}</td>
+            <td data-label="Duration">${c.duration ? c.duration + 's' : '—'}</td>
+            <td data-label="Status"><span class="status-badge">${c.status || '—'}</span></td>
+            <td data-label="Sentiment">${sentEmoji(c.sentiment)} ${c.sentiment || '—'}</td>
+            <td data-label="Recording">${c.recordingUrl ? '🎙️ Yes' : '—'}</td>
+            <td data-label="Actions" style="white-space:nowrap;display:flex;gap:6px">
+              <button class="btn btn-secondary btn-sm" onclick="openLead('${c.leadId}')">👁️ View</button>
+              <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="confirmDeleteCall('${c.leadId}','${c.callId}','${esc(c.leadName)}',${c.attemptNumber})">🗑️ Delete</button>
+            </td>
           </tr>
         `).join('')}</tbody>
       </table>
@@ -1755,6 +1889,123 @@ async function loadRevenue(days = 30) {
       el4.innerHTML = '<div class="empty"><div class="icon">📈</div>No payment data yet</div>';
     }
   } catch(e) { toast(e.message, 'error'); }
+}
+
+// ─── Add / Edit / Delete Lead ───────────────────────
+function openAddLead() {
+  document.getElementById('leadFormId').value = '';
+  document.getElementById('leadFormTitle').textContent = '➕ Add New Lead';
+  document.getElementById('leadFormSaveBtn').textContent = '💾 Save Lead';
+  document.getElementById('lf_fullName').value  = '';
+  document.getElementById('lf_email').value     = '';
+  document.getElementById('lf_phone').value     = '';
+  document.getElementById('lf_grade').value     = '';
+  document.getElementById('lf_program').value   = '';
+  document.getElementById('lf_status').value    = 'new';
+  document.getElementById('lf_parentName').value  = '';
+  document.getElementById('lf_parentEmail').value = '';
+  document.getElementById('lf_notes').value     = '';
+  document.getElementById('leadFormModal').classList.add('active');
+}
+
+async function openEditLead(id) {
+  try {
+    const l = await api('/leads/' + id);
+    document.getElementById('leadFormId').value   = l._id;
+    document.getElementById('leadFormTitle').textContent = '✏️ Edit Lead — ' + esc(l.fullName);
+    document.getElementById('leadFormSaveBtn').textContent = '💾 Update Lead';
+    document.getElementById('lf_fullName').value  = l.fullName || '';
+    document.getElementById('lf_email').value     = l.email || '';
+    document.getElementById('lf_phone').value     = l.phone || '';
+    document.getElementById('lf_grade').value     = l.grade || '';
+    document.getElementById('lf_program').value   = l.courseInterest || '';
+    document.getElementById('lf_status').value    = l.status || 'new';
+    document.getElementById('lf_parentName').value  = l.parentName || '';
+    document.getElementById('lf_parentEmail').value = l.parentEmail || '';
+    document.getElementById('lf_notes').value     = l.notes || '';
+    document.getElementById('leadFormModal').classList.add('active');
+  } catch(e) { toast('Failed to load lead: ' + e.message, 'error'); }
+}
+
+function closeLeadForm() {
+  document.getElementById('leadFormModal').classList.remove('active');
+}
+
+async function saveLeadForm() {
+  const id       = document.getElementById('leadFormId').value;
+  const fullName = document.getElementById('lf_fullName').value.trim();
+  const email    = document.getElementById('lf_email').value.trim();
+  const phone    = document.getElementById('lf_phone').value.trim();
+  const grade    = document.getElementById('lf_grade').value;
+  const courseInterest = document.getElementById('lf_program').value;
+  const status   = document.getElementById('lf_status').value;
+  const parentName  = document.getElementById('lf_parentName').value.trim();
+  const parentEmail = document.getElementById('lf_parentEmail').value.trim();
+  const notes    = document.getElementById('lf_notes').value.trim();
+
+  if (!fullName) { toast('Full name is required', 'error'); return; }
+  if (!email)    { toast('Email is required', 'error'); return; }
+  if (!phone)    { toast('Phone is required', 'error'); return; }
+
+  const payload = { fullName, email, phone, grade, courseInterest, status, parentName, parentEmail, notes };
+  const btn = document.getElementById('leadFormSaveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    if (id) {
+      // Edit existing
+      await api('/leads/' + id, { method: 'PATCH', body: JSON.stringify(payload) });
+      toast('✅ Lead updated successfully', 'success');
+    } else {
+      // Create new
+      await api('/leads', { method: 'POST', body: JSON.stringify(payload) });
+      toast('✅ Lead added successfully', 'success');
+    }
+    closeLeadForm();
+    await loadLeads();
+  } catch(e) {
+    toast('❌ ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = id ? '💾 Update Lead' : '💾 Save Lead';
+  }
+}
+
+function confirmDeleteLead(id, name) {
+  document.getElementById('deleteLeadId').value = id;
+  document.getElementById('deleteLeadName').textContent = name;
+  document.getElementById('deleteLeadModal').classList.add('active');
+}
+function closeDeleteLead() { document.getElementById('deleteLeadModal').classList.remove('active'); }
+async function deleteLead() {
+  const id = document.getElementById('deleteLeadId').value;
+  try {
+    const r = await api('/leads/' + id, { method: 'DELETE' });
+    toast('🗑️ ' + (r.message || 'Lead deleted'), 'success');
+    closeDeleteLead();
+    closeModal();
+    await loadLeads();
+  } catch(e) { toast('❌ ' + e.message, 'error'); }
+}
+
+// ─── Delete Call Record ──────────────────────────────
+function confirmDeleteCall(leadId, callId, leadName, attemptNum) {
+  document.getElementById('deleteCallLeadId').value = leadId;
+  document.getElementById('deleteCallId').value     = callId;
+  document.getElementById('deleteCallDesc').textContent = `${leadName} · attempt #${attemptNum}`;
+  document.getElementById('deleteCallModal').classList.add('active');
+}
+function closeDeleteCall() { document.getElementById('deleteCallModal').classList.remove('active'); }
+async function deleteCall() {
+  const leadId = document.getElementById('deleteCallLeadId').value;
+  const callId = document.getElementById('deleteCallId').value;
+  try {
+    const r = await api(`/leads/${leadId}/calls/${callId}`, { method: 'DELETE' });
+    toast('🗑️ ' + (r.message || 'Call record deleted'), 'success');
+    closeDeleteCall();
+    await loadCalls();
+  } catch(e) { toast('❌ ' + e.message, 'error'); }
 }
 
 // ─── Meeting Outcome ────────────────────────────────
