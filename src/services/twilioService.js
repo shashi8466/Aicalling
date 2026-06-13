@@ -69,26 +69,38 @@ class TwilioService {
     return say;
   }
 
-  /** Opening greeting – gathers first response */
+  /**
+   * Say text then listen — <Say> is OUTSIDE <Gather> so it can never be
+   * cut off by barge-in (student pickup noise, background sound, etc.).
+   * Twilio only starts listening after the agent has finished speaking.
+   */
   twimlStart(text, gatherUrl) {
     const r = new VR();
-    const g = r.gather({
+
+    // 1. Speak fully — not interruptible
+    this._speak(r, text);
+
+    // 2. Brief pause so the student knows it's their turn
+    r.pause({ length: 1 });
+
+    // 3. Now listen for their response
+    r.gather({
       input:        'speech',
       action:       gatherUrl,
       method:       'POST',
-      speechTimeout:'auto',
-      language:     LANG,
-      timeout:      5,
+      speechTimeout: 'auto',
+      language:      LANG,
+      timeout:       6,       // wait up to 6 s for them to start speaking
     });
-    this._speak(g, text);
-    // Fallback if no speech detected
+
+    // 4. Fallback if no speech at all
     r.redirect({ method: 'POST' }, gatherUrl + '&noSpeech=1');
     return r.toString();
   }
 
-  /** Mid-conversation turn – say AI reply then gather next input */
+  /** Mid-conversation turn — same non-interruptible pattern */
   twimlRespond(text, gatherUrl) {
-    return this.twimlStart(text, gatherUrl);   // same structure
+    return this.twimlStart(text, gatherUrl);
   }
 
   /** Offer meeting slots – announce real date + time, gather slot choice */
@@ -106,15 +118,19 @@ class TwilioService {
 
     const fullText = `${intro} I currently have the following available times. ${slotSpeech}. Which works best for you? You can say ${choiceWords}.`;
 
-    const g = r.gather({
+    // Speak slot options fully — not interruptible
+    this._speak(r, fullText);
+    r.pause({ length: 1 });
+
+    // Then listen for their slot choice
+    r.gather({
       input:        'speech',
       action:       bookUrl,
       method:       'POST',
-      speechTimeout:'auto',
-      language:     LANG,
-      timeout:      12,
+      speechTimeout: 'auto',
+      language:      LANG,
+      timeout:       12,
     });
-    this._speak(g, fullText);
     r.redirect({ method: 'POST' }, bookUrl + '&noSpeech=1');
     return r.toString();
   }
