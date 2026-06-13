@@ -1416,7 +1416,13 @@ async function openLead(id) {
     }
 
     if (l.callAttempts && l.callAttempts.length > 0) {
-      body += `<div class="section-title">📞 Call History (${l.callAttempts.length})</div>`;
+      const chId = 'ch_' + l._id;
+      body += `
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleCallHistory('${chId}')">
+          <span>📞 Call History (${l.callAttempts.length})</span>
+          <span id="${chId}_icon" style="font-size:12px;color:var(--muted);transition:transform .2s">▼ View History</span>
+        </div>
+        <div id="${chId}" style="display:none">`;
       l.callAttempts.slice().reverse().forEach((c, revIdx) => {
         const idx = l.callAttempts.length - 1 - revIdx;
         body += `
@@ -1435,9 +1441,9 @@ async function openLead(id) {
                 <div class="transcript">${esc(c.transcript)}</div>
               </details>
             ` : ''}
-          </div>
-        `;
+          </div>`;
       });
+      body += `</div>`;
     }
 
     if (l.emailsSent && l.emailsSent.length > 0) {
@@ -2170,6 +2176,15 @@ function fmtFollowupType(t) {
     'enrollment-reminder-day10':  '🎓 Enrollment Reminder (Day 10)',
   };
   return map[t] || t;
+}
+
+function toggleCallHistory(chId) {
+  const panel = document.getElementById(chId);
+  const icon  = document.getElementById(chId + '_icon');
+  if (!panel) return;
+  const open = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  if (icon) icon.textContent = open ? '▲ Hide History' : '▼ View History';
 }
 
 function switchFuTab(tabId, weekLabel) {

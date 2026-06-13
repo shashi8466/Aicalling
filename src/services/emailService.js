@@ -263,7 +263,7 @@ td{border-collapse:collapse}
   .hdr h1{font-size:20px !important}
   .hdr p{font-size:12px !important}
   .hdr img{width:100px !important}
-  .body{padding:24px 20px !important;font-size:14px !important}
+  .body{padding:20px 16px !important;font-size:14px !important}
   h2{font-size:18px !important;margin-bottom:12px !important}
   p{font-size:14px !important;margin-bottom:10px !important}
   ul{margin:6px 0 12px 18px !important}
@@ -275,13 +275,21 @@ td{border-collapse:collapse}
   .sig{margin:24px 0 0 !important;padding:16px 0 0 !important;font-size:12px !important}
   .sig strong{font-size:14px !important}
   .ftr{padding:16px 20px !important;font-size:11px !important}
+  /* Success stories — stack two-col layouts */
+  .m-stack{display:block !important;width:100% !important}
+  .m-stack td{display:block !important;width:100% !important;padding:8px 0 !important}
+  /* Scorer grid — 2 per row on mobile */
+  .scorer-td{width:50% !important;display:inline-block !important;vertical-align:top}
+  /* Section card padding */
+  .ss-card{padding:14px 12px !important;border-radius:10px !important;margin-bottom:12px !important}
 }
 @media only screen and (max-width:480px){
   .hdr{padding:20px 16px !important}
   .hdr h1{font-size:18px !important}
-  .body{padding:16px !important}
+  .body{padding:14px 12px !important}
   .box{padding:12px 14px !important;border-radius:6px !important}
   .btn{padding:10px 16px !important;font-size:13px !important;margin:12px 0 !important}
+  .scorer-td{width:33% !important}
 }
 </style>
 </head>
@@ -583,7 +591,7 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
       for (let i = 0; i < scorers.length; i += 5) {
         const chunk = scorers.slice(i, i + 5);
         rows.push(`<tr>${chunk.map(s => `
-          <td style="text-align:center;padding:6px 4px;vertical-align:top;width:20%">
+          <td class="scorer-td" style="text-align:center;padding:6px 4px;vertical-align:top;width:20%">
             ${avatar(s.name, 52, '#1a3c6e')}
             <div style="font-size:10px;font-weight:700;color:#1a3c6e;line-height:1.3;margin-bottom:2px">${s.name.split(' ').slice(0,2).join(' ')}</div>
             <div style="font-size:14px;font-weight:900;color:#ea580c">${s.score}</div>
@@ -599,16 +607,16 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
 <p style="color:#374151;font-size:15px;margin:0 0 20px">Hi ${l.parentName || l.fullName}! We wanted to share what Test Prep Pundits students have achieved — because these aren't just numbers, they're futures changed.</p>
 
 <!-- ══ Latest SAT Stories banner ════════════════════════════════════════ -->
-<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:linear-gradient(135deg,#f97316 0%,#1a3c6e 100%);border-radius:14px;margin:0 0 16px">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" class="ss-card" style="background:linear-gradient(135deg,#f97316 0%,#1a3c6e 100%);border-radius:14px;margin:0 0 16px">
   <tr><td style="padding:20px">
     <p style="color:#fff;font-size:15px;font-weight:800;text-align:center;margin:0 0 16px;letter-spacing:.3px">Our Latest SAT Success Stories</p>
-    <table cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" class="m-stack"><tr>
       ${latestSAT.map(s => `
-      <td style="text-align:center;padding:0 10px;width:50%;vertical-align:top">
+      <td class="m-stack" style="text-align:center;padding:0 8px 12px;width:50%;vertical-align:top">
         <div style="background:rgba(255,255,255,.15);border-radius:12px;padding:14px 10px">
           ${avatar(s.name, 64, 'rgba(255,255,255,.9)', '#1a3c6e', '3px solid #fff')}
           <p style="color:#fbbf24;font-size:13px;font-weight:800;margin:0 0 2px">${s.name}</p>
-          <p style="color:rgba(255,255,255,.8);font-size:10px;margin:0 0 10px;line-height:1.4">${s.school}</p>
+          <p style="color:rgba(255,255,255,.8);font-size:11px;margin:0 0 10px;line-height:1.4">${s.school}</p>
           <div style="background:#0d9488;color:#fff;font-size:13px;font-weight:900;padding:7px 14px;border-radius:8px;letter-spacing:.5px">SAT SCORE ${s.score}</div>
         </div>
       </td>`).join('')}
@@ -618,7 +626,7 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
 </table>
 
 <!-- ══ Top 1% SAT Scorers ════════════════════════════════════════════════ -->
-<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f0f6ff;border-radius:14px;margin:0 0 16px">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" class="ss-card" style="background:#f0f6ff;border-radius:14px;margin:0 0 16px">
   <tr><td style="padding:18px">
     <p style="font-size:15px;font-weight:800;color:#1a3c6e;text-align:center;margin:0 0 14px">⭐ Our Top 1% SAT Scorers</p>
     <table cellpadding="0" cellspacing="0" border="0" width="100%">
@@ -628,12 +636,12 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
 </table>
 
 <!-- ══ National Merit Finalists ══════════════════════════════════════════ -->
-<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fff7ed;border-radius:14px;margin:0 0 16px">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" class="ss-card" style="background:#fff7ed;border-radius:14px;margin:0 0 16px">
   <tr><td style="padding:18px">
     <p style="font-size:15px;font-weight:800;color:#1a3c6e;text-align:center;margin:0 0 14px">🎖️ National Merit Finalists</p>
-    <table cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" class="m-stack"><tr>
       ${nationalMerit.map(name => `
-      <td style="text-align:center;padding:0 10px;width:50%">
+      <td class="m-stack" style="text-align:center;padding:0 10px 10px;width:50%">
         ${avatar(name, 60, '#fff', '#1a3c6e', '3px solid #ea580c')}
         <div style="font-size:12px;font-weight:700;color:#1a3c6e">${name}</div>
       </td>`).join('')}
@@ -642,12 +650,12 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
 </table>
 
 <!-- ══ ACT Top 1% ════════════════════════════════════════════════════════ -->
-<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f0f6ff;border-radius:14px;margin:0 0 16px">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" class="ss-card" style="background:#f0f6ff;border-radius:14px;margin:0 0 16px">
   <tr><td style="padding:18px">
     <p style="font-size:15px;font-weight:800;color:#1a3c6e;text-align:center;margin:0 0 14px">🎯 ACT Top 1% Scorers</p>
     <table cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
       ${actScorers.map(s => `
-      <td style="text-align:center;padding:6px 4px;vertical-align:top;width:16%">
+      <td class="scorer-td" style="text-align:center;padding:6px 4px;vertical-align:top;width:16%">
         ${avatar(s.name, 48, '#1a3c6e')}
         <div style="font-size:10px;font-weight:700;color:#1a3c6e;margin-bottom:2px">${s.name.split(' ')[0]}</div>
         <div style="font-size:12px;font-weight:900;color:#ea580c">ACT ${s.score}</div>
@@ -657,7 +665,7 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
 </table>
 
 <!-- ══ Mission footer CTA ════════════════════════════════════════════════ -->
-<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:linear-gradient(135deg,#1a3c6e 0%,#2563eb 100%);border-radius:14px;margin:0 0 20px">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" class="ss-card" style="background:linear-gradient(135deg,#1a3c6e 0%,#2563eb 100%);border-radius:14px;margin:0 0 20px">
   <tr><td style="padding:24px;text-align:center">
     <p style="color:#fbbf24;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin:0 0 6px">🎓 Your Dream Score Is Our Mission</p>
     <p style="color:rgba(255,255,255,.85);font-size:13px;margin:0 0 16px;line-height:1.6">Join thousands of motivated students achieving their goals with the right guidance and strategy.</p>
