@@ -571,84 +571,109 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
 
     const nationalMerit = ['Farah Khaleel', 'Gauthamm Mandala'];
 
-    const scorerRow = (students, type) => students.slice(0, 6).map(s => `
-      <td style="text-align:center;padding:8px 6px;vertical-align:top;width:16%">
-        <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#1a3c6e,#2563eb);margin:0 auto 6px;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;font-weight:800;overflow:hidden">
-          ${s.name.split(' ').map(w => w[0]).slice(0,2).join('')}
-        </div>
-        <div style="font-size:11px;font-weight:700;color:#1a3c6e;line-height:1.3">${s.name.split(' ')[0]}</div>
-        <div style="font-size:13px;font-weight:800;color:#ea580c;margin-top:3px">${type === 'act' ? 'ACT ' : ''}${s.score}</div>
-        ${s.school ? `<div style="font-size:9px;color:#6b7280;margin-top:2px;line-height:1.2">${s.school.split(',')[0]}</div>` : ''}
-      </td>`).join('');
+    // ── Reusable avatar circle (email-safe) ──────────────────────────────
+    const avatar = (name, size = 56, bg = '#1a3c6e', color = '#fff', border = 'none') => {
+      const initials = name.split(' ').map(w => w[0]).slice(0, 2).join('');
+      return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};border:${border};margin:0 auto 6px;line-height:${size}px;text-align:center;font-size:${Math.round(size*0.3)}px;font-weight:800;color:${color};font-family:Arial,sans-serif">${initials}</div>`;
+    };
+
+    // SAT scorer grid: 5 per row
+    const satGrid = (scorers) => {
+      const rows = [];
+      for (let i = 0; i < scorers.length; i += 5) {
+        const chunk = scorers.slice(i, i + 5);
+        rows.push(`<tr>${chunk.map(s => `
+          <td style="text-align:center;padding:6px 4px;vertical-align:top;width:20%">
+            ${avatar(s.name, 52, '#1a3c6e')}
+            <div style="font-size:10px;font-weight:700;color:#1a3c6e;line-height:1.3;margin-bottom:2px">${s.name.split(' ').slice(0,2).join(' ')}</div>
+            <div style="font-size:14px;font-weight:900;color:#ea580c">${s.score}</div>
+            ${s.school ? `<div style="font-size:9px;color:#6b7280;line-height:1.2;margin-top:1px">${s.school.split(',')[0]}</div>` : ''}
+          </td>`).join('')}</tr>`);
+      }
+      return rows.join('');
+    };
 
     return `
-<h2>🏆 Real Students. Real Results.</h2>
-<p>Hi ${l.parentName || l.fullName}! We wanted to share what Test Prep Pundits students have achieved — because these aren't just numbers, they're futures changed.</p>
+<!-- ══ Header greeting ═══════════════════════════════════════════════════ -->
+<h2 style="color:#1a3c6e;font-size:22px;font-weight:900;margin:0 0 6px">🏆 Real Students. Real Results.</h2>
+<p style="color:#374151;font-size:15px;margin:0 0 20px">Hi ${l.parentName || l.fullName}! We wanted to share what Test Prep Pundits students have achieved — because these aren't just numbers, they're futures changed.</p>
 
-<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:linear-gradient(135deg,#ff6b35,#1a3c6e);border-radius:12px;padding:18px;margin:14px 0">
-  <tr><td>
-    <p style="color:#fff;font-size:16px;font-weight:800;text-align:center;margin:0 0 14px">📣 Our Latest SAT Success Stories</p>
+<!-- ══ Latest SAT Stories banner ════════════════════════════════════════ -->
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:linear-gradient(135deg,#f97316 0%,#1a3c6e 100%);border-radius:14px;margin:0 0 16px">
+  <tr><td style="padding:20px">
+    <p style="color:#fff;font-size:15px;font-weight:800;text-align:center;margin:0 0 16px;letter-spacing:.3px">Our Latest SAT Success Stories</p>
     <table cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
       ${latestSAT.map(s => `
-      <td style="text-align:center;padding:8px;width:50%;vertical-align:top">
-        <div style="width:64px;height:64px;border-radius:50%;background:#fff;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#1a3c6e">
-          ${s.name.split(' ').map(w=>w[0]).slice(0,2).join('')}
+      <td style="text-align:center;padding:0 10px;width:50%;vertical-align:top">
+        <div style="background:rgba(255,255,255,.15);border-radius:12px;padding:14px 10px">
+          ${avatar(s.name, 64, 'rgba(255,255,255,.9)', '#1a3c6e', '3px solid #fff')}
+          <p style="color:#fbbf24;font-size:13px;font-weight:800;margin:0 0 2px">${s.name}</p>
+          <p style="color:rgba(255,255,255,.8);font-size:10px;margin:0 0 10px;line-height:1.4">${s.school}</p>
+          <div style="background:#0d9488;color:#fff;font-size:13px;font-weight:900;padding:7px 14px;border-radius:8px;letter-spacing:.5px">SAT SCORE ${s.score}</div>
         </div>
-        <p style="color:#fbbf24;font-size:14px;font-weight:800;margin:0 0 2px">${s.name}</p>
-        <p style="color:rgba(255,255,255,.8);font-size:11px;margin:0 0 8px">${s.school}</p>
-        <p style="background:#00c2a8;color:#fff;font-size:16px;font-weight:900;padding:8px 16px;border-radius:8px;margin:0;display:inline-block">SAT SCORE ${s.score}</p>
       </td>`).join('')}
     </tr></table>
-    <p style="color:rgba(255,255,255,.85);font-size:12px;text-align:center;margin:12px 0 0">Want to be our next SAT success story?</p>
+    <p style="color:rgba(255,255,255,.75);font-size:11px;text-align:center;margin:14px 0 0">Want to be our next SAT success story? 🌟</p>
   </td></tr>
 </table>
 
-<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:linear-gradient(135deg,#0a1628,#1a3c6e);border-radius:14px;padding:20px;margin:16px 0">
-  <tr><td>
-    <p style="color:#fbbf24;font-size:13px;font-weight:700;text-align:center;margin:0 0 4px;letter-spacing:1px;text-transform:uppercase">✨ Perfect Scorer</p>
-    <p style="color:#fff;font-size:18px;font-weight:800;text-align:center;margin:0 0 2px">Akahara Balakrishnan</p>
-    <p style="color:rgba(255,255,255,.7);font-size:12px;text-align:center;margin:0 0 12px">Only A Couple Of Hundred Get Perfect Score Out Of 3.7 Millions</p>
-    <p style="background:#ea580c;color:#fff;font-size:22px;font-weight:900;text-align:center;padding:10px;border-radius:10px;margin:0">SAT 1600 🎉</p>
+<!-- ══ Perfect Scorer ════════════════════════════════════════════════════ -->
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#0a1628;border-radius:14px;margin:0 0 16px">
+  <tr><td style="padding:22px;text-align:center">
+    <p style="color:#fbbf24;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin:0 0 6px">🏆 PERFECT SCORER</p>
+    <p style="color:#fff;font-size:20px;font-weight:900;margin:0 0 4px">Akahara Balakrishnan</p>
+    <p style="color:rgba(255,255,255,.6);font-size:11px;margin:0 0 14px">Only A Couple Of Hundred Get Perfect Score Out Of 3.7 Millions</p>
+    <div style="background:#ea580c;color:#fff;font-size:26px;font-weight:900;padding:12px 24px;border-radius:12px;display:inline-block;letter-spacing:1px">SAT 1600</div>
   </td></tr>
 </table>
 
-<p style="font-size:16px;font-weight:700;color:#1a3c6e;margin:20px 0 10px;text-align:center">Our Top 1% SAT Scorers</p>
-<table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:20px">
-  <tr>${scorerRow(satScorers.slice(0, 5), 'sat')}</tr>
-  <tr>${scorerRow(satScorers.slice(5, 10), 'sat')}</tr>
+<!-- ══ Top 1% SAT Scorers ════════════════════════════════════════════════ -->
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f0f6ff;border-radius:14px;margin:0 0 16px">
+  <tr><td style="padding:18px">
+    <p style="font-size:15px;font-weight:800;color:#1a3c6e;text-align:center;margin:0 0 14px">⭐ Our Top 1% SAT Scorers</p>
+    <table cellpadding="0" cellspacing="0" border="0" width="100%">
+      ${satGrid(satScorers)}
+    </table>
+  </td></tr>
 </table>
 
-<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f0f6ff;border-radius:12px;padding:16px;margin:16px 0">
-  <tr><td>
-    <p style="font-size:14px;font-weight:700;color:#1a3c6e;text-align:center;margin:0 0 10px">🎖️ National Merit Finalists</p>
+<!-- ══ National Merit Finalists ══════════════════════════════════════════ -->
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fff7ed;border-radius:14px;margin:0 0 16px">
+  <tr><td style="padding:18px">
+    <p style="font-size:15px;font-weight:800;color:#1a3c6e;text-align:center;margin:0 0 14px">🎖️ National Merit Finalists</p>
     <table cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
       ${nationalMerit.map(name => `
-      <td style="text-align:center;padding:8px;width:50%">
-        <div style="width:52px;height:52px;border-radius:50%;background:#ea580c;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff;font-weight:800">
-          ${name.split(' ').map(w=>w[0]).slice(0,2).join('')}
-        </div>
+      <td style="text-align:center;padding:0 10px;width:50%">
+        ${avatar(name, 60, '#fff', '#1a3c6e', '3px solid #ea580c')}
         <div style="font-size:12px;font-weight:700;color:#1a3c6e">${name}</div>
       </td>`).join('')}
     </tr></table>
   </td></tr>
 </table>
 
-<p style="font-size:16px;font-weight:700;color:#1a3c6e;margin:20px 0 10px;text-align:center">ACT Top 1% Scorers</p>
-<table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:20px">
-  <tr>${scorerRow(actScorers, 'act')}</tr>
+<!-- ══ ACT Top 1% ════════════════════════════════════════════════════════ -->
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f0f6ff;border-radius:14px;margin:0 0 16px">
+  <tr><td style="padding:18px">
+    <p style="font-size:15px;font-weight:800;color:#1a3c6e;text-align:center;margin:0 0 14px">🎯 ACT Top 1% Scorers</p>
+    <table cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
+      ${actScorers.map(s => `
+      <td style="text-align:center;padding:6px 4px;vertical-align:top;width:16%">
+        ${avatar(s.name, 48, '#1a3c6e')}
+        <div style="font-size:10px;font-weight:700;color:#1a3c6e;margin-bottom:2px">${s.name.split(' ')[0]}</div>
+        <div style="font-size:12px;font-weight:900;color:#ea580c">ACT ${s.score}</div>
+      </td>`).join('')}
+    </tr></table>
+  </td></tr>
 </table>
 
-<div class="box">
-  <strong>Why ${l.fullName} can achieve the same:</strong><br>
-  ✅ Personalized study plan based on your strength & weakness analysis<br>
-  ✅ Expert tutors — the same ones behind these scores<br>
-  ✅ 150–200 SAT point improvement on average<br>
-  ✅ Flexible schedule — 7 days/week, morning to evening
-</div>
-
-<p>We'd love to add <strong>${l.fullName}</strong> to our wall of success. The first step is a free 15-minute consultation — no commitment required.</p>
-
-<a href="${site}" class="btn">Schedule Your Free Consultation →</a>
+<!-- ══ Mission footer CTA ════════════════════════════════════════════════ -->
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:linear-gradient(135deg,#1a3c6e 0%,#2563eb 100%);border-radius:14px;margin:0 0 20px">
+  <tr><td style="padding:24px;text-align:center">
+    <p style="color:#fbbf24;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin:0 0 6px">🎓 Your Dream Score Is Our Mission</p>
+    <p style="color:rgba(255,255,255,.85);font-size:13px;margin:0 0 16px;line-height:1.6">Join thousands of motivated students achieving their goals with the right guidance and strategy.</p>
+    <a href="${site}" style="background:#ea580c;color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:800;font-size:14px;display:inline-block;letter-spacing:.3px">Get Started Today →</a>
+  </td></tr>
+</table>
 
 <div class="sig">
   <strong>Shashi Kumar</strong>
