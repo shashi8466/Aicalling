@@ -80,20 +80,38 @@ router.post('/call/respond', async (req, res) => {
 
     const session = sessions.get(leadId) || { history: [], turnCount: 0 };
 
-    // No speech detected
+    // No speech detected — rephrase up to 3 times before giving up
     if (!speech || noSpeech) {
-      session.turnCount++;
-      if (session.turnCount > 3) {
-        return res.send(twilioSvc.twimlHangup(
-          `It seems like we may have lost you. No worries! I'll send you an email with our program details. Have a great day, ${lead.fullName}!`
+      session.silenceCount = (session.silenceCount || 0) + 1;
+      sessions.set(leadId, session);
+
+      if (session.silenceCount === 1) {
+        return res.send(twilioSvc.twimlRespond(
+          "I'm sorry, I didn't quite catch that. Could you please repeat that?",
+          respondUrl(cfg.server.baseUrl, leadId)
         ));
       }
-      sessions.set(leadId, session);
-      return res.send(twilioSvc.twimlRespond(
-        "I'm sorry, I didn't catch that. Could you say that again?",
-        respondUrl(cfg.server.baseUrl, leadId)
+      if (session.silenceCount === 2) {
+        return res.send(twilioSvc.twimlRespond(
+          "I apologize, the connection may not be clear. Could you please say that one more time?",
+          respondUrl(cfg.server.baseUrl, leadId)
+        ));
+      }
+      if (session.silenceCount === 3) {
+        const studentFirst = lead.fullName.split(' ')[0];
+        return res.send(twilioSvc.twimlRespond(
+          `Just to make sure I understand correctly, ${studentFirst} — are you interested in SAT, ACT, AP courses, or College Admissions Counseling?`,
+          respondUrl(cfg.server.baseUrl, leadId)
+        ));
+      }
+      // 4th silence — only now end the call
+      return res.send(twilioSvc.twimlHangup(
+        `It seems we may have lost the connection. No worries — I'll follow up by email with our program details. Have a great day!`
       ));
     }
+
+    // Speech received — reset silence counter
+    session.silenceCount = 0;
 
     // Detect ONLY explicit decline — never end the call on weak signals.
     // The caller must clearly and unambiguously refuse.
