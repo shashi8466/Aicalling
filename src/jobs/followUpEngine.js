@@ -1,22 +1,36 @@
 /**
- * Automated Follow-up Engine
- * Runs every 15 minutes, processes due follow-ups.
+ * Continuous Lead Nurturing Engine
+ * Runs every 15 minutes. Processes due follow-ups.
  *
- * Day 1  → Email + WhatsApp (logged)
- * Day 3  → AI follow-up call
- * Day 5  → Success stories email
- * Day 7  → Counselor reminder (dashboard alert)
- * Day 10 → Enrollment reminder email
+ * Stops automation only when lead status is:
+ *   enrolled | lost | do-not-call
+ *
+ * Week 1:  Day 1 email, Day 2 AI call, Day 3 success stories,
+ *          Day 4 AI call, Day 5 email, Day 6 AI call, Day 7 counselor reminder
+ * Week 2:  Day 8 email, Day 10 AI call, Day 12 email, Day 14 counselor reminder
+ * Week 3:  AI call, success stories, parent discussion, enrollment reminder
+ * Week 4:  AI call, program benefits, limited seat reminder, counselor reminder
+ * Monthly: Every 7d AI call, every 3d email, every 14d success stories,
+ *          every 14d counselor reminder, every 30d lead review
  */
-const cron      = require('node-cron');
-const Lead      = require('../models/Lead');
-const FollowUp  = require('../models/FollowUp');
-const emailSvc  = require('../services/emailService');
+const cron     = require('node-cron');
+const Lead     = require('../models/Lead');
+const FollowUp = require('../models/FollowUp');
+const emailSvc = require('../services/emailService');
 const twilioSvc = require('../services/twilioService');
-const cfg       = require('../config');
-const logger    = require('../logger');
+const cfg      = require('../config');
+const logger   = require('../logger');
 
 let running = false;
+
+// ── Recurring intervals for the ongoing monthly cadence ──────────────────────
+const NURTURE_INTERVALS = {
+  'nurture-ai-call':            7,   // days
+  'nurture-email':              3,
+  'nurture-success-stories':    14,
+  'nurture-counselor-reminder': 14,
+  'nurture-lead-review':        30,
+};
 
 async function runFollowUps() {
   if (running) return;
@@ -33,11 +47,11 @@ async function runFollowUps() {
     for (const fu of due) {
       try {
         await processFollowUp(fu);
-      } catch(err) {
+      } catch (err) {
         logger.error('FollowUp error', { id: fu._id, type: fu.followupType, msg: err.message });
       }
     }
-  } catch(err) {
+  } catch (err) {
     logger.error('FollowUpEngine run error', { msg: err.message });
   } finally {
     running = false;
@@ -46,42 +60,79 @@ async function runFollowUps() {
 
 async function processFollowUp(fu) {
   const lead = await Lead.findById(fu.leadId);
-  if (!lead) {
-    fu.completed = true; fu.completedAt = new Date(); fu.result = 'lead-not-found';
-    await fu.save(); return;
-  }
 
-  // Skip if lead is enrolled or do-not-call
-  if (['enrolled','do-not-call','lost'].includes(lead.status)) {
-    fu.completed = true; fu.completedAt = new Date(); fu.result = 'skipped-status';
-    await fu.save(); return;
+  // Lead gone or automation should stop
+  if (!lead) {
+    return _complete(fu, 'lead-not-found');
+  }
+  if (['enrolled', 'do-not-call', 'lost'].includes(lead.status)) {
+    return _complete(fu, 'skipped-status:' + lead.status);
   }
 
   let result = 'processed';
 
   switch (fu.followupType) {
-    case 'email-day1': {
+
+    // ── Emails ─────────────────────────────────────────────────────────
+    case 'email-day1':
+    case 'email-day5':
+    case 'email-day8':
+    case 'email-day12':
+    case 'nurture-email': {
       const r = await emailSvc.sendEnrollmentFollowup(lead);
       result = r.ok ? `email-sent:${r.messageId}` : `email-failed:${r.error}`;
       break;
     }
 
-    case 'whatsapp-day1': {
-      // WhatsApp via Twilio (if configured); otherwise log as pending
-      result = 'whatsapp-logged'; // placeholder — extend with Twilio WhatsApp API
-      logger.info(`WhatsApp follow-up due for ${lead.fullName} (${lead.phone}) — Day 1`);
+    case 'success-stories-day3':
+    case 'success-stories-week3':
+    case 'nurture-success-stories': {
+      const r = await emailSvc.sendSuccessStories(lead);
+      result = r.ok ? 'success-stories-sent' : `email-failed:${r.error}`;
       break;
     }
 
-    case 'ai-call-day3': {
-      // Trigger AI follow-up call if attempts remain and we have a valid URL
+    case 'parent-discussion-week3': {
+      const r = await emailSvc.sendParentDiscussion(lead);
+      result = r.ok ? 'parent-discussion-sent' : `email-failed:${r.error}`;
+      break;
+    }
+
+    case 'enrollment-reminder-week3':
+    case 'enrollment-reminder-day10': {
+      const r = await emailSvc.sendEnrollmentReminder(lead);
+      result = r.ok ? 'enrollment-reminder-sent' : `email-failed:${r.error}`;
+      break;
+    }
+
+    case 'program-benefits-week4': {
+      const r = await emailSvc.sendProgramBenefits(lead);
+      result = r.ok ? 'program-benefits-sent' : `email-failed:${r.error}`;
+      break;
+    }
+
+    case 'limited-seat-week4': {
+      const r = await emailSvc.sendLimitedSeat(lead);
+      result = r.ok ? 'limited-seat-sent' : `email-failed:${r.error}`;
+      break;
+    }
+
+    // ── AI Calls ───────────────────────────────────────────────────────
+    case 'ai-call-day2':
+    case 'ai-call-day4':
+    case 'ai-call-day6':
+    case 'ai-call-day10':
+    case 'ai-call-week3':
+    case 'ai-call-week4':
+    case 'ai-call-day3':  // legacy
+    case 'nurture-ai-call': {
       const { getCurrentUrl } = require('../utils/tunnel');
       const baseUrl = getCurrentUrl() || cfg.server.baseUrl;
       if (baseUrl && !baseUrl.includes('localhost')) {
         try {
           await _placeFollowUpCall(lead, baseUrl);
           result = 'ai-call-initiated';
-        } catch(e) {
+        } catch (e) {
           result = `ai-call-failed:${e.message}`;
         }
       } else {
@@ -90,52 +141,83 @@ async function processFollowUp(fu) {
       break;
     }
 
+    // ── Counselor Reminders ────────────────────────────────────────────
+    case 'counselor-reminder-day7':
+    case 'counselor-reminder-day14':
+    case 'counselor-reminder-week4':
+    case 'nurture-counselor-reminder': {
+      logger.info(`📋 COUNSELOR REMINDER: Follow up manually with ${lead.fullName} (${lead.phone})`);
+      result = 'counselor-alert-logged';
+      break;
+    }
+
+    // ── Lead Review ────────────────────────────────────────────────────
+    case 'nurture-lead-review': {
+      logger.info(`🔍 MONTHLY LEAD REVIEW: ${lead.fullName} | Status: ${lead.status} | Score: ${lead.leadScore} | Calls: ${lead.totalCallAttempts}`);
+      result = 'lead-review-logged';
+      break;
+    }
+
+    // ── WhatsApp (placeholder) ─────────────────────────────────────────
+    case 'whatsapp-day1': {
+      logger.info(`WhatsApp follow-up due for ${lead.fullName} (${lead.phone})`);
+      result = 'whatsapp-logged';
+      break;
+    }
+
+    // ── Legacy ─────────────────────────────────────────────────────────
     case 'success-stories-day5': {
-      // Send a success stories / social proof email
-      const r = await emailSvc.sendSuccessStories(lead).catch(() => ({ ok: false, error: 'method-missing' }));
-      result = r?.ok ? `email-sent` : 'email-sent-fallback';
-      // Fallback to enrollment followup email
-      if (!r?.ok) await emailSvc.sendEnrollmentFollowup(lead).catch(() => {});
-      break;
-    }
-
-    case 'counselor-reminder-day7': {
-      // No external action — just marks it in the DB for the counselor to see
-      result = 'counselor-alert-created';
-      logger.info(`📋 COUNSELOR REMINDER: Follow up manually with ${lead.fullName} (${lead.phone}) — Day 7`);
-      break;
-    }
-
-    case 'enrollment-reminder-day10': {
-      const r = await emailSvc.sendEnrollmentReminder(lead).catch(() => ({ ok: false }));
-      result = r?.ok ? 'enrollment-reminder-sent' : 'enrollment-reminder-fallback';
-      if (!r?.ok) await emailSvc.sendEnrollmentFollowup(lead).catch(() => {});
+      const r = await emailSvc.sendSuccessStories(lead);
+      result = r.ok ? 'success-stories-sent' : `email-failed:${r.error}`;
       break;
     }
 
     default:
-      result = 'unknown-type';
+      result = 'unknown-type:' + fu.followupType;
   }
 
+  await _complete(fu, result);
+
+  // Re-schedule nurture types for the next cycle
+  if (fu.followupType in NURTURE_INTERVALS) {
+    const nextCycle = (fu.cycle || 1) + 1;
+    const intervalDays = NURTURE_INTERVALS[fu.followupType];
+    const nextDate = new Date(Date.now() + intervalDays * 86400000);
+
+    // Only re-schedule if lead is still active
+    const fresh = await Lead.findById(fu.leadId).select('status');
+    if (fresh && !['enrolled', 'do-not-call', 'lost'].includes(fresh.status)) {
+      await FollowUp.create({
+        leadId:       fu.leadId,
+        followupType: fu.followupType,
+        scheduledDate: nextDate,
+        cycle:        nextCycle,
+      });
+      logger.info(`Rescheduled ${fu.followupType} cycle ${nextCycle} for ${lead.fullName} → ${nextDate.toDateString()}`);
+    }
+  }
+}
+
+async function _complete(fu, result) {
   fu.completed   = true;
   fu.completedAt = new Date();
   fu.result      = result;
   await fu.save();
-  logger.info(`FollowUp done: ${fu.followupType} for ${lead.fullName} → ${result}`);
+  logger.info(`FollowUp done: ${fu.followupType} → ${result}`);
 }
 
 async function _placeFollowUpCall(lead, baseUrl) {
   if (!lead.phone || !/^\+[1-9]\d{6,14}$/.test(lead.phone)) {
     throw new Error('invalid-phone');
   }
-  if (['enrolled','do-not-call','calling'].includes(lead.status)) return;
+  if (['enrolled', 'do-not-call', 'calling'].includes(lead.status)) return;
   if (lead.totalCallAttempts >= cfg.call.maxAttempts) {
     throw new Error('max-attempts-reached');
   }
 
-  lead.status           = 'calling';
+  lead.status            = 'calling';
   lead.totalCallAttempts += 1;
-  lead.lastCallAt       = new Date();
+  lead.lastCallAt        = new Date();
   lead.callAttempts.push({ attemptNumber: lead.totalCallAttempts, startTime: new Date(), status: 'initiated' });
   await lead.save();
 
@@ -144,7 +226,7 @@ async function _placeFollowUpCall(lead, baseUrl) {
     lead.callAttempts[lead.callAttempts.length - 1].callSid = callSid;
     await lead.save();
     logger.info(`Follow-up call initiated: ${lead.fullName} → ${callSid}`);
-  } catch(err) {
+  } catch (err) {
     lead.status = 'contacted';
     lead.totalCallAttempts -= 1;
     lead.callAttempts.pop();
@@ -154,10 +236,8 @@ async function _placeFollowUpCall(lead, baseUrl) {
 }
 
 function start() {
-  // Run every 15 minutes
   cron.schedule('*/15 * * * *', runFollowUps);
   logger.info('Follow-up engine started — checks every 15 min');
-  // Run once 30 seconds after boot
   setTimeout(runFollowUps, 30_000);
 }
 

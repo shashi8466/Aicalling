@@ -464,22 +464,51 @@ router.get('/pipeline', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════
 async function scheduleFollowUps(leadId) {
   const now = new Date();
+  const days = d => new Date(now.getTime() + d * 86400000);
+
+  // Full Week 1–4 plan + ongoing monthly cadence
   const plan = [
-    { type: 'email-day1',             daysOffset: 1  },
-    { type: 'whatsapp-day1',          daysOffset: 1  },
-    { type: 'ai-call-day3',           daysOffset: 3  },
-    { type: 'success-stories-day5',   daysOffset: 5  },
-    { type: 'counselor-reminder-day7',daysOffset: 7  },
-    { type: 'enrollment-reminder-day10', daysOffset: 10 },
+    // ── Week 1 ──────────────────────────────────────────────────────────
+    { type: 'email-day1',              at: days(1)  },
+    { type: 'ai-call-day2',            at: days(2)  },
+    { type: 'success-stories-day3',    at: days(3)  },
+    { type: 'ai-call-day4',            at: days(4)  },
+    { type: 'email-day5',              at: days(5)  },
+    { type: 'ai-call-day6',            at: days(6)  },
+    { type: 'counselor-reminder-day7', at: days(7)  },
+    // ── Week 2 ──────────────────────────────────────────────────────────
+    { type: 'email-day8',              at: days(8)  },
+    { type: 'ai-call-day10',           at: days(10) },
+    { type: 'email-day12',             at: days(12) },
+    { type: 'counselor-reminder-day14',at: days(14) },
+    // ── Week 3 ──────────────────────────────────────────────────────────
+    { type: 'ai-call-week3',           at: days(17) },
+    { type: 'success-stories-week3',   at: days(18) },
+    { type: 'parent-discussion-week3', at: days(19) },
+    { type: 'enrollment-reminder-week3',at: days(21) },
+    // ── Week 4 ──────────────────────────────────────────────────────────
+    { type: 'ai-call-week4',           at: days(24) },
+    { type: 'program-benefits-week4',  at: days(25) },
+    { type: 'limited-seat-week4',      at: days(27) },
+    { type: 'counselor-reminder-week4',at: days(28) },
+    // ── Ongoing monthly cadence starts at Day 30 (cycle 1) ──────────────
+    { type: 'nurture-ai-call',         at: days(30), cycle: 1 },
+    { type: 'nurture-email',           at: days(33), cycle: 1 },
+    { type: 'nurture-success-stories', at: days(44), cycle: 1 },
+    { type: 'nurture-counselor-reminder', at: days(44), cycle: 1 },
+    { type: 'nurture-lead-review',     at: days(60), cycle: 1 },
   ];
 
   const docs = [];
   for (const p of plan) {
-    // Don't create duplicates
     const existing = await FollowUp.findOne({ leadId, followupType: p.type, completed: false });
     if (!existing) {
-      const scheduledDate = new Date(now.getTime() + p.daysOffset * 86400000);
-      const doc = await FollowUp.create({ leadId, followupType: p.type, scheduledDate });
+      const doc = await FollowUp.create({
+        leadId,
+        followupType: p.type,
+        scheduledDate: p.at,
+        cycle: p.cycle || 0,
+      });
       docs.push(doc);
     }
   }

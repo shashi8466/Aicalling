@@ -114,6 +114,36 @@ class EmailService {
     });
   }
 
+  async sendParentDiscussion(lead) {
+    if (!lead.email) return { ok: false, error: `Lead ${lead._id} missing email` };
+    return this._send({
+      to:      lead.email,
+      cc:      lead.parentEmail,
+      subject: `${lead.parentName || 'A note for parents'} — Let's discuss ${lead.fullName}'s academic future`,
+      html:    this._wrap(this._parentDiscussionBody(lead)),
+    });
+  }
+
+  async sendProgramBenefits(lead) {
+    if (!lead.email) return { ok: false, error: `Lead ${lead._id} missing email` };
+    return this._send({
+      to:      lead.email,
+      cc:      lead.parentEmail,
+      subject: `Why students choose Test Prep Pundits — ${lead.fullName}'s program breakdown`,
+      html:    this._wrap(this._programBenefitsBody(lead)),
+    });
+  }
+
+  async sendLimitedSeat(lead) {
+    if (!lead.email) return { ok: false, error: `Lead ${lead._id} missing email` };
+    return this._send({
+      to:      lead.email,
+      cc:      lead.parentEmail,
+      subject: `⚠️ Limited seats remaining — secure ${lead.fullName}'s spot now`,
+      html:    this._wrap(this._limitedSeatBody(lead)),
+    });
+  }
+
   async sendEnrollmentFollowup(lead) {
     if (!lead.email) {
       const err = `Lead ${lead._id} missing email address`;
@@ -505,28 +535,193 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
 
   _successStoriesBody(l) {
     const c = cfg.company;
+    const site = c.website || 'https://testpreppundits.com';
+
+    // SAT Top 1% Scorers — real students
+    const satScorers = [
+      { name: 'Shiva Sai Teja Sama',   score: 1590, school: 'Academy for Math, Science, and Engineering, NJ' },
+      { name: 'Aadil Hashman Shah',     score: 1580, school: 'Sri Chaitanya Techno School Hyderabad, Delhi' },
+      { name: 'Aryan Rashinkar',        score: 1570, school: 'Glastonbury High School Glastonbury, CT' },
+      { name: 'Ananya Pantangi',        score: 1570, school: 'Argyle ISD Texas, Denton county' },
+      { name: 'Sri Kashala',            score: 1560, school: 'Carnegie Vanguard High School HISD, Texas' },
+      { name: 'Sai Vignesh Vadlamudi', score: 1560, school: '' },
+      { name: 'Mona Patibandl',         score: 1540, school: '' },
+      { name: 'Farah Khaleel',          score: 1530, school: '' },
+      { name: 'Anjay Chamardhana',      score: 1530, school: '' },
+      { name: 'Kamal Anuj Arundula',   score: 1530, school: '' },
+      { name: 'Shahzaa Donovan',        score: 1530, school: '' },
+      { name: 'Krishna Lagala',         score: 1510, school: '' },
+      { name: 'Kunal Sharma',           score: 1510, school: '' },
+    ];
+
+    const actScorers = [
+      { name: 'Balasubramanya Koneru', score: 36 },
+      { name: 'Sai Vignesh',           score: 35 },
+      { name: 'Adithyaacchi',          score: 35 },
+      { name: 'Satish Dasa Arundula',  score: 34 },
+      { name: 'Aragati Sairavi Patel', score: 34 },
+      { name: 'Akavi',                 score: 32 },
+    ];
+
+    const nationalMerit = ['Farah Khaleel', 'Ganthimathi Maratala'];
+
+    const scorerRow = (students, type) => students.slice(0, 6).map(s => `
+      <td style="text-align:center;padding:8px 6px;vertical-align:top;width:16%">
+        <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#1a3c6e,#2563eb);margin:0 auto 6px;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;font-weight:800;overflow:hidden">
+          ${s.name.split(' ').map(w => w[0]).slice(0,2).join('')}
+        </div>
+        <div style="font-size:11px;font-weight:700;color:#1a3c6e;line-height:1.3">${s.name.split(' ')[0]}</div>
+        <div style="font-size:13px;font-weight:800;color:#ea580c;margin-top:3px">${type === 'act' ? 'ACT ' : ''}${s.score}</div>
+        ${s.school ? `<div style="font-size:9px;color:#6b7280;margin-top:2px;line-height:1.2">${s.school.split(',')[0]}</div>` : ''}
+      </td>`).join('');
+
     return `
-<h2>See What Students Like ${l.fullName} Achieved 🌟</h2>
-<p>Hi ${l.parentName || l.fullName}! We wanted to share a few of our recent student success stories — because seeing real results speaks louder than any brochure.</p>
+<h2>🏆 Real Students. Real Results.</h2>
+<p>Hi ${l.parentName || l.fullName}! We wanted to share what Test Prep Pundits students have achieved — because these aren't just numbers, they're futures changed.</p>
+
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:linear-gradient(135deg,#0a1628,#1a3c6e);border-radius:14px;padding:20px;margin:16px 0">
+  <tr><td>
+    <p style="color:#fbbf24;font-size:13px;font-weight:700;text-align:center;margin:0 0 4px;letter-spacing:1px;text-transform:uppercase">✨ Perfect Scorer</p>
+    <p style="color:#fff;font-size:18px;font-weight:800;text-align:center;margin:0 0 2px">Akahara Balakrishnan</p>
+    <p style="color:rgba(255,255,255,.7);font-size:12px;text-align:center;margin:0 0 12px">Only A Couple Of Hundred Get Perfect Score Out Of 3.7 Millions</p>
+    <p style="background:#ea580c;color:#fff;font-size:22px;font-weight:900;text-align:center;padding:10px;border-radius:10px;margin:0">SAT 1600 🎉</p>
+  </td></tr>
+</table>
+
+<p style="font-size:16px;font-weight:700;color:#1a3c6e;margin:20px 0 10px;text-align:center">Our Top 1% SAT Scorers</p>
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:20px">
+  <tr>${scorerRow(satScorers.slice(0, 5), 'sat')}</tr>
+  <tr>${scorerRow(satScorers.slice(5, 10), 'sat')}</tr>
+</table>
+
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f0f6ff;border-radius:12px;padding:16px;margin:16px 0">
+  <tr><td>
+    <p style="font-size:14px;font-weight:700;color:#1a3c6e;text-align:center;margin:0 0 10px">🎖️ National Merit Finalists</p>
+    <table cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
+      ${nationalMerit.map(name => `
+      <td style="text-align:center;padding:8px;width:50%">
+        <div style="width:52px;height:52px;border-radius:50%;background:#ea580c;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff;font-weight:800">
+          ${name.split(' ').map(w=>w[0]).slice(0,2).join('')}
+        </div>
+        <div style="font-size:12px;font-weight:700;color:#1a3c6e">${name}</div>
+      </td>`).join('')}
+    </tr></table>
+  </td></tr>
+</table>
+
+<p style="font-size:16px;font-weight:700;color:#1a3c6e;margin:20px 0 10px;text-align:center">ACT Top 1% Scorers</p>
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:20px">
+  <tr>${scorerRow(actScorers, 'act')}</tr>
+</table>
 
 <div class="box">
-  🎓 <strong>Sarah M. (Grade 11):</strong> Improved SAT from 1080 → 1360 in 8 weeks<br>
-  🎓 <strong>Rahul P. (Grade 10):</strong> ACT composite jumped from 22 → 29 after one prep cycle<br>
-  🎓 <strong>Emma L. (Grade 12):</strong> Scored 5s on AP Calculus and AP Chemistry<br>
-  🎓 <strong>James W. (Grade 11):</strong> Earned $40,000 merit scholarship with improved SAT score
+  <strong>Why ${l.fullName} can achieve the same:</strong><br>
+  ✅ Personalized study plan based on your strength & weakness analysis<br>
+  ✅ Expert tutors — the same ones behind these scores<br>
+  ✅ 150–200 SAT point improvement on average<br>
+  ✅ Flexible schedule — 7 days/week, morning to evening
 </div>
 
-<p><strong>The #1 reason students succeed with us:</strong></p>
+<p>We'd love to add <strong>${l.fullName}</strong> to our wall of success. The first step is a free 15-minute consultation — no commitment required.</p>
+
+<a href="${site}" class="btn">Schedule Your Free Consultation →</a>
+
+<div class="sig">
+  <strong>Shashi Kumar</strong>
+  Admissions Counselor | Test Prep Pundits<br>
+  📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}<br>
+  🌐 <a href="${site}">${site}</a>
+</div>`;
+  }
+
+  _parentDiscussionBody(l) {
+    const c = cfg.company;
+    return `
+<h2>A Note for ${l.parentName || 'Parents'} 👨‍👩‍👧</h2>
+<p>Hi ${l.parentName || l.fullName}! As a parent, you play the most important role in <strong>${l.fullName}'s</strong> academic journey — and we want to make sure you have everything you need to make the best decision.</p>
+
+<div class="box">
+  💬 <strong>Common questions from parents:</strong><br><br>
+  ❓ <em>"How do I know this program will actually improve scores?"</em><br>
+  → Our students average a <strong>150–200 point SAT improvement</strong> with personalized weekly progress reports you can track.<br><br>
+  ❓ <em>"My child already has a tutor — do they need this?"</em><br>
+  → Our structured program complements existing tutors. Many of our top scorers used both.<br><br>
+  ❓ <em>"Is the investment worth it?"</em><br>
+  → A 150-point SAT improvement can mean <strong>$20,000–$100,000 more</strong> in scholarship eligibility.
+</div>
+
+<p>We'd love to answer your questions in a free, no-pressure 15-minute call — just you, ${l.fullName}, and our counselor.</p>
+
+<a href="mailto:${c.counselorEmail}?subject=Parent Discussion – ${l.fullName}" class="btn">Schedule a Parent Discussion →</a>
+
+<div class="sig">
+  <strong>Shashi Kumar</strong>
+  Admissions Counselor | Test Prep Pundits<br>
+  📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
+</div>`;
+  }
+
+  _programBenefitsBody(l) {
+    const c = cfg.company;
+    const prog = (l.courseInterest || 'Test Prep');
+    return `
+<h2>Why ${l.fullName}'s ${prog} Program Works 📈</h2>
+<p>Hi ${l.parentName || l.fullName}! We know you're evaluating your options — here's a clear breakdown of what makes Test Prep Pundits different.</p>
+
+<div class="grid">
+  <div class="cell"><div class="lbl">Average Score Gain</div><div class="val">150–200 pts SAT / 4–6 pts ACT</div></div>
+  <div class="cell"><div class="lbl">Class Size</div><div class="val">12–15 students (small group)</div></div>
+  <div class="cell"><div class="lbl">Schedule</div><div class="val">7 days/week, 7 AM–10 PM</div></div>
+  <div class="cell"><div class="lbl">Duration</div><div class="val">8–12 weeks</div></div>
+</div>
+
+<p><strong>What's included in every program:</strong></p>
 <ul>
-  <li>📊 Personalized study plan based on individual strength & weakness analysis</li>
-  <li>👩‍🏫 Expert tutors with 10+ years of test prep experience</li>
-  <li>📈 Weekly progress tracking with adaptive content</li>
-  <li>🕐 Flexible scheduling — 7 days/week, morning to evening</li>
+  <li>✅ Diagnostic assessment to identify ${l.fullName}'s exact weak areas</li>
+  <li>✅ Personalized study plan updated weekly</li>
+  <li>✅ Full-length practice tests with detailed score analytics</li>
+  <li>✅ Expert video solutions for every missed question</li>
+  <li>✅ Parent progress updates every 2 weeks</li>
+  <li>✅ 1-Year digital license access — review anytime</li>
+  <li>✅ Flexible payment plans (3–6 monthly installments)</li>
 </ul>
 
-<p>We'd love to add <strong>${l.fullName}</strong> to our success stories. Let's get started!</p>
+<div class="box">
+  🎯 <strong>Our promise:</strong> If ${l.fullName} follows the program, we guarantee measurable improvement — or we'll extend at no charge.
+</div>
 
-<a href="${c.website}" class="btn">Schedule Your Free Consultation →</a>
+<a href="${c.website}" class="btn">See All Programs & Pricing →</a>
+
+<div class="sig">
+  <strong>Shashi Kumar</strong>
+  Admissions Counselor | Test Prep Pundits<br>
+  📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
+</div>`;
+  }
+
+  _limitedSeatBody(l) {
+    const c = cfg.company;
+    return `
+<h2>⚠️ Limited Seats — Don't Miss ${l.fullName}'s Spot</h2>
+<p>Hi ${l.parentName || l.fullName}! I wanted to send a quick heads-up: our upcoming ${l.courseInterest || 'test prep'} session is filling up fast — and we're keeping class sizes small by design (12–15 students max).</p>
+
+<div class="box" style="background:#fff7ed;border-left:4px solid #ea580c">
+  🔴 <strong>Current availability is limited.</strong><br>
+  We cannot guarantee ${l.fullName}'s preferred time slot will still be open next week.<br>
+  Students who secure their spot early also lock in <strong>current pricing</strong> before any increases.
+</div>
+
+<p>Here's what ${l.fullName} gets by enrolling today:</p>
+<ul>
+  <li>✅ Guaranteed spot in the next available session</li>
+  <li>✅ Current pricing locked in — no future increases</li>
+  <li>✅ Free 15-min kick-off consultation with your counselor</li>
+  <li>✅ Payment plan options — as low as 3 monthly installments</li>
+</ul>
+
+<p>To confirm, simply reply to this email or give us a call. Takes less than 5 minutes.</p>
+
+<a href="mailto:${c.counselorEmail}?subject=Reserve Spot – ${l.fullName}" class="btn">Reserve ${l.fullName}'s Spot →</a>
 
 <div class="sig">
   <strong>Shashi Kumar</strong>
