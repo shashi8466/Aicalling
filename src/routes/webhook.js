@@ -35,36 +35,58 @@ function bookUrl(baseUrl, leadId) {
   return `${baseUrl}/webhook/call/book?leadId=${leadId}`;
 }
 
-// ── STEP 1 – Call connects ─────────────────────────────────────────────────────
+// ── STEP 1 – Call connects → speak immediately ────────────────────────────────
+// With asyncAmd, this webhook fires the moment a human (or machine) answers.
+// We don't wait for AMD — we start speaking right away.
+// Machine detection result arrives separately at /webhook/call/amd.
 router.post('/call/start', async (req, res) => {
-  const { leadId }     = req.query;
-  const { AnsweredBy } = req.body;
+  const { leadId } = req.query;
   res.type('text/xml');
 
   try {
     const lead = await Lead.findById(leadId);
     if (!lead) return res.send(twilioSvc.twimlHangup());
 
-    // Answering machine → leave voicemail
-    if (AnsweredBy && AnsweredBy.startsWith('machine')) {
-      await _markAttempt(lead, req.body.CallSid, 'voicemail');
-      await emailSvc.sendNoAnswer(lead);
-      return res.send(twilioSvc.twimlVoicemail(lead));
-    }
-
-    // Human answered
     const isFollowUp = req.query.followUp === '1';
     sessions.set(leadId, { history: [], turnCount: 0, isFollowUp });
 
     const studentFirst = lead.fullName.split(' ')[0];
     const opener = isFollowUp
-      ? `Hello, this is David from Test Prep Pundits. May I please speak with ${studentFirst} or their parent?`
+      ? `Hello, this is Shashi from Test Prep Pundits. May I please speak with ${studentFirst} or their parent?`
       : `Hello, this is Shashi from Test Prep Pundits. Am I speaking with ${studentFirst}?`;
 
     res.send(twilioSvc.twimlStart(opener, respondUrl(cfg.server.baseUrl, leadId)));
   } catch (err) {
     logger.error('webhook/start error', { msg: err.message });
     res.send(twilioSvc.twimlHangup());
+  }
+});
+
+// ── ASYNC AMD CALLBACK – fires after machine detection completes ───────────────
+// If it's a machine, hang up the live call and leave voicemail via a separate call.
+router.post('/call/amd', async (req, res) => {
+  res.sendStatus(200);
+  const { leadId } = req.query;
+  const { AnsweredBy, CallSid } = req.body;
+
+  if (!AnsweredBy || !AnsweredBy.startsWith('machine')) return; // human — nothing to do
+
+  try {
+    const lead = await Lead.findById(leadId);
+    if (!lead) return;
+
+    logger.info(`AMD detected machine for ${lead.fullName} — hanging up live call`);
+
+    // Hang up the in-progress call
+    await require('../services/twilioService')._client()
+      .calls(CallSid)
+      .update({ status: 'completed' })
+      .catch(() => {});
+
+    await _markAttempt(lead, CallSid, 'voicemail');
+    await emailSvc.sendNoAnswer(lead).catch(() => {});
+  } catch (err) {
+    logger.error('AMD callback error', { msg: err.message });
   }
 });
 

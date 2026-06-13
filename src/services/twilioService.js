@@ -25,7 +25,7 @@ class TwilioService {
       to:   lead.phone,
       from: cfg.twilio.phoneNumber,
 
-      // TwiML entry point
+      // TwiML entry point — fires IMMEDIATELY when human answers
       url:    `${baseUrl}/webhook/call/start?${params}`,
       method: 'POST',
 
@@ -39,11 +39,14 @@ class TwilioService {
       recordingStatusCallback:       `${baseUrl}/webhook/call/recording?${params}`,
       recordingStatusCallbackMethod: 'POST',
 
-      // Answering machine detection
-      machineDetection:        'DetectMessageEnd',
-      machineDetectionTimeout: 6000,
+      // Async AMD — webhook fires immediately on connect, AMD runs in background.
+      // If machine detected, /webhook/call/amd receives the result and leaves voicemail.
+      machineDetection:              'Enable',
+      asyncAmd:                      'true',
+      asyncAmdStatusCallback:        `${baseUrl}/webhook/call/amd?${params}`,
+      asyncAmdStatusCallbackMethod:  'POST',
 
-      timeout: 30,   // ring for 30 s before giving up
+      timeout: 30,
     });
 
     logger.info(`Outbound call placed → ${lead.phone}  SID=${call.sid}`);
@@ -173,14 +176,19 @@ class TwilioService {
       record:                        true,
       recordingStatusCallback:       `${baseUrl}/webhook/call/recording?${params}`,
       recordingStatusCallbackMethod: 'POST',
-      machineDetection:        'DetectMessageEnd',
-      machineDetectionTimeout: 6000,
+      machineDetection:             'Enable',
+      asyncAmd:                     'true',
+      asyncAmdStatusCallback:       `${baseUrl}/webhook/call/amd?${params}`,
+      asyncAmdStatusCallbackMethod: 'POST',
       timeout: 30,
     });
 
     logger.info(`Follow-up call placed → ${lead.phone}  SID=${call.sid}`);
     return { callSid: call.sid, status: call.status };
   }
+
+  /** Expose client for AMD hangup */
+  _client() { return client; }
 
   /** End call gracefully */
   twimlHangup(text = 'Thank you for your time. Have a wonderful day! Goodbye.') {
