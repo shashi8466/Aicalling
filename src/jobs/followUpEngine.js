@@ -27,7 +27,7 @@ let running = false;
 const NURTURE_INTERVALS = {
   'nurture-ai-call':            7,   // days
   'nurture-email':              3,
-  'nurture-success-stories':    14,
+  'nurture-success-stories':    7,   // every week
   'nurture-counselor-reminder': 14,
   'nurture-lead-review':        30,
 };
@@ -85,7 +85,9 @@ async function processFollowUp(fu) {
     }
 
     case 'success-stories-day3':
+    case 'success-stories-day9':
     case 'success-stories-week3':
+    case 'success-stories-week4':
     case 'nurture-success-stories': {
       const r = await emailSvc.sendSuccessStories(lead);
       result = r.ok ? 'success-stories-sent' : `email-failed:${r.error}`;

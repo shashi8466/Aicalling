@@ -467,36 +467,40 @@ async function scheduleFollowUps(leadId) {
   const days = d => new Date(now.getTime() + d * 86400000);
 
   // Full Week 1–4 plan + ongoing monthly cadence
+  // No WhatsApp — removed from automation
+  // One Success Stories email per week guaranteed
   const plan = [
     // ── Week 1 ──────────────────────────────────────────────────────────
     { type: 'email-day1',              at: days(1)  },
     { type: 'ai-call-day2',            at: days(2)  },
-    { type: 'success-stories-day3',    at: days(3)  },
+    { type: 'success-stories-day3',    at: days(3)  },  // Week 1 success story
     { type: 'ai-call-day4',            at: days(4)  },
     { type: 'email-day5',              at: days(5)  },
     { type: 'ai-call-day6',            at: days(6)  },
     { type: 'counselor-reminder-day7', at: days(7)  },
     // ── Week 2 ──────────────────────────────────────────────────────────
     { type: 'email-day8',              at: days(8)  },
+    { type: 'success-stories-day9',    at: days(9)  },  // Week 2 success story
     { type: 'ai-call-day10',           at: days(10) },
     { type: 'email-day12',             at: days(12) },
     { type: 'counselor-reminder-day14',at: days(14) },
     // ── Week 3 ──────────────────────────────────────────────────────────
     { type: 'ai-call-week3',           at: days(17) },
-    { type: 'success-stories-week3',   at: days(18) },
+    { type: 'success-stories-week3',   at: days(18) },  // Week 3 success story
     { type: 'parent-discussion-week3', at: days(19) },
     { type: 'enrollment-reminder-week3',at: days(21) },
     // ── Week 4 ──────────────────────────────────────────────────────────
     { type: 'ai-call-week4',           at: days(24) },
-    { type: 'program-benefits-week4',  at: days(25) },
+    { type: 'success-stories-week4',   at: days(25) },  // Week 4 success story
+    { type: 'program-benefits-week4',  at: days(26) },
     { type: 'limited-seat-week4',      at: days(27) },
     { type: 'counselor-reminder-week4',at: days(28) },
-    // ── Ongoing monthly cadence starts at Day 30 (cycle 1) ──────────────
-    { type: 'nurture-ai-call',         at: days(30), cycle: 1 },
-    { type: 'nurture-email',           at: days(33), cycle: 1 },
-    { type: 'nurture-success-stories', at: days(44), cycle: 1 },
+    // ── Ongoing cadence starts at Day 30 — success stories every 7 days ─
+    { type: 'nurture-ai-call',            at: days(30), cycle: 1 },
+    { type: 'nurture-email',              at: days(33), cycle: 1 },
+    { type: 'nurture-success-stories',    at: days(37), cycle: 1 },  // every 7d
     { type: 'nurture-counselor-reminder', at: days(44), cycle: 1 },
-    { type: 'nurture-lead-review',     at: days(60), cycle: 1 },
+    { type: 'nurture-lead-review',        at: days(60), cycle: 1 },
   ];
 
   const docs = [];

@@ -1474,10 +1474,10 @@ async function openLead(id) {
       if (followUps.length) {
         // Group follow-ups into weeks
         const weeks = {
-          'Week 1': ['email-day1','whatsapp-day1','ai-call-day2','success-stories-day3','ai-call-day4','email-day5','ai-call-day6','counselor-reminder-day7'],
-          'Week 2': ['email-day8','ai-call-day10','email-day12','counselor-reminder-day14'],
+          'Week 1': ['email-day1','ai-call-day2','success-stories-day3','ai-call-day4','email-day5','ai-call-day6','counselor-reminder-day7'],
+          'Week 2': ['email-day8','success-stories-day9','ai-call-day10','email-day12','counselor-reminder-day14'],
           'Week 3': ['ai-call-week3','success-stories-week3','parent-discussion-week3','enrollment-reminder-week3'],
-          'Week 4': ['ai-call-week4','program-benefits-week4','limited-seat-week4','counselor-reminder-week4'],
+          'Week 4': ['ai-call-week4','success-stories-week4','program-benefits-week4','limited-seat-week4','counselor-reminder-week4'],
           'Ongoing': ['nurture-ai-call','nurture-email','nurture-success-stories','nurture-counselor-reminder','nurture-lead-review'],
         };
         // Determine default tab: first week with pending items
@@ -2145,6 +2145,7 @@ function fmtFollowupType(t) {
     'whatsapp-day1':            '💬 WhatsApp (Day 1)',
     'ai-call-day2':             '🤖 AI Follow-up Call (Day 2)',
     'success-stories-day3':     '⭐ Success Stories Email (Day 3)',
+    'success-stories-day9':     '⭐ Success Stories Email (Day 9)',
     'ai-call-day4':             '🤖 AI Follow-up Call (Day 4)',
     'email-day5':               '📧 Email Follow-up (Day 5)',
     'ai-call-day6':             '🤖 AI Follow-up Call (Day 6)',
@@ -2161,6 +2162,7 @@ function fmtFollowupType(t) {
     'enrollment-reminder-week3':'🎓 Enrollment Reminder (Week 3)',
     // Week 4
     'ai-call-week4':            '🤖 AI Follow-up Call (Week 4)',
+    'success-stories-week4':    '⭐ Success Stories Email (Week 4)',
     'program-benefits-week4':   '📋 Program Benefits (Week 4)',
     'limited-seat-week4':       '⚠️ Limited Seat Reminder (Week 4)',
     'counselor-reminder-week4': '👤 Counselor Reminder (Week 4)',

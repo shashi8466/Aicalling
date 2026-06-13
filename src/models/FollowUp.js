@@ -15,6 +15,7 @@ const followUpSchema = new mongoose.Schema({
       'counselor-reminder-day7',
       // Week 2
       'email-day8',
+      'success-stories-day9',
       'ai-call-day10',
       'email-day12',
       'counselor-reminder-day14',
@@ -25,6 +26,7 @@ const followUpSchema = new mongoose.Schema({
       'enrollment-reminder-week3',
       // Week 4
       'ai-call-week4',
+      'success-stories-week4',
       'program-benefits-week4',
       'limited-seat-week4',
       'counselor-reminder-week4',
