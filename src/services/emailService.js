@@ -617,16 +617,6 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
   </td></tr>
 </table>
 
-<!-- ══ Perfect Scorer ════════════════════════════════════════════════════ -->
-<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#0a1628;border-radius:14px;margin:0 0 16px">
-  <tr><td style="padding:22px;text-align:center">
-    <p style="color:#fbbf24;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin:0 0 6px">🏆 PERFECT SCORER</p>
-    <p style="color:#fff;font-size:20px;font-weight:900;margin:0 0 4px">Akahara Balakrishnan</p>
-    <p style="color:rgba(255,255,255,.6);font-size:11px;margin:0 0 14px">Only A Couple Of Hundred Get Perfect Score Out Of 3.7 Millions</p>
-    <div style="background:#ea580c;color:#fff;font-size:26px;font-weight:900;padding:12px 24px;border-radius:12px;display:inline-block;letter-spacing:1px">SAT 1600</div>
-  </td></tr>
-</table>
-
 <!-- ══ Top 1% SAT Scorers ════════════════════════════════════════════════ -->
 <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f0f6ff;border-radius:14px;margin:0 0 16px">
   <tr><td style="padding:18px">
