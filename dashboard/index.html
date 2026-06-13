@@ -183,6 +183,10 @@ tbody tr:last-child td { border-bottom: none; }
 .followup-item .fu-type { font-weight: 600; }
 .followup-item .fu-date { color: var(--muted); font-size: 12px; }
 .followup-item .fu-status { font-size: 11px; }
+.fu-week-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 10px; }
+.fu-tab { background: var(--panel2); border: 1px solid var(--border); color: var(--muted); border-radius: 20px; padding: 4px 12px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all .15s; }
+.fu-tab:hover { border-color: var(--brand); color: var(--brand); }
+.fu-tab.active { background: var(--brand); color: #fff; border-color: var(--brand); }
 
 /* Enrollment form */
 .enroll-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -1462,12 +1466,42 @@ async function openLead(id) {
         </div>`;
       }
       if (followUps.length) {
+        // Group follow-ups into weeks
+        const weeks = {
+          'Week 1': ['email-day1','whatsapp-day1','ai-call-day2','success-stories-day3','ai-call-day4','email-day5','ai-call-day6','counselor-reminder-day7'],
+          'Week 2': ['email-day8','ai-call-day10','email-day12','counselor-reminder-day14'],
+          'Week 3': ['ai-call-week3','success-stories-week3','parent-discussion-week3','enrollment-reminder-week3'],
+          'Week 4': ['ai-call-week4','program-benefits-week4','limited-seat-week4','counselor-reminder-week4'],
+          'Ongoing': ['nurture-ai-call','nurture-email','nurture-success-stories','nurture-counselor-reminder','nurture-lead-review'],
+        };
+        // Determine default tab: first week with pending items
+        const weekKeys = Object.keys(weeks);
+        let defaultTab = weekKeys[0];
+        for (const wk of weekKeys) {
+          if (followUps.some(f => weeks[wk].includes(f.followupType) && !f.completed)) { defaultTab = wk; break; }
+        }
+        const tabId = 'fu_tabs_' + l._id;
         body += `<div class="section-title">🔔 Follow-up Schedule (${followUps.length})</div>`;
-        followUps.forEach(f => {
-          body += `<div class="followup-item">
-            <div><div class="fu-type">${fmtFollowupType(f.followupType)}</div><div class="fu-date">📅 ${new Date(f.scheduledDate).toLocaleDateString()}</div></div>
-            <span class="fu-status ${f.completed ? 'status-badge meeting-completed' : 'status-badge queued'}">${f.completed ? '✓ Done' : '⏳ Pending'}</span>
-          </div>`;
+        body += `<div class="fu-week-tabs" id="${tabId}">`;
+        weekKeys.forEach((wk, i) => {
+          const wkItems = followUps.filter(f => weeks[wk].includes(f.followupType));
+          if (!wkItems.length) return;
+          const done = wkItems.filter(f => f.completed).length;
+          const badge = done === wkItems.length ? '✅' : done > 0 ? '🔄' : '⏳';
+          body += `<button class="fu-tab${wk === defaultTab ? ' active' : ''}" onclick="switchFuTab('${tabId}','${wk}')">${badge} ${wk}</button>`;
+        });
+        body += `</div>`;
+        weekKeys.forEach(wk => {
+          const wkItems = followUps.filter(f => weeks[wk].includes(f.followupType));
+          if (!wkItems.length) return;
+          body += `<div class="fu-week-panel" id="${tabId}_${wk.replace(' ','_')}" style="display:${wk === defaultTab ? 'block' : 'none'}">`;
+          wkItems.forEach(f => {
+            body += `<div class="followup-item">
+              <div><div class="fu-type">${fmtFollowupType(f.followupType)}</div><div class="fu-date">📅 ${new Date(f.scheduledDate).toLocaleDateString()}</div></div>
+              <span class="fu-status ${f.completed ? 'status-badge meeting-completed' : 'status-badge queued'}">${f.completed ? '✓ Done' : '⏳ Pending'}</span>
+            </div>`;
+          });
+          body += `</div>`;
         });
       }
     } catch(_) {}
@@ -1480,6 +1514,7 @@ async function openLead(id) {
         ${m.scheduledAt ? `<button class="btn btn-secondary" onclick="logOutcome('${l._id}', '${esc(l.fullName)}')">📝 Log Outcome</button>` : ''}
         <button class="btn btn-secondary" onclick="addObjection('${l._id}', '${esc(l.fullName)}')">⚠️ Log Objection</button>
         <button class="btn btn-secondary" onclick="scheduleFollowUps('${l._id}')">🔔 Schedule Follow-ups</button>
+        <button class="btn btn-secondary" onclick="sendEmail('${l._id}', 'success-stories')">⭐ Success Story</button>
         <button class="btn btn-secondary" onclick="sendEmail('${l._id}', 'enrollment')">🎯 Enrollment</button>
         <button class="btn btn-success btn-sm" onclick="showEnrollFromLead('${l._id}', '${esc(l.fullName)}', '${esc(l.grade||'')}', '${esc(l.parentName||'')}', '${esc(l.parentEmail||'')}', '${esc(l.phone||'')}', '${esc(l.courseInterest||'')}')">✅ Enroll</button>
       </div>
@@ -2099,11 +2134,55 @@ function fmtUptime(sec) {
 }
 function fmtFollowupType(t) {
   const map = {
-    'email-day1': '📧 Email Follow-up (Day 1)', 'whatsapp-day1': '💬 WhatsApp (Day 1)',
-    'ai-call-day3': '🤖 AI Follow-up Call (Day 3)', 'success-stories-day5': '🌟 Success Stories Email (Day 5)',
-    'counselor-reminder-day7': '👤 Counselor Reminder (Day 7)', 'enrollment-reminder-day10': '🎓 Enrollment Reminder (Day 10)',
+    // Week 1
+    'email-day1':               '📧 Email Follow-up (Day 1)',
+    'whatsapp-day1':            '💬 WhatsApp (Day 1)',
+    'ai-call-day2':             '🤖 AI Follow-up Call (Day 2)',
+    'success-stories-day3':     '⭐ Success Stories Email (Day 3)',
+    'ai-call-day4':             '🤖 AI Follow-up Call (Day 4)',
+    'email-day5':               '📧 Email Follow-up (Day 5)',
+    'ai-call-day6':             '🤖 AI Follow-up Call (Day 6)',
+    'counselor-reminder-day7':  '👤 Counselor Reminder (Day 7)',
+    // Week 2
+    'email-day8':               '📧 Email Follow-up (Day 8)',
+    'ai-call-day10':            '🤖 AI Follow-up Call (Day 10)',
+    'email-day12':              '📧 Email Follow-up (Day 12)',
+    'counselor-reminder-day14': '👤 Counselor Reminder (Day 14)',
+    // Week 3
+    'ai-call-week3':            '🤖 AI Follow-up Call (Week 3)',
+    'success-stories-week3':    '⭐ Success Stories Email (Week 3)',
+    'parent-discussion-week3':  '👨‍👩‍👧 Parent Discussion (Week 3)',
+    'enrollment-reminder-week3':'🎓 Enrollment Reminder (Week 3)',
+    // Week 4
+    'ai-call-week4':            '🤖 AI Follow-up Call (Week 4)',
+    'program-benefits-week4':   '📋 Program Benefits (Week 4)',
+    'limited-seat-week4':       '⚠️ Limited Seat Reminder (Week 4)',
+    'counselor-reminder-week4': '👤 Counselor Reminder (Week 4)',
+    // Ongoing
+    'nurture-ai-call':            '🤖 AI Call (Ongoing)',
+    'nurture-email':              '📧 Nurture Email (Ongoing)',
+    'nurture-success-stories':    '⭐ Success Stories (Ongoing)',
+    'nurture-counselor-reminder': '👤 Counselor Reminder (Ongoing)',
+    'nurture-lead-review':        '🔍 Lead Review (Ongoing)',
+    // Legacy
+    'ai-call-day3':               '🤖 AI Follow-up Call (Day 3)',
+    'success-stories-day5':       '⭐ Success Stories Email (Day 5)',
+    'enrollment-reminder-day10':  '🎓 Enrollment Reminder (Day 10)',
   };
-  return map[t] || fmtStatus(t);
+  return map[t] || t;
+}
+
+function switchFuTab(tabId, weekLabel) {
+  // Deactivate all tabs in this group
+  document.querySelectorAll(`#${tabId} .fu-tab`).forEach(btn => btn.classList.remove('active'));
+  // Hide all panels
+  const panelPrefix = tabId + '_';
+  document.querySelectorAll(`[id^="${panelPrefix}"]`).forEach(p => p.style.display = 'none');
+  // Activate selected
+  const activeBtn = [...document.querySelectorAll(`#${tabId} .fu-tab`)].find(b => b.textContent.includes(weekLabel));
+  if (activeBtn) activeBtn.classList.add('active');
+  const panel = document.getElementById(tabId + '_' + weekLabel.replace(' ', '_'));
+  if (panel) panel.style.display = 'block';
 }
 
 // ─── Mobile Menu ────────────────────────────────────

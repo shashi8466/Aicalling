@@ -279,14 +279,15 @@ router.post('/leads/:id/email', async (req, res) => {
 
     // ── Email type map ───────────────────────────────────────────────────
     const map = {
-      welcome:      () => emailSvc.sendNewLeadWelcome(lead),
-      confirmation: () => emailSvc.sendMeetingConfirmation(lead),
-      reminder:     () => emailSvc.sendMeetingReminder(lead),
-      noAnswer:     () => emailSvc.sendNoAnswer(lead),
-      enrollment:   () => emailSvc.sendEnrollmentFollowup(lead),
+      welcome:           () => emailSvc.sendNewLeadWelcome(lead),
+      confirmation:      () => emailSvc.sendMeetingConfirmation(lead),
+      reminder:          () => emailSvc.sendMeetingReminder(lead),
+      noAnswer:          () => emailSvc.sendNoAnswer(lead),
+      enrollment:        () => emailSvc.sendEnrollmentFollowup(lead),
+      'success-stories': () => emailSvc.sendSuccessStories(lead),
     };
     if (!map[type]) {
-      return res.status(400).json({ ok: false, error: `Unknown email type "${type}". Valid types: welcome, confirmation, reminder, noAnswer, enrollment` });
+      return res.status(400).json({ ok: false, error: `Unknown email type "${type}". Valid: welcome, confirmation, reminder, noAnswer, enrollment, success-stories` });
     }
 
     // ── Send ─────────────────────────────────────────────────────────────

@@ -537,33 +537,39 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
     const c = cfg.company;
     const site = c.website || 'https://testpreppundits.com';
 
-    // SAT Top 1% Scorers — real students
+    // SAT Top 1% Scorers — exact names & scores from testpreppundits.com
     const satScorers = [
-      { name: 'Shiva Sai Teja Sama',   score: 1590, school: 'Academy for Math, Science, and Engineering, NJ' },
-      { name: 'Aadil Hashman Shah',     score: 1580, school: 'Sri Chaitanya Techno School Hyderabad, Delhi' },
-      { name: 'Aryan Rashinkar',        score: 1570, school: 'Glastonbury High School Glastonbury, CT' },
-      { name: 'Ananya Pantangi',        score: 1570, school: 'Argyle ISD Texas, Denton county' },
-      { name: 'Sri Kashala',            score: 1560, school: 'Carnegie Vanguard High School HISD, Texas' },
-      { name: 'Sai Vignesh Vadlamudi', score: 1560, school: '' },
-      { name: 'Mona Patibandl',         score: 1540, school: '' },
-      { name: 'Farah Khaleel',          score: 1530, school: '' },
-      { name: 'Anjay Chamardhana',      score: 1530, school: '' },
-      { name: 'Kamal Anuj Arundula',   score: 1530, school: '' },
-      { name: 'Shahzaa Donovan',        score: 1530, school: '' },
-      { name: 'Krishna Lagala',         score: 1510, school: '' },
-      { name: 'Kunal Sharma',           score: 1510, school: '' },
+      { name: 'Shiva Sai Teja Kalva',   score: 1590, school: 'Academy for Math, Science, and Engineering, Rockaway, NJ' },
+      { name: 'Keshif Rahiman Shaik',   score: 1580, school: 'Sri Chaitanya Techno School Hyderabad, India' },
+      { name: 'Arnav Kamineni',          score: 1570, school: 'Glastonbury High School Glastonbury, CT' },
+      { name: 'Ananya Pantangi',         score: 1570, school: 'Argyle ISD Texas, Denton county' },
+      { name: 'Sai Kosthala',            score: 1560, school: 'Carnigie Vanguard High School HISD, Texas' },
+      { name: 'Sai Vignesh Vajinapelly', score: 1560, school: '' },
+      { name: 'Manas Vadlamudi',         score: 1540, school: '' },
+      { name: 'Farah Khaleel',           score: 1540, school: '' },
+      { name: 'Avyay Chamunthala',       score: 1530, school: '' },
+      { name: 'Kamal Deep Vasireddy',    score: 1530, school: '' },
+      { name: 'Dhashana Sivaneson',      score: 1530, school: '' },
+      { name: 'Krishna Gajjela',         score: 1510, school: '' },
+      { name: 'Kunal Sharma',            score: 1510, school: '' },
+    ];
+
+    // Latest SAT Success Stories (banner)
+    const latestSAT = [
+      { name: 'Anish Miryala',   score: 1510, school: 'Crooms Academy of Information Technology, FL' },
+      { name: 'Vishnu Venkatesh', score: 1480, school: 'John P. Stevens High School, Edison, NJ' },
     ];
 
     const actScorers = [
-      { name: 'Balasubramanya Koneru', score: 36 },
-      { name: 'Sai Vignesh',           score: 35 },
-      { name: 'Adithyaacchi',          score: 35 },
-      { name: 'Satish Dasa Arundula',  score: 34 },
-      { name: 'Aragati Sairavi Patel', score: 34 },
-      { name: 'Akavi',                 score: 32 },
+      { name: 'Akahara Balakrishnan', score: 36 },
+      { name: 'Gauthamm Mandala',     score: 35 },
+      { name: 'Farah Khaleel',        score: 35 },
+      { name: 'Kamal Deep Vasireddy', score: 34 },
+      { name: 'Avyay Chamunthala',    score: 34 },
+      { name: 'Ansul',                score: 32 },
     ];
 
-    const nationalMerit = ['Farah Khaleel', 'Ganthimathi Maratala'];
+    const nationalMerit = ['Farah Khaleel', 'Gauthamm Mandala'];
 
     const scorerRow = (students, type) => students.slice(0, 6).map(s => `
       <td style="text-align:center;padding:8px 6px;vertical-align:top;width:16%">
@@ -578,6 +584,24 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
     return `
 <h2>🏆 Real Students. Real Results.</h2>
 <p>Hi ${l.parentName || l.fullName}! We wanted to share what Test Prep Pundits students have achieved — because these aren't just numbers, they're futures changed.</p>
+
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:linear-gradient(135deg,#ff6b35,#1a3c6e);border-radius:12px;padding:18px;margin:14px 0">
+  <tr><td>
+    <p style="color:#fff;font-size:16px;font-weight:800;text-align:center;margin:0 0 14px">📣 Our Latest SAT Success Stories</p>
+    <table cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
+      ${latestSAT.map(s => `
+      <td style="text-align:center;padding:8px;width:50%;vertical-align:top">
+        <div style="width:64px;height:64px;border-radius:50%;background:#fff;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#1a3c6e">
+          ${s.name.split(' ').map(w=>w[0]).slice(0,2).join('')}
+        </div>
+        <p style="color:#fbbf24;font-size:14px;font-weight:800;margin:0 0 2px">${s.name}</p>
+        <p style="color:rgba(255,255,255,.8);font-size:11px;margin:0 0 8px">${s.school}</p>
+        <p style="background:#00c2a8;color:#fff;font-size:16px;font-weight:900;padding:8px 16px;border-radius:8px;margin:0;display:inline-block">SAT SCORE ${s.score}</p>
+      </td>`).join('')}
+    </tr></table>
+    <p style="color:rgba(255,255,255,.85);font-size:12px;text-align:center;margin:12px 0 0">Want to be our next SAT success story?</p>
+  </td></tr>
+</table>
 
 <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:linear-gradient(135deg,#0a1628,#1a3c6e);border-radius:14px;padding:20px;margin:16px 0">
   <tr><td>
