@@ -192,6 +192,34 @@ async function retryPendingLeads() {
   }
 }
 
+/**
+ * Safety net: reset leads stuck in "calling" for too long.
+ * A real call can't last 15+ minutes, so if the completed/canceled webhook
+ * never arrived (network blip, server restart mid-call), unstick the lead.
+ */
+async function unstickStaleCalls() {
+  try {
+    const cutoff = new Date(Date.now() - 15 * 60_000); // 15 min ago
+    const stuck = await Lead.find({
+      status:     'calling',
+      lastCallAt: { $lte: cutoff },
+    });
+
+    for (const lead of stuck) {
+      lead.status = 'contacted';
+      const last = lead.callAttempts[lead.callAttempts.length - 1];
+      if (last && !['completed','canceled','failed','no-answer','busy'].includes(last.status)) {
+        last.status  = 'completed';
+        last.endTime = last.endTime || new Date();
+      }
+      await lead.save();
+      logger.warn(`Unstuck stale "calling" lead: ${lead.fullName} (last call ${lead.lastCallAt?.toISOString()}) → contacted`);
+    }
+  } catch (err) {
+    logger.error('unstickStaleCalls error', { msg: err.message });
+  }
+}
+
 /** Also send reminders for meetings tomorrow */
 async function sendMeetingReminders() {
   try {
@@ -226,6 +254,9 @@ function start() {
 
   // Retry pending leads every 5 minutes
   cron.schedule('*/5 * * * *', retryPendingLeads);
+
+  // Unstick stale "calling" leads every 5 minutes
+  cron.schedule('*/5 * * * *', unstickStaleCalls);
 
   // Meeting reminders at 9 AM daily
   cron.schedule('0 9 * * *', sendMeetingReminders);

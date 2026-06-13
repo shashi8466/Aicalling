@@ -251,6 +251,50 @@ router.post('/leads/:id/call', async (req, res) => {
   }
 });
 
+// ── Stop an in-progress call (admin) ──────────────────────────────────────────
+router.post('/leads/:id/stop-call', async (req, res) => {
+  try {
+    const lead = await Lead.findById(req.params.id);
+    if (!lead) return res.status(404).json({ ok: false, error: 'Lead not found' });
+
+    // Find the most recent call attempt with a live SID
+    const lastAttempt = [...(lead.callAttempts || [])].reverse()
+      .find(a => a.callSid && !['completed','canceled','failed','no-answer','busy'].includes(a.status));
+    const callSid = lastAttempt?.callSid;
+
+    // Tell Twilio to hang up (best-effort — call may already be over)
+    let hungUp = false;
+    if (callSid) {
+      try {
+        await twilioSvc.endCall(callSid);
+        hungUp = true;
+        logger.info(`Admin stopped call ${callSid} for ${lead.fullName}`);
+      } catch (e) {
+        logger.warn(`Stop-call: Twilio hangup failed (call likely already ended): ${e.message}`);
+      }
+    }
+
+    // Reset the lead status so automation/UI no longer shows "Calling"
+    if (lead.status === 'calling') lead.status = 'contacted';
+    if (lastAttempt && !['completed','canceled'].includes(lastAttempt.status)) {
+      lastAttempt.status  = 'canceled';
+      lastAttempt.endTime = new Date();
+    }
+    lead.nextRetryAt = null; // cancel any pending auto-retry
+    await lead.save();
+
+    res.json({
+      ok: true,
+      hungUp,
+      message: hungUp
+        ? `Call stopped for ${lead.fullName}.`
+        : `No active call found — status reset for ${lead.fullName}.`,
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 router.post('/leads/:id/email', async (req, res) => {
   const { type } = req.body || {};
   const leadId = req.params.id;

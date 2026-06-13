@@ -510,10 +510,24 @@ router.post('/call/status', async (req, res) => {
       if (session) {
         await _finaliseCall(lead, session, CallSid, 'completed');
         sessions.delete(leadId);
+      } else {
+        // No active session (server restarted, AMD hangup, or call ended
+        // before any conversation turn). Still clear the "calling" status so
+        // the lead never gets stuck — and persist the attempt update above.
+        if (lead.status === 'calling') lead.status = 'contacted';
+        await lead.save();
+        logger.info(`Call completed for ${lead.fullName} with no active session — status reset to contacted`);
       }
     }
 
+    if (CallStatus === 'canceled') {
+      if (lead.status === 'calling') lead.status = 'contacted';
+      sessions.delete(leadId);
+      await lead.save();
+    }
+
     if (['no-answer','busy','failed'].includes(CallStatus)) {
+      sessions.delete(leadId);
       lead.status = 'queued';
 
       // Schedule retry if attempts remain

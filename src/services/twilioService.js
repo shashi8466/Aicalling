@@ -190,6 +190,12 @@ class TwilioService {
   /** Expose client for AMD hangup */
   _client() { return client; }
 
+  /** Forcefully end an in-progress call by SID (admin Stop Call) */
+  async endCall(callSid) {
+    if (!callSid) throw new Error('No callSid provided');
+    return client.calls(callSid).update({ status: 'completed' });
+  }
+
   /** End call gracefully */
   twimlHangup(text = 'Thank you for your time. Have a wonderful day! Goodbye.') {
     const r = new VR();

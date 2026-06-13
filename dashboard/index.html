@@ -1152,9 +1152,11 @@ function renderTable(elId, leads, full) {
           <td data-label="Calls">${l.totalCallAttempts || 0}</td>
           <td data-label="Actions" style="white-space:nowrap" onclick="event.stopPropagation()">
             <div style="display:flex;gap:4px;flex-wrap:wrap">
-              ${phoneValid
-                ? `<button class="btn btn-primary btn-sm" onclick="callLead('${l._id}')">📞 Call</button>`
-                : `<button class="btn btn-secondary btn-sm" style="opacity:.6" title="Invalid phone">⚠️ Bad #</button>`
+              ${l.status === 'calling'
+                ? `<button class="btn btn-sm" style="background:var(--hot);color:#fff" onclick="stopCall('${l._id}')">🛑 Stop Call</button>`
+                : phoneValid
+                  ? `<button class="btn btn-primary btn-sm" onclick="callLead('${l._id}')">📞 Call</button>`
+                  : `<button class="btn btn-secondary btn-sm" style="opacity:.6" title="Invalid phone">⚠️ Bad #</button>`
               }
               <button class="btn btn-secondary btn-sm" onclick="openEditLead('${l._id}')">✏️ Edit</button>
               <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="confirmDeleteLead('${l._id}','${esc(l.fullName)}')">🗑️</button>
@@ -1514,7 +1516,10 @@ async function openLead(id) {
 
     body += `
       <div class="action-bar">
-        <button class="btn btn-primary" onclick="callLead('${l._id}')">📞 Call Now</button>
+        ${l.status === 'calling'
+          ? `<button class="btn" style="background:var(--hot);color:#fff" onclick="stopCall('${l._id}')">🛑 Stop Call</button>`
+          : `<button class="btn btn-primary" onclick="callLead('${l._id}')">📞 Call Now</button>`
+        }
         <button class="btn btn-secondary" onclick="sendEmail('${l._id}', 'welcome')">📧 Welcome</button>
         ${m.scheduledAt ? `<button class="btn btn-secondary" onclick="sendEmail('${l._id}', 'reminder')">⏰ Reminder</button>` : ''}
         ${m.scheduledAt ? `<button class="btn btn-secondary" onclick="logOutcome('${l._id}', '${esc(l.fullName)}')">📝 Log Outcome</button>` : ''}
@@ -1569,6 +1574,19 @@ async function callLead(id) {
   } catch(e) {
     toast('❌ ' + e.message, 'error');
     console.error('Call failed:', e);
+  }
+}
+async function stopCall(id) {
+  const ok = confirm('🛑 Stop the ongoing call for this lead?\n\nThe call will be hung up immediately and the status reset.');
+  if (!ok) return;
+  toast('Stopping call…', 'info');
+  try {
+    const r = await api('/leads/' + id + '/stop-call', { method: 'POST' });
+    toast(`🛑 ${r.message || 'Call stopped'}`, 'success');
+    closeModal();
+    setTimeout(loadLeads, 1000);
+  } catch(e) {
+    toast('❌ ' + e.message, 'error');
   }
 }
 async function sendEmail(id, type) {
