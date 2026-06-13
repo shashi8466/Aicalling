@@ -98,9 +98,8 @@ router.post('/call/respond', async (req, res) => {
         ));
       }
       if (session.silenceCount === 3) {
-        const studentFirst = lead.fullName.split(' ')[0];
         return res.send(twilioSvc.twimlRespond(
-          `Just to make sure I understand correctly, ${studentFirst} — are you interested in SAT, ACT, AP courses, or College Admissions Counseling?`,
+          "No problem. I'd love to help you learn more about our programs. We offer a free 10 to 15 minute consultation with one of our academic advisors who can answer all your questions and recommend the best study plan for you. Would you like me to schedule a free consultation for you?",
           respondUrl(cfg.server.baseUrl, leadId)
         ));
       }
