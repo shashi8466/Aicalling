@@ -1268,18 +1268,23 @@ async function loadMeetingOutcomes() {
     };
     el.innerHTML = `
       <table>
-        <thead><tr><th>Student</th><th>Outcome</th><th>Pipeline Move</th><th>Notes</th><th>Logged</th></tr></thead>
+        <thead><tr><th>Student</th><th>Outcome</th><th>Pipeline Move</th><th>Notes</th><th>Logged</th><th>Actions</th></tr></thead>
         <tbody>${list.map(o => {
           const color = outcomeColor[o.outcome] || 'var(--muted)';
           const next  = outcomeNext[o.outcome]  || '';
           const name  = o.leadId?.fullName || '—';
           const notes = o.notes ? esc(o.notes.slice(0, 80)) + (o.notes.length > 80 ? '…' : '') : '—';
-          return `<tr onclick="openLead('${o.leadId?._id || ''}')" style="cursor:pointer">
-            <td><strong>${esc(name)}</strong></td>
-            <td><span style="background:${color}22;color:${color};padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600">${fmtStatus(o.outcome)}</span></td>
-            <td style="color:var(--muted);font-size:12px">${next}</td>
-            <td style="color:var(--muted);font-size:12px;max-width:200px">${notes}</td>
-            <td style="color:var(--muted);font-size:12px">${o.createdAt ? new Date(o.createdAt).toLocaleDateString() : '—'}</td>
+          const lid   = o.leadId?._id || '';
+          return `<tr>
+            <td data-label="Student" onclick="openLead('${lid}')" style="cursor:pointer"><strong>${esc(name)}</strong></td>
+            <td data-label="Outcome"><span style="background:${color}22;color:${color};padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600">${fmtStatus(o.outcome)}</span></td>
+            <td data-label="Pipeline Move" style="color:var(--muted);font-size:12px">${next}</td>
+            <td data-label="Notes" style="color:var(--muted);font-size:12px;max-width:200px">${notes}</td>
+            <td data-label="Logged" style="color:var(--muted);font-size:12px">${o.createdAt ? new Date(o.createdAt).toLocaleDateString() : '—'}</td>
+            <td data-label="Actions" style="white-space:nowrap;display:flex;gap:6px">
+              <button class="btn btn-secondary btn-sm" onclick="editOutcome('${o._id}','${esc(name)}','${o.outcome}','${esc((o.notes||'').replace(/'/g,"\\'").replace(/\n/g,' '))}')">✏️ Edit</button>
+              <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="confirmDeleteOutcome('${o._id}','${esc(name)}')">🗑️</button>
+            </td>
           </tr>`;
         }).join('')}</tbody>
       </table>
@@ -1291,13 +1296,16 @@ async function loadMeetingOutcomes() {
 
 function completeMeeting(leadId, name) {
   // Open the outcome modal — same modal used from lead detail view
+  const m = document.getElementById('outcomeModal');
   document.getElementById('outcomeLeadId').value = leadId;
   document.getElementById('outcomeLeadName').textContent = name;
   document.getElementById('outcomeResult').value = '';
   document.getElementById('outcomeNotes').value = '';
-  document.getElementById('outcomeModal').classList.add('active');
+  m.dataset.editId = '';
+  m.querySelector('h2').textContent = 'Log Meeting Outcome';
+  m.classList.add('active');
   // Flag that we came from the meetings page so refresh is correct
-  document.getElementById('outcomeModal').dataset.fromMeetings = '1';
+  m.dataset.fromMeetings = '1';
 }
 
 // ─── Analytics ─────────────────────────────────────
@@ -2069,23 +2077,66 @@ async function deleteCall() {
 
 // ─── Meeting Outcome ────────────────────────────────
 function logOutcome(leadId, name) {
+  const m = document.getElementById('outcomeModal');
   document.getElementById('outcomeLeadId').value = leadId;
   document.getElementById('outcomeLeadName').textContent = name;
   document.getElementById('outcomeResult').value = '';
   document.getElementById('outcomeNotes').value = '';
+  m.dataset.editId = '';
+  m.querySelector('h2').textContent = 'Log Meeting Outcome';
   closeModal();
-  document.getElementById('outcomeModal').classList.add('active');
-  document.getElementById('outcomeModal').dataset.fromMeetings = '0';
+  m.classList.add('active');
+  m.dataset.fromMeetings = '0';
+}
+function editOutcome(id, name, outcome, notes) {
+  const m = document.getElementById('outcomeModal');
+  m.dataset.editId = id;
+  m.dataset.fromMeetings = '1';
+  document.getElementById('outcomeLeadName').textContent = name + ' (editing)';
+  document.getElementById('outcomeResult').value = outcome || '';
+  document.getElementById('outcomeNotes').value  = notes || '';
+  m.querySelector('h2').textContent = 'Edit Meeting Outcome';
+  m.classList.add('active');
+}
+function confirmDeleteOutcome(id, name) {
+  if (!confirm(`🗑️ Delete this meeting outcome for ${name}?\n\nThis action cannot be undone.`)) return;
+  deleteOutcome(id);
+}
+async function deleteOutcome(id) {
+  try {
+    const r = await api('/crm/meeting-outcomes/' + id, { method: 'DELETE' });
+    toast('🗑️ ' + (r.message || 'Outcome deleted'), 'success');
+    loadMeetingOutcomes();
+  } catch(e) { toast('❌ ' + e.message, 'error'); }
 }
 function closeOutcomeModal() {
-  document.getElementById('outcomeModal').classList.remove('active');
-  document.getElementById('outcomeModal').dataset.fromMeetings = '0';
+  const m = document.getElementById('outcomeModal');
+  m.classList.remove('active');
+  m.dataset.fromMeetings = '0';
+  m.dataset.editId = '';
+  m.querySelector('h2').textContent = 'Log Meeting Outcome';
 }
 async function saveOutcome() {
+  const m       = document.getElementById('outcomeModal');
+  const editId  = m.dataset.editId;
   const leadId  = document.getElementById('outcomeLeadId').value;
   const outcome = document.getElementById('outcomeResult').value;
   const notes   = document.getElementById('outcomeNotes').value;
   if (!outcome) { toast('Please select an outcome', 'error'); return; }
+
+  // ── EDIT MODE — PATCH existing outcome ──
+  if (editId) {
+    try {
+      await api('/crm/meeting-outcomes/' + editId, {
+        method: 'PATCH',
+        body: JSON.stringify({ outcome, notes }),
+      });
+      toast('✅ Outcome updated', 'success');
+      closeOutcomeModal();
+      setTimeout(() => { loadMeetingOutcomes(); loadLeads(); }, 600);
+    } catch(e) { toast('❌ ' + e.message, 'error'); }
+    return;
+  }
 
   // Backend /api/crm/meeting-outcomes POST handles the status update automatically.
   // Mapping shown here for UI label only (mirrors server-side statusMap in crm.js):

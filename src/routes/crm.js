@@ -64,6 +64,45 @@ router.get('/meeting-outcomes/:id', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// Update an outcome (and re-apply the lead status move if outcome changed)
+router.patch('/meeting-outcomes/:id', async (req, res) => {
+  try {
+    const { outcome, notes } = req.body;
+    const doc = await MeetingOutcome.findById(req.params.id);
+    if (!doc) return res.status(404).json({ ok: false, error: 'Outcome not found' });
+
+    const outcomeChanged = outcome && outcome !== doc.outcome;
+    if (outcome !== undefined) doc.outcome = outcome;
+    if (notes   !== undefined) doc.notes   = notes;
+    await doc.save();
+
+    // Re-apply the pipeline move + reschedule follow-ups if the outcome changed
+    if (outcomeChanged) {
+      const statusMap = {
+        'ready-to-enroll':        'enrollment-pending',
+        'interested':             'proposal-sent',
+        'need-follow-up':         'meeting-completed',
+        'parent-wants-discussion':'meeting-completed',
+        'not-interested':         'lost',
+      };
+      const newStatus = statusMap[doc.outcome];
+      if (newStatus) await Lead.findByIdAndUpdate(doc.leadId, { status: newStatus });
+      if (doc.outcome !== 'not-interested') await scheduleFollowUps(doc.leadId);
+    }
+
+    res.json({ ok: true, outcome: doc });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// Delete an outcome
+router.delete('/meeting-outcomes/:id', async (req, res) => {
+  try {
+    const doc = await MeetingOutcome.findByIdAndDelete(req.params.id);
+    if (!doc) return res.status(404).json({ ok: false, error: 'Outcome not found' });
+    res.json({ ok: true, message: 'Meeting outcome deleted' });
+  } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 // ═══════════════════════════════════════════════════════════════════════
 //   FOLLOW-UPS
 // ═══════════════════════════════════════════════════════════════════════
