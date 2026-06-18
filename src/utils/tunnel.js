@@ -55,7 +55,7 @@ function updateEnvBaseUrl(url) {
     fs.writeFileSync(envPath, content);
     process.env.BASE_URL = url;
     cfg.server.baseUrl   = url;
-    logger.info(`📡 BASE_URL → ${url}`);
+    logger.info(`📡 BASE_URL set to: ${url}`);
   } catch(e) {
     logger.warn('Could not update .env:', e.message);
   }
@@ -103,7 +103,7 @@ async function attemptLocalTunnel(port) {
 
     currentUrl = url;
     updateEnvBaseUrl(url);
-    logger.info(`✅ Tunnel LIVE via localtunnel: ${url}`);
+    logger.info(`✅ Tunnel: ${url}`);
 
     // Treat the tunnel object like a "proc" for cleanup
     currentProc = {
@@ -176,7 +176,7 @@ function attemptSshProvider(provider, port) {
         currentProc = proc;        // assign only on success
         currentUrl  = url;
         updateEnvBaseUrl(url);
-        logger.info(`✅ Tunnel LIVE via ${provider.name}: ${url}`);
+        logger.info(`✅ Tunnel: ${url}`);
 
         // Attach close handler AFTER success
         proc.on('close', (code) => {
