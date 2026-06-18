@@ -908,6 +908,7 @@ audio { width: 100%; margin-top: 10px; }
 
       <!-- ─── CALLS ─── -->
       <section class="view" id="view-calls">
+        <div class="kpi-strip" id="callsKpis"></div>
         <div class="card">
           <div class="card-header"><h3>Call Activity — Recordings, Transcripts & AI Summaries</h3></div>
           <div id="callsTable"></div>
@@ -916,6 +917,7 @@ audio { width: 100%; margin-top: 10px; }
 
       <!-- ─── MEETINGS ─── -->
       <section class="view" id="view-meetings">
+        <div class="kpi-strip" id="meetingsKpis"></div>
         <div class="card">
           <div class="card-header">
             <h3>Upcoming Meetings</h3>
@@ -1119,6 +1121,7 @@ audio { width: 100%; margin-top: 10px; }
 
       <!-- ─── ENROLLMENTS ─── -->
       <section class="view" id="view-enrollments">
+        <div class="kpi-strip" id="enrollKpis"></div>
         <div class="card" style="margin-bottom:18px">
           <div class="card-header">
             <h3>Enrollments</h3>
@@ -1189,52 +1192,86 @@ audio { width: 100%; margin-top: 10px; }
 
       <!-- ─── REVENUE ─── -->
       <section class="view" id="view-revenue">
-        <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
-          <button class="btn btn-secondary btn-sm" onclick="loadRevenue(30)">Last 30 Days</button>
-          <button class="btn btn-secondary btn-sm" onclick="loadRevenue(90)">Last 90 Days</button>
-          <button class="btn btn-secondary btn-sm" onclick="loadRevenue(365)">This Year</button>
-        </div>
-        <div class="metric-cards">
-          <div class="metric-card"><div class="metric-value" id="rv_revenue">$0</div><div class="metric-label">Total Revenue Collected</div></div>
-          <div class="metric-card"><div class="metric-value" id="rv_pending">$0</div><div class="metric-label">Pending Revenue</div></div>
-          <div class="metric-card"><div class="metric-value" id="rv_enrolled">0</div><div class="metric-label">Total Enrollments</div></div>
-          <div class="metric-card"><div class="metric-value" id="rv_overall_conv">0%</div><div class="metric-label">Overall Conversion</div></div>
-        </div>
-        <div class="distribution">
-          <div class="card">
-            <div class="card-header"><h3>Conversion Metrics</h3></div>
-            <div class="modal-body" id="rv_conv_metrics"></div>
+        <div class="an-page">
+
+          <!-- Header -->
+          <div class="an-header">
+            <div><h2 class="an-title">Revenue &amp; Analytics</h2></div>
+            <div class="an-header-right">
+              <select class="pipe-date-select" id="rvRange" onchange="loadRevenue(+this.value)">
+                <option value="30">Last 30 Days</option>
+                <option value="90">Last 90 Days</option>
+                <option value="365">This Year</option>
+              </select>
+            </div>
           </div>
-          <div class="card">
-            <div class="card-header"><h3>Revenue by Program</h3></div>
-            <div class="modal-body" id="rv_by_program"></div>
+
+          <!-- KPI cards -->
+          <div class="an-kpis">
+            <div class="an-kpi" style="--kpi-color:#10b981">
+              <div><div class="an-kpi-label">Total Revenue Collected</div><div class="an-kpi-val" id="rv_revenue">$0</div></div>
+              <div class="an-kpi-icon">💰</div>
+            </div>
+            <div class="an-kpi" style="--kpi-color:#f59e0b">
+              <div><div class="an-kpi-label">Pending Revenue</div><div class="an-kpi-val" id="rv_pending">$0</div></div>
+              <div class="an-kpi-icon">⏳</div>
+            </div>
+            <div class="an-kpi" style="--kpi-color:#ec4899">
+              <div><div class="an-kpi-label">Total Enrollments</div><div class="an-kpi-val" id="rv_enrolled">0</div></div>
+              <div class="an-kpi-icon">🎓</div>
+            </div>
+            <div class="an-kpi" style="--kpi-color:#3b82f6">
+              <div><div class="an-kpi-label">Overall Conversion</div><div class="an-kpi-val" id="rv_overall_conv">0%</div></div>
+              <div class="an-kpi-icon">📈</div>
+            </div>
           </div>
-        </div>
-        <div class="distribution">
-          <div class="card">
-            <div class="card-header"><h3>Enrollments by Program</h3></div>
-            <div class="modal-body" id="rv_enroll_prog"></div>
+
+          <!-- Mid 2-col -->
+          <div class="an-mid">
+            <div class="ov-card">
+              <div class="ov-card-hdr"><h4>Conversion Metrics</h4></div>
+              <div class="ov-card-body" id="rv_conv_metrics"></div>
+            </div>
+            <div class="ov-card">
+              <div class="ov-card-hdr"><h4>Revenue by Program</h4></div>
+              <div class="ov-card-body" id="rv_by_program"></div>
+            </div>
           </div>
-          <div class="card">
-            <div class="card-header"><h3>Pipeline Status Counts</h3></div>
-            <div class="modal-body" id="rv_pipeline"></div>
+
+          <div class="an-mid">
+            <div class="ov-card">
+              <div class="ov-card-hdr"><h4>Enrollments by Program</h4></div>
+              <div class="ov-card-body" id="rv_enroll_prog"></div>
+            </div>
+            <div class="ov-card">
+              <div class="ov-card-hdr"><h4>Pipeline Status Counts</h4></div>
+              <div class="ov-card-body" id="rv_pipeline"></div>
+            </div>
           </div>
-        </div>
-        <div class="card">
-          <div class="card-header"><h3>Revenue Trend</h3></div>
-          <div class="modal-body" id="rv_trend"></div>
+
+          <!-- Revenue trend -->
+          <div class="ov-card">
+            <div class="ov-card-hdr"><h4>Revenue Trend</h4></div>
+            <div class="ov-card-body" id="rv_trend"></div>
+          </div>
         </div>
       </section>
 
       <!-- ─── SETTINGS ─── -->
       <section class="view" id="view-settings">
-        <div class="card">
-          <div class="card-header"><h3>System Configuration</h3></div>
-          <div class="modal-body">
-            <div class="detail-grid" id="systemInfo"></div>
-            <p style="color:var(--muted);font-size:13px;line-height:1.6;margin-top:16px">
-              ⚙️ Settings are loaded from the server's <code>.env</code> file. Modify and restart the server to apply changes.
-            </p>
+        <div class="an-page">
+          <div class="an-header">
+            <div><h2 class="an-title">System Settings</h2></div>
+          </div>
+          <div class="kpi-strip" id="settingsKpis"></div>
+          <div class="ov-card">
+            <div class="ov-card-hdr"><h4>System Configuration</h4></div>
+            <div class="ov-card-body">
+              <div class="detail-grid" id="systemInfo"></div>
+              <p style="color:var(--muted);font-size:13px;line-height:1.6;margin-top:16px">
+                ⚙️ Settings are loaded from the server's <code>.env</code> file. Modify and restart the server to apply changes.
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -1701,14 +1738,41 @@ function renderActivity() {
   : '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">No recent activity</div>';
 }
 
+// ─── Reusable KPI chip ──────────────────────────────
+function kpiChip(icon, val, label, color) {
+  return `<div class="kpi-chip" style="--kc:${color};--kcbg:${color}1f">
+    <div class="kpi-chip-icon">${icon}</div>
+    <div><div class="kpi-chip-val">${val}</div><div class="kpi-chip-label">${label}</div></div>
+  </div>`;
+}
+
 // ─── Leads ──────────────────────────────────────────
 async function loadLeads() {
   try {
     LEADS = await api('/leads');
     document.getElementById('navLeadCount').textContent = LEADS.length;
+    renderLeadsKpis();
     renderLeadsTable();
     loadOverview();
   } catch(e) { toast(e.message, 'error'); }
+}
+
+function renderLeadsKpis() {
+  const el = document.getElementById('leadsKpis');
+  if (!el) return;
+  const total    = LEADS.length;
+  const hot      = LEADS.filter(l => l.leadCategory === 'hot').length;
+  const contacted= LEADS.filter(l => l.totalCallAttempts > 0).length;
+  const meetings = LEADS.filter(l => ['meeting-scheduled','meeting-completed'].includes(l.status)).length;
+  const enrolled = LEADS.filter(l => l.status === 'enrolled').length;
+  const avgScore = total ? Math.round(LEADS.reduce((s,l)=>s+(l.leadScore||0),0)/total) : 0;
+  el.innerHTML =
+    kpiChip('👥', total,     'Total Leads',   '#3b82f6') +
+    kpiChip('🔥', hot,       'Hot Leads',     '#ef4444') +
+    kpiChip('📞', contacted, 'Contacted',     '#f59e0b') +
+    kpiChip('📅', meetings,  'Meetings',      '#10b981') +
+    kpiChip('🎓', enrolled,  'Enrolled',      '#ec4899') +
+    kpiChip('⭐', avgScore,  'Avg Score',     '#8b5cf6');
 }
 
 function filterLeads() {
@@ -1764,6 +1828,7 @@ async function loadCalls() {
   try {
     CALLS = await api('/calls');
     document.getElementById('navCallCount').textContent = CALLS.length;
+    renderCallsKpis();
     const el = document.getElementById('callsTable');
     if (!CALLS.length) { el.innerHTML = '<div class="empty"><div class="icon">📞</div>No call activity yet</div>'; return; }
     el.innerHTML = `
@@ -1789,15 +1854,51 @@ async function loadCalls() {
   } catch(e) { toast(e.message, 'error'); }
 }
 
+function renderCallsKpis() {
+  const el = document.getElementById('callsKpis');
+  if (!el) return;
+  const total     = CALLS.length;
+  const completed = CALLS.filter(c => c.status === 'completed').length;
+  const noAnswer  = CALLS.filter(c => ['no-answer','busy','failed'].includes(c.status)).length;
+  const positive  = CALLS.filter(c => c.sentiment === 'positive').length;
+  const durs      = CALLS.filter(c => c.duration > 0).map(c => c.duration);
+  const avgDur    = durs.length ? Math.round(durs.reduce((a,b)=>a+b,0)/durs.length) : 0;
+  el.innerHTML =
+    kpiChip('📞', total,         'Total Calls',   '#3b82f6') +
+    kpiChip('✅', completed,     'Completed',     '#10b981') +
+    kpiChip('📵', noAnswer,      'No Answer',     '#ef4444') +
+    kpiChip('😊', positive,      'Positive',      '#f59e0b') +
+    kpiChip('⏱️', avgDur + 's',  'Avg Duration',  '#8b5cf6');
+}
+
 // ─── Meetings ───────────────────────────────────────
 async function loadMeetings() {
   try {
     MEETINGS = await api('/meetings');
     document.getElementById('navMeetCount').textContent = MEETINGS.total;
+    renderMeetingsKpis();
     renderMeetingList('meetingsUpcoming', MEETINGS.upcoming, 'No upcoming meetings', true);
     renderMeetingList('meetingsPast',     MEETINGS.past,     'No past meetings',     false);
     loadMeetingOutcomes();
   } catch(e) { toast(e.message, 'error'); }
+}
+
+function renderMeetingsKpis() {
+  const el = document.getElementById('meetingsKpis');
+  if (!el) return;
+  const upcoming = (MEETINGS.upcoming || []).length;
+  const past     = (MEETINGS.past || []).length;
+  const total    = MEETINGS.total || (upcoming + past);
+  const now = Date.now(), weekAhead = now + 7*86400000;
+  const thisWeek = (MEETINGS.upcoming || []).filter(l => {
+    const t = new Date(l.meeting?.scheduledAt).getTime();
+    return t >= now && t <= weekAhead;
+  }).length;
+  el.innerHTML =
+    kpiChip('📅', total,    'Total Meetings', '#3b82f6') +
+    kpiChip('🔜', upcoming, 'Upcoming',       '#10b981') +
+    kpiChip('🗓️', thisWeek, 'This Week',       '#f59e0b') +
+    kpiChip('📋', past,     'Past Meetings',  '#8b5cf6');
 }
 
 function renderMeetingList(elId, list, emptyMsg, showAction) {
@@ -2055,6 +2156,15 @@ async function loadAnalytics() {
 async function loadSystem() {
   try {
     const s = await api('/system');
+    const ks = document.getElementById('settingsKpis');
+    if (ks) {
+      const online = s.tunnelUrl && !String(s.tunnelUrl).includes('localhost');
+      ks.innerHTML =
+        kpiChip(online ? '🟢' : '🔴', online ? 'Online' : 'Local', 'Public Tunnel', online ? '#10b981' : '#ef4444') +
+        kpiChip('📞', s.twilioPhone || '—', 'Caller ID',   '#3b82f6') +
+        kpiChip('🔄', s.pollInterval + 's', 'Poll Interval', '#f59e0b') +
+        kpiChip('⏱️', fmtUptime(s.uptime), 'Uptime',       '#8b5cf6');
+    }
     document.getElementById('systemInfo').innerHTML = `
       <div class="detail-cell"><div class="lbl">Public URL (Tunnel)</div><div class="val" style="font-family:monospace;font-size:11px">${s.tunnelUrl}</div></div>
       <div class="detail-cell"><div class="lbl">Twilio Caller ID</div><div class="val">${s.twilioPhone}</div></div>
@@ -2692,8 +2802,22 @@ async function loadEnrollments() {
     const status = document.getElementById('enrollStatusFilter')?.value || '';
     ENROLLMENTS = await fetch('/api/crm/enrollments' + (status ? '?status=' + status : '')).then(r => r.json());
     document.getElementById('navEnrollCount').textContent = ENROLLMENTS.length;
+    renderEnrollKpis();
     renderEnrollmentsTable();
   } catch(e) { toast(e.message, 'error'); }
+}
+function renderEnrollKpis() {
+  const el = document.getElementById('enrollKpis');
+  if (!el) return;
+  const total   = ENROLLMENTS.length;
+  const active  = ENROLLMENTS.filter(e => ['active','confirmed'].includes(e.enrollmentStatus)).length;
+  const pending = ENROLLMENTS.filter(e => e.enrollmentStatus === 'pending').length;
+  const revenue = ENROLLMENTS.reduce((s,e) => s + (e.programFee || 0), 0);
+  el.innerHTML =
+    kpiChip('🎓', total,                          'Total Enrollments', '#3b82f6') +
+    kpiChip('✅', active,                         'Active',            '#10b981') +
+    kpiChip('⏳', pending,                        'Pending',           '#f59e0b') +
+    kpiChip('💰', '$' + revenue.toLocaleString(), 'Program Value',     '#ec4899');
 }
 function renderEnrollmentsTable() {
   const el = document.getElementById('enrollmentsTable');
