@@ -189,9 +189,9 @@ router.post('/call/respond', async (req, res) => {
       if (confirmed) {
         session.history.push({ role: 'user', content: speech });
         const followUp =
-          `Great! I noticed that you recently completed a demo test with Test Prep Pundits, ` +
-          `and I wanted to follow up to see how we can help you achieve your academic goals. ` +
-          `Are you interested in learning more about SAT, ACT, AP courses, or College Admissions Counseling?`;
+          `Great! I noticed that you recently completed a demo test with Test Prep Pundits. ` +
+          `I'm calling to help you learn more about our SAT, ACT, AP, and College Admissions programs. ` +
+          `Which program are you interested in?`;
         session.history.push({ role: 'assistant', content: followUp });
         session.turnCount++;
         sessions.set(leadId, session);
@@ -214,7 +214,7 @@ router.post('/call/respond', async (req, res) => {
           // After 3 failed attempts, move forward anyway
           session.history.push({ role: 'user', content: speech });
           const followUp =
-            `I understand. Let me tell you about our programs. Are you interested in learning more about SAT, ACT, AP courses, or College Admissions Counseling?`;
+            `I understand. I'm calling to help you learn more about our SAT, ACT, AP, and College Admissions programs. Which program are you interested in?`;
           session.history.push({ role: 'assistant', content: followUp });
           session.turnCount++;
           sessions.set(leadId, session);
@@ -275,6 +275,32 @@ router.post('/call/respond', async (req, res) => {
       await _finaliseCall(lead, session, req.body.CallSid, 'ended-by-caller-decline');
       return res.send(twilioSvc.twimlHangup(
         `Absolutely no problem. Thank you so much for your time and have a wonderful day!`
+      ));
+    }
+
+    // Callback request — FIRST attempt converts to a slot offer; if they insist again, accept.
+    // Skip if a meeting is already booked (then it's just chit-chat, let the AI handle it).
+    const callbackPhrases = [
+      'call me back', 'call back', 'callback', 'call me later', 'call later',
+      'another time', 'some other time', 'reach me later', 'contact me later',
+      'try me later', 'call again later',
+    ];
+    if (!meetingBooked && callbackPhrases.some(p => lowSpeech.includes(p))) {
+      session.callbackCount = (session.callbackCount || 0) + 1;
+      sessions.set(leadId, session);
+
+      if (session.callbackCount === 1) {
+        // First callback → make one attempt to lock in a slot now
+        return res.send(twilioSvc.twimlStart(
+          `Of course! Let me find a time that works so it's confirmed in both our calendars — that way you won't miss it.`,
+          slotsUrl(cfg.server.baseUrl, leadId)
+        ));
+      }
+
+      // Second+ callback after a scheduling attempt → accept gracefully and end
+      await _finaliseCall(lead, session, req.body.CallSid, 'ended-callback-requested');
+      return res.send(twilioSvc.twimlHangup(
+        `Absolutely, I'll make a note to call you back. Thank you so much for your time, and have a wonderful day!`
       ));
     }
 
