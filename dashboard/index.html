@@ -2002,11 +2002,11 @@ function openStageModal(key) {
     </div>`).join('')
   : '<div style="padding:32px;text-align:center;color:var(--muted)">No leads in this stage</div>';
 
-  document.getElementById('stageModal').classList.add('open');
+  document.getElementById('stageModal').classList.add('active');
 }
 
 function closeStageModal() {
-  document.getElementById('stageModal').classList.remove('open');
+  document.getElementById('stageModal').classList.remove('active');
 }
 
 // ─── Enrollments ────────────────────────────────────
