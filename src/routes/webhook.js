@@ -53,6 +53,20 @@ function isIdentityConfirmed(lowSpeech, firstName) {
   return namePatterns.some(p => lowSpeech.includes(p));
 }
 
+/**
+ * Detects program intent from caller speech.
+ * Returns the detected program or null if not recognized.
+ */
+function detectProgramIntent(lowSpeech) {
+  const s = lowSpeech.trim();
+  // Match SAT, ACT, AP, College Admissions in any case/form
+  if (/\bsat\b/.test(s)) return 'SAT';
+  if (/\bact\b/.test(s)) return 'ACT';
+  if (/\bap\b/.test(s)) return 'AP';
+  if (/\b(college|admissions)\b/.test(s)) return 'College Admissions';
+  return null;
+}
+
 // ── Helper to build the per-turn respond URL ──────────────────────────────────
 function respondUrl(baseUrl, leadId) {
   return `${baseUrl}/webhook/call/respond?leadId=${leadId}`;
@@ -165,9 +179,10 @@ router.post('/call/respond', async (req, res) => {
     session.silenceCount = 0;
     const lowSpeech = speech.toLowerCase();
 
-    // ── IDENTITY CONFIRMATION (Turn 1 only) — deterministic, no LLM needed ────
-    // If this is the very first caller reply, check for any confirmed-identity phrase.
-    // If matched, immediately deliver the scripted follow-up line without hitting the AI.
+    // ── IDENTITY CONFIRMATION (Turn 0 only) — deterministic, no LLM needed ────
+    // On the very first caller reply, check for any confirmed-identity phrase.
+    // If matched, immediately deliver the scripted follow-up line.
+    // If NOT matched, ask them to confirm identity before proceeding.
     if (session.turnCount === 0) {
       const studentFirst = lead.fullName.split(' ')[0].toLowerCase();
       const confirmed = isIdentityConfirmed(lowSpeech, studentFirst);
@@ -181,6 +196,30 @@ router.post('/call/respond', async (req, res) => {
         session.turnCount++;
         sessions.set(leadId, session);
         return res.send(twilioSvc.twimlRespond(followUp, respondUrl(cfg.server.baseUrl, leadId)));
+      } else {
+        // Identity not confirmed on first turn — ask them to clarify who they are
+        session.identityConfirmAttempt = (session.identityConfirmAttempt || 0) + 1;
+        sessions.set(leadId, session);
+        if (session.identityConfirmAttempt === 1) {
+          return res.send(twilioSvc.twimlRespond(
+            `I'm sorry, I didn't quite catch that. Could you please confirm — am I speaking with ${lead.fullName.split(' ')[0]}?`,
+            respondUrl(cfg.server.baseUrl, leadId)
+          ));
+        } else if (session.identityConfirmAttempt === 2) {
+          return res.send(twilioSvc.twimlRespond(
+            `I apologize for the confusion. Just to confirm — is this ${lead.fullName}?`,
+            respondUrl(cfg.server.baseUrl, leadId)
+          ));
+        } else {
+          // After 3 failed attempts, move forward anyway
+          session.history.push({ role: 'user', content: speech });
+          const followUp =
+            `I understand. Let me tell you about our programs. Are you interested in learning more about SAT, ACT, AP courses, or College Admissions Counseling?`;
+          session.history.push({ role: 'assistant', content: followUp });
+          session.turnCount++;
+          sessions.set(leadId, session);
+          return res.send(twilioSvc.twimlRespond(followUp, respondUrl(cfg.server.baseUrl, leadId)));
+        }
       }
     }
 
@@ -237,6 +276,14 @@ router.post('/call/respond', async (req, res) => {
       return res.send(twilioSvc.twimlHangup(
         `Absolutely no problem. Thank you so much for your time and have a wonderful day!`
       ));
+    }
+
+    // Detect program intent on turn 1 (after identity confirmation, when answering program question)
+    if (session.turnCount === 1) {
+      const detectedProgram = detectProgramIntent(lowSpeech);
+      if (detectedProgram) {
+        logger.info(`Program intent detected: "${detectedProgram}" from speech: "${speech}"`);
+      }
     }
 
     // Add user turn to history
