@@ -24,6 +24,35 @@ const cfg            = require('../config');
 // In-memory conversation store  { leadId → { history, slots } }
 const sessions = new Map();
 
+/**
+ * Deterministically checks whether the caller's first reply confirms their identity.
+ * Matches all accepted confirmation phrases regardless of case or minor punctuation.
+ * @param {string} lowSpeech  - caller speech already lowercased
+ * @param {string} firstName  - student's first name already lowercased
+ * @returns {boolean}
+ */
+function isIdentityConfirmed(lowSpeech, firstName) {
+  // Generic affirmations
+  const genericOk = /^(yes|yeah|yep|yup|correct|speaking|sure|absolutely|of course|that'?s? me|that is me)[\.!,]?$/.test(lowSpeech.trim());
+  if (genericOk) return true;
+
+  // Name-based confirmations
+  const namePatterns = [
+    `yes i'?m ${firstName}`,
+    `i am ${firstName}`,
+    `this is ${firstName}`,
+    `you'?re speaking with ${firstName}`,
+    `you are speaking with ${firstName}`,
+    `${firstName} speaking`,
+    `${firstName} here`,
+    `speaking with ${firstName}`,
+    `it'?s ${firstName}`,
+    `it is ${firstName}`,
+    `kumar speaking`,  // covers counselor-name variant from rules
+  ];
+  return namePatterns.some(p => lowSpeech.includes(p));
+}
+
 // ── Helper to build the per-turn respond URL ──────────────────────────────────
 function respondUrl(baseUrl, leadId) {
   return `${baseUrl}/webhook/call/respond?leadId=${leadId}`;
@@ -134,6 +163,26 @@ router.post('/call/respond', async (req, res) => {
 
     // Speech received — reset silence counter
     session.silenceCount = 0;
+    const lowSpeech = speech.toLowerCase();
+
+    // ── IDENTITY CONFIRMATION (Turn 1 only) — deterministic, no LLM needed ────
+    // If this is the very first caller reply, check for any confirmed-identity phrase.
+    // If matched, immediately deliver the scripted follow-up line without hitting the AI.
+    if (session.turnCount === 0) {
+      const studentFirst = lead.fullName.split(' ')[0].toLowerCase();
+      const confirmed = isIdentityConfirmed(lowSpeech, studentFirst);
+      if (confirmed) {
+        session.history.push({ role: 'user', content: speech });
+        const followUp =
+          `Great! I noticed that you recently completed a demo test with Test Prep Pundits, ` +
+          `and I wanted to follow up to see how we can help you achieve your academic goals. ` +
+          `Are you interested in learning more about SAT, ACT, AP courses, or College Admissions Counseling?`;
+        session.history.push({ role: 'assistant', content: followUp });
+        session.turnCount++;
+        sessions.set(leadId, session);
+        return res.send(twilioSvc.twimlRespond(followUp, respondUrl(cfg.server.baseUrl, leadId)));
+      }
+    }
 
     // Detect ONLY explicit decline — never end the call on weak signals.
     // The caller must clearly and unambiguously refuse.
@@ -150,7 +199,6 @@ router.post('/call/respond', async (req, res) => {
       "i am not interested",
     ];
     const meetingBooked = !!session.meetingBooked;
-    const lowSpeech = speech.toLowerCase();
 
     // Allow goodbye/bye to end ONLY if meeting is already booked
     if (meetingBooked && /\b(goodbye|bye|thanks bye|all done|that's it|nothing else|no questions)\b/.test(lowSpeech)) {
