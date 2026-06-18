@@ -9,9 +9,9 @@
  *          Day 4 AI call, Day 5 email, Day 6 AI call, Day 7 counselor reminder
  * Week 2:  Day 8 email, Day 10 AI call, Day 12 email, Day 14 counselor reminder
  * Week 3:  AI call, success stories, parent discussion, enrollment reminder
- * Week 4:  AI call, program benefits, limited seat reminder, counselor reminder
- * Monthly: Every 7d AI call, every 3d email, every 14d success stories,
- *          every 14d counselor reminder, every 30d lead review
+ * Week 4:  AI call, success stories, program benefits, limited seat, counselor reach-out email
+ * Monthly: Every 7d AI call, every 3d email, every 7d success stories,
+ *          every 14d counselor reach-out email, every 30d re-engagement email
  */
 const cron     = require('node-cron');
 const Lead     = require('../models/Lead');
@@ -143,20 +143,20 @@ async function processFollowUp(fu) {
       break;
     }
 
-    // ── Counselor Reminders ────────────────────────────────────────────
+    // ── Counselor Reach-Out (automated email to lead) ──────────────────
     case 'counselor-reminder-day7':
     case 'counselor-reminder-day14':
     case 'counselor-reminder-week4':
     case 'nurture-counselor-reminder': {
-      logger.info(`📋 COUNSELOR REMINDER: Follow up manually with ${lead.fullName} (${lead.phone})`);
-      result = 'counselor-alert-logged';
+      const r = await emailSvc.sendCounselorReachOut(lead);
+      result = r.ok ? 'counselor-reachout-sent' : `email-failed:${r.error}`;
       break;
     }
 
-    // ── Lead Review ────────────────────────────────────────────────────
+    // ── Monthly Re-Engagement Email ────────────────────────────────────
     case 'nurture-lead-review': {
-      logger.info(`🔍 MONTHLY LEAD REVIEW: ${lead.fullName} | Status: ${lead.status} | Score: ${lead.leadScore} | Calls: ${lead.totalCallAttempts}`);
-      result = 'lead-review-logged';
+      const r = await emailSvc.sendReEngagement(lead);
+      result = r.ok ? 're-engagement-sent' : `email-failed:${r.error}`;
       break;
     }
 

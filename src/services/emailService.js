@@ -144,6 +144,26 @@ class EmailService {
     });
   }
 
+  async sendCounselorReachOut(lead) {
+    if (!lead.email) return { ok: false, error: `Lead ${lead._id} missing email` };
+    return this._send({
+      to:      lead.email,
+      cc:      lead.parentEmail,
+      subject: `${lead.fullName}, I wanted to personally check in 👋`,
+      html:    this._wrap(this._counselorReachOutBody(lead)),
+    });
+  }
+
+  async sendReEngagement(lead) {
+    if (!lead.email) return { ok: false, error: `Lead ${lead._id} missing email` };
+    return this._send({
+      to:      lead.email,
+      cc:      lead.parentEmail,
+      subject: `Still thinking about it? We're here for ${lead.fullName} whenever you're ready`,
+      html:    this._wrap(this._reEngagementBody(lead)),
+    });
+  }
+
   async sendEnrollmentFollowup(lead) {
     if (!lead.email) {
       const err = `Lead ${lead._id} missing email address`;
@@ -804,6 +824,69 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
   <strong>Shashi Kumar</strong>
   Admissions Counselor | Test Prep Pundits<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
+</div>`;
+  }
+
+  _counselorReachOutBody(l) {
+    const c = cfg.company;
+    return `
+<h2>Hi ${l.parentName || l.fullName}! I wanted to check in 👋</h2>
+<p>This is <strong>Shashi Kumar</strong> from Test Prep Pundits. I've been following up because I genuinely believe ${l.fullName} has what it takes to hit an incredible score — and I don't want them to miss the window.</p>
+
+<div class="box">
+  📌 <strong>Where ${l.fullName} stands right now:</strong><br><br>
+  Program of Interest: <strong>${l.courseInterest || 'Test Prep'}</strong><br>
+  Grade: <strong>${l.grade || 'To confirm'}</strong><br><br>
+  Our students at this stage see an average <strong>150–200 point SAT</strong> or <strong>4–6 point ACT</strong> improvement with the right program.
+</div>
+
+<p>I know you're busy — so here are the three most common questions I get at this stage:</p>
+
+<ul>
+  <li>❓ <em>"When does the next session start?"</em> → We start new cohorts every 2–3 weeks. The next one is filling up.</li>
+  <li>❓ <em>"Can we try before committing?"</em> → Yes! We offer a <strong>free 45-min consultation</strong> — zero obligation.</li>
+  <li>❓ <em>"What if it doesn't work?"</em> → We extend the program at no charge if ${l.fullName} follows the plan and doesn't see improvement.</li>
+</ul>
+
+<p>I'd love to hop on a quick 15-minute call to answer any remaining questions. Just reply to this email or call me directly.</p>
+
+<a href="mailto:${c.counselorEmail}?subject=Quick Question – ${l.fullName}" class="btn">Reply to Shashi →</a>
+
+<div class="sig">
+  <strong>Shashi Kumar</strong>
+  Admissions Counselor | Test Prep Pundits<br>
+  📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}<br>
+  🌐 <a href="${c.website}">${c.website}</a>
+</div>`;
+  }
+
+  _reEngagementBody(l) {
+    const c = cfg.company;
+    return `
+<h2>We're still rooting for ${l.fullName}! 🎓</h2>
+<p>Hi ${l.parentName || l.fullName}! It's been a little while since we last connected, and I just wanted you to know — we haven't forgotten about <strong>${l.fullName}</strong>, and we're still here whenever the timing feels right.</p>
+
+<div class="box">
+  💡 <strong>Did you know?</strong><br>
+  Students who start ${l.courseInterest || 'test prep'} at least <strong>8–12 weeks before their exam date</strong> see the greatest score gains. If ${l.fullName} has an upcoming test date, now is a great time to get the plan in motion.
+</div>
+
+<p><strong>What's changed since we last spoke?</strong></p>
+<ul>
+  <li>✅ New cohorts starting — flexible Saturday/Sunday and weekday options</li>
+  <li>✅ Payment plans now available from just 3 monthly installments</li>
+  <li>✅ Recent student wins — see our latest success stories below</li>
+</ul>
+
+<p>No pressure, no commitment — just a quick reply or call to see where ${l.fullName} is in the journey. We're happy to answer any questions at all.</p>
+
+<a href="mailto:${c.counselorEmail}?subject=Re: ${l.fullName} – Checking In" class="btn">Reconnect With Us →</a>
+
+<div class="sig">
+  <strong>Shashi Kumar</strong>
+  Admissions Counselor | Test Prep Pundits<br>
+  📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}<br>
+  🌐 <a href="${c.website}">${c.website}</a>
 </div>`;
   }
 
