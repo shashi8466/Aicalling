@@ -224,6 +224,86 @@ tbody tr:last-child td { border-bottom: none; }
 .status-badge.enrolled             { background: rgba(236,72,153,.15);   color: var(--pink); }
 .status-badge.lost                 { background: rgba(239,68,68,.15);    color: var(--hot); }
 
+/* ─── Counselor Dashboard ───────────────────────────────── */
+.cd-page { display:flex; flex-direction:column; gap:16px; }
+
+/* Tab bar */
+.cd-tabs { display:flex; gap:6px; }
+.cd-tab {
+  padding:8px 20px; border-radius:8px; font-size:13px; font-weight:600;
+  border:none; cursor:pointer; background:var(--panel2); color:var(--muted);
+  border:1px solid var(--border); transition:all .15s;
+}
+.cd-tab:hover { color:var(--text); background:var(--panel); }
+.cd-tab.active { background:var(--brand); color:#fff; border-color:var(--brand); }
+
+/* KPI cards */
+.cd-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+@media(max-width:900px){ .cd-kpis{ grid-template-columns:repeat(2,1fr); } }
+@media(max-width:500px){ .cd-kpis{ grid-template-columns:1fr; } }
+
+.cd-kpi {
+  background:var(--panel); border:1px solid var(--border); border-radius:14px;
+  padding:18px 20px; display:flex; align-items:center; gap:14px;
+  border-left:3px solid var(--ck,var(--brand));
+}
+.cd-kpi-icon {
+  width:46px; height:46px; border-radius:12px; flex-shrink:0;
+  background:var(--ckbg,rgba(59,130,246,.12)); color:var(--ck,#3b82f6);
+  display:flex; align-items:center; justify-content:center; font-size:20px;
+}
+.cd-kpi-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-bottom:4px; }
+.cd-kpi-val   { font-size:26px; font-weight:800; color:var(--ck,var(--brand)); line-height:1; }
+.cd-kpi-sub   { font-size:11px; color:var(--muted); margin-top:3px; }
+
+/* 2-col grid */
+.cd-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+@media(max-width:700px){ .cd-grid{ grid-template-columns:1fr; } }
+
+/* Follow-up item (new style) */
+.cd-fu-item {
+  display:flex; align-items:center; gap:12px;
+  padding:12px 18px; border-bottom:1px solid var(--border);
+  transition:background .12s;
+}
+.cd-fu-item:last-child { border-bottom:none; }
+.cd-fu-item:hover { background:var(--panel2); }
+.cd-fu-icon {
+  width:36px; height:36px; border-radius:10px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; font-size:16px;
+}
+.cd-fu-title { font-size:13px; font-weight:600; }
+.cd-fu-date  { font-size:11px; color:var(--muted); margin-top:2px; }
+.cd-due-badge {
+  padding:3px 9px; border-radius:6px; font-size:11px; font-weight:700;
+  background:rgba(239,68,68,.15); color:#ef4444; flex-shrink:0; white-space:nowrap;
+}
+.cd-fu-actions { display:flex; align-items:center; gap:8px; margin-left:auto; flex-shrink:0; }
+
+/* Hot lead item */
+.cd-lead-item {
+  display:flex; align-items:center; gap:12px; padding:12px 18px;
+  border-bottom:1px solid var(--border); cursor:pointer; transition:background .12s;
+}
+.cd-lead-item:last-child { border-bottom:none; }
+.cd-lead-item:hover { background:var(--panel2); }
+.cd-lead-avatar {
+  width:36px; height:36px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:13px; font-weight:800; color:#fff;
+}
+.cd-lead-name { font-size:13px; font-weight:600; }
+.cd-lead-meta { font-size:11px; color:var(--muted); margin-top:2px; }
+
+/* Empty state */
+.cd-empty {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:40px 20px; gap:10px; text-align:center;
+}
+.cd-empty-icon { font-size:40px; opacity:.3; }
+.cd-empty-title { font-size:14px; font-weight:600; color:var(--text); }
+.cd-empty-sub   { font-size:12px; color:var(--muted); }
+
 /* ─── Analytics page ────────────────────────────────────── */
 .an-page { display:flex; flex-direction:column; gap:16px; }
 .an-header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
@@ -269,6 +349,21 @@ tbody tr:last-child td { border-bottom: none; }
 
 /* SVG area chart */
 .an-chart-svg { width:100%; overflow:visible; }
+
+/* ─── Reusable KPI strip (table pages) ─────────────────── */
+.kpi-strip { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:18px; }
+.kpi-chip {
+  background:var(--panel); border:1px solid var(--border); border-radius:14px;
+  padding:15px 18px; display:flex; align-items:center; gap:13px;
+  border-left:3px solid var(--kc,var(--brand));
+}
+.kpi-chip-icon {
+  width:44px; height:44px; border-radius:12px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; font-size:19px;
+  background:var(--kcbg,rgba(59,130,246,.12)); color:var(--kc,#3b82f6);
+}
+.kpi-chip-val   { font-size:23px; font-weight:800; line-height:1; }
+.kpi-chip-label { font-size:11px; color:var(--muted); margin-top:4px; font-weight:500; }
 
 /* ─── Pipeline — table view ──────────────────────────────── */
 .pipe-page { display:flex; flex-direction:column; gap:18px; }
@@ -780,6 +875,7 @@ audio { width: 100%; margin-top: 10px; }
 
       <!-- ─── LEADS ─── -->
       <section class="view" id="view-leads">
+        <div class="kpi-strip" id="leadsKpis"></div>
         <div class="card">
           <div class="card-header">
             <h3>All Leads</h3>
@@ -932,36 +1028,87 @@ audio { width: 100%; margin-top: 10px; }
 
       <!-- ─── COUNSELOR DASHBOARD ─── -->
       <section class="view" id="view-counselor">
-        <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
-          <button class="btn btn-secondary btn-sm" onclick="loadCounselor('today')">Today</button>
-          <button class="btn btn-secondary btn-sm" onclick="loadCounselor('week')">This Week</button>
-          <button class="btn btn-secondary btn-sm" onclick="loadCounselor('month')">This Month</button>
-        </div>
-        <div class="stats" id="counselorStats">
-          <div class="stat-card brand"><div class="label">Meetings in Range</div><div class="value" id="cd_meetings">—</div></div>
-          <div class="stat-card hot"><div class="label">🔥 Hot Leads</div><div class="value" id="cd_hot">—</div></div>
-          <div class="stat-card warm"><div class="label">Enrollment Pending</div><div class="value" id="cd_enroll_pending">—</div></div>
-          <div class="stat-card success"><div class="label">Revenue Pipeline</div><div class="value" id="cd_revenue">—</div></div>
-        </div>
-        <div class="distribution">
-          <div class="card">
-            <div class="card-header"><h3>📅 Today's Meetings</h3></div>
-            <div id="cd_today_meetings" class="modal-body"></div>
+        <div class="cd-page">
+
+          <!-- Tab bar -->
+          <div class="cd-tabs" id="cdTabs">
+            <button class="cd-tab active" onclick="switchCdTab('today',this)">Today</button>
+            <button class="cd-tab" onclick="switchCdTab('week',this)">This Week</button>
+            <button class="cd-tab" onclick="switchCdTab('month',this)">This Month</button>
           </div>
-          <div class="card">
-            <div class="card-header"><h3>⏰ Follow-ups Due</h3></div>
-            <div id="cd_followups" class="modal-body"></div>
+
+          <!-- 4 KPI cards -->
+          <div class="cd-kpis">
+            <div class="cd-kpi" style="--ck:#3b82f6;--ckbg:rgba(59,130,246,.12)">
+              <div class="cd-kpi-icon">📅</div>
+              <div class="cd-kpi-body">
+                <div class="cd-kpi-label">MEETINGS IN RANGE</div>
+                <div class="cd-kpi-val" id="cd_meetings">—</div>
+                <div class="cd-kpi-sub" id="cd_meetings_sub">No meetings scheduled</div>
+              </div>
+            </div>
+            <div class="cd-kpi" style="--ck:#ef4444;--ckbg:rgba(239,68,68,.12)">
+              <div class="cd-kpi-icon" style="color:#ef4444">🔥</div>
+              <div class="cd-kpi-body">
+                <div class="cd-kpi-label">HOT LEADS</div>
+                <div class="cd-kpi-val" id="cd_hot">—</div>
+                <div class="cd-kpi-sub" id="cd_hot_sub">No hot leads</div>
+              </div>
+            </div>
+            <div class="cd-kpi" style="--ck:#8b5cf6;--ckbg:rgba(139,92,246,.12)">
+              <div class="cd-kpi-icon" style="color:#8b5cf6">🎓</div>
+              <div class="cd-kpi-body">
+                <div class="cd-kpi-label">ENROLLMENT PENDING</div>
+                <div class="cd-kpi-val" id="cd_enroll_pending">—</div>
+                <div class="cd-kpi-sub" id="cd_enroll_sub">No pending enrollments</div>
+              </div>
+            </div>
+            <div class="cd-kpi" style="--ck:#10b981;--ckbg:rgba(16,185,129,.12)">
+              <div class="cd-kpi-icon" style="color:#10b981">💰</div>
+              <div class="cd-kpi-body">
+                <div class="cd-kpi-label">REVENUE PIPELINE</div>
+                <div class="cd-kpi-val" id="cd_revenue">—</div>
+                <div class="cd-kpi-sub">Total expected revenue</div>
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="distribution">
-          <div class="card">
-            <div class="card-header"><h3>🔥 Hot Leads</h3></div>
-            <div id="cd_hot_leads" class="modal-body"></div>
+
+          <!-- Row 2: Today's Meetings + Follow-ups -->
+          <div class="cd-grid">
+            <div class="ov-card">
+              <div class="ov-card-hdr"><h4>📅 Today's Meetings</h4></div>
+              <div id="cd_today_meetings" class="ov-card-body" style="min-height:180px"></div>
+            </div>
+            <div class="ov-card">
+              <div class="ov-card-hdr">
+                <h4>🔔 Follow-ups Due</h4>
+                <a class="btn btn-secondary btn-sm" data-view="counselor" style="text-decoration:none;font-size:11px" onclick="loadCounselor(document.querySelector('.cd-tab.active')?.dataset?.range||'today')">↻</a>
+              </div>
+              <div id="cd_followups" style="min-height:180px"></div>
+              <div style="padding:12px 18px;border-top:1px solid var(--border)">
+                <a href="#" onclick="switchCdTab('today',null)" style="font-size:13px;color:var(--brand);font-weight:600;text-decoration:none">View All Follow-ups →</a>
+              </div>
+            </div>
           </div>
-          <div class="card">
-            <div class="card-header"><h3>📋 Enrollment Pending</h3></div>
-            <div id="cd_enroll_list" class="modal-body"></div>
+
+          <!-- Row 3: Hot Leads + Enrollment Pending -->
+          <div class="cd-grid">
+            <div class="ov-card">
+              <div class="ov-card-hdr">
+                <h4>🔥 Hot Leads</h4>
+                <a class="btn btn-secondary btn-sm" data-view="leads" style="text-decoration:none;font-size:11px">View All Leads</a>
+              </div>
+              <div id="cd_hot_leads" style="min-height:180px"></div>
+            </div>
+            <div class="ov-card">
+              <div class="ov-card-hdr">
+                <h4>🎓 Enrollment Pending</h4>
+                <a class="btn btn-secondary btn-sm" data-view="enrollments" style="text-decoration:none;font-size:11px">View All Enrollments</a>
+              </div>
+              <div id="cd_enroll_list" style="min-height:180px"></div>
+            </div>
           </div>
+
         </div>
       </section>
 
@@ -2173,61 +2320,141 @@ function exportLeads() {
 }
 
 // ─── Counselor Dashboard ────────────────────────────
+function switchCdTab(range, btn) {
+  document.querySelectorAll('.cd-tab').forEach(t => t.classList.remove('active'));
+  if (btn) { btn.classList.add('active'); btn.dataset.range = range; }
+  else {
+    const t = document.querySelector(`.cd-tab[onclick*="${range}"]`);
+    if (t) t.classList.add('active');
+  }
+  loadCounselor(range);
+}
+
 async function loadCounselor(range = 'today') {
   try {
     const d = await fetch('/api/crm/counselor-dashboard?range=' + range).then(r => r.json());
-    document.getElementById('cd_meetings').textContent = d.meetingsInRange;
-    document.getElementById('cd_hot').textContent = d.hotLeads.length;
-    document.getElementById('cd_enroll_pending').textContent = d.enrollmentPending.length;
-    document.getElementById('cd_revenue').textContent = '$' + (d.revenuePipeline || 0).toLocaleString();
 
-    // Today's meetings
+    // KPI values
+    const mtg = d.meetingsInRange || 0;
+    const hot = d.hotLeads?.length || 0;
+    const enr = d.enrollmentPending?.length || 0;
+    document.getElementById('cd_meetings').textContent = mtg;
+    document.getElementById('cd_hot').textContent      = hot;
+    document.getElementById('cd_enroll_pending').textContent = enr;
+    document.getElementById('cd_revenue').textContent  = '$' + (d.revenuePipeline || 0).toLocaleString();
+    document.getElementById('cd_meetings_sub').textContent = mtg > 0 ? `${mtg} meeting${mtg>1?'s':''} scheduled` : 'No meetings scheduled';
+    document.getElementById('cd_hot_sub').textContent      = hot > 0 ? `${hot} hot lead${hot>1?'s':''}` : 'No hot leads';
+    document.getElementById('cd_enroll_sub').textContent   = enr > 0 ? `${enr} pending enrollment${enr>1?'s':''}` : 'No pending enrollments';
+
+    function ini(n) { return (n||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
+    function fmtTime(d) { return d ? new Date(d).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '—'; }
+    function fmtDate(d) { return d ? new Date(d).toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'numeric'}) : '—'; }
+    const AVATAR_COLORS = ['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#06b6d4','#ec4899'];
+    function avatarColor(name) { let h=0; for(const c of (name||'')) h=(h*31+c.charCodeAt(0))&0xffffff; return AVATAR_COLORS[Math.abs(h)%AVATAR_COLORS.length]; }
+
+    // ── Today's Meetings ─────────────────────────────────
     const el1 = document.getElementById('cd_today_meetings');
-    if (d.todayMeetings.length) {
+    if (d.todayMeetings?.length) {
       el1.innerHTML = d.todayMeetings.map(l => `
-        <div class="followup-item" onclick="openLead('${l._id}')" style="cursor:pointer">
-          <div><div class="fu-type">${esc(l.fullName)}</div><div class="fu-date">🕐 ${l.meeting?.scheduledAt ? new Date(l.meeting.scheduledAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—'} · ${esc(l.courseInterest || '—')}</div></div>
-          ${l.meeting?.meetLink ? `<a href="${l.meeting.meetLink}" target="_blank" onclick="event.stopPropagation()" class="btn btn-primary btn-sm">🎥 Join</a>` : ''}
+        <div class="cd-lead-item" onclick="openLead('${l._id}')">
+          <div class="cd-lead-avatar" style="background:${avatarColor(l.fullName)}">${ini(l.fullName)}</div>
+          <div style="flex:1;min-width:0">
+            <div class="cd-lead-name">${esc(l.fullName)}</div>
+            <div class="cd-lead-meta">🕐 ${fmtTime(l.meeting?.scheduledAt)} · ${esc(l.courseInterest||'—')}</div>
+          </div>
+          ${l.meeting?.meetLink ? `<a href="${l.meeting.meetLink}" target="_blank" onclick="event.stopPropagation()" class="btn btn-primary btn-sm" style="font-size:12px">🎥 Join</a>` : '<span class="status-badge meeting-scheduled" style="font-size:11px">Scheduled</span>'}
         </div>`).join('');
     } else {
-      el1.innerHTML = '<div class="empty"><div class="icon">📅</div>No meetings today</div>';
+      el1.innerHTML = `
+        <div class="cd-empty">
+          <div class="cd-empty-icon">📅</div>
+          <div class="cd-empty-title">No meetings today</div>
+          <div class="cd-empty-sub">You have no meetings scheduled for today.</div>
+          <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="switchView('meetings')">View Calendar</button>
+        </div>`;
     }
 
-    // Follow-ups due
+    // ── Follow-ups Due ───────────────────────────────────
     const el2 = document.getElementById('cd_followups');
-    if (d.pendingFollowUps.length) {
-      el2.innerHTML = d.pendingFollowUps.map(f => `
-        <div class="followup-item">
-          <div><div class="fu-type">${fmtFollowupType(f.followupType)}</div><div class="fu-date">📅 ${new Date(f.scheduledDate).toLocaleDateString()}</div></div>
-          <button class="btn btn-secondary btn-sm" onclick="markFollowUpDone('${f._id}')">✓ Done</button>
-        </div>`).join('');
+    const FU_ICONS = { 'ai-call':'📞', 'email':'📧', 'success-stories':'⭐', 'counselor-reminder':'🔔', 'parent-discussion':'👨‍👩‍👧', 'enrollment-reminder':'🎓', 'program-benefits':'📋', 'limited-seat':'⚠️' };
+    const FU_COLORS = { 'ai-call':'rgba(59,130,246,.15)', 'email':'rgba(16,185,129,.15)', 'success-stories':'rgba(245,158,11,.15)', 'counselor-reminder':'rgba(139,92,246,.15)' };
+    const FU_TEXT   = { 'ai-call':'#3b82f6', 'email':'#10b981', 'success-stories':'#f59e0b', 'counselor-reminder':'#8b5cf6' };
+
+    function fuIconKey(type) { return Object.keys(FU_ICONS).find(k => type.includes(k)) || 'counselor-reminder'; }
+
+    if (d.pendingFollowUps?.length) {
+      el2.innerHTML = d.pendingFollowUps.slice(0,6).map(f => {
+        const k     = fuIconKey(f.followupType);
+        const icon  = FU_ICONS[k]  || '🔔';
+        const bg    = FU_COLORS[k] || 'rgba(139,92,246,.15)';
+        const clr   = FU_TEXT[k]   || '#8b5cf6';
+        const isOverdue = new Date(f.scheduledDate) <= new Date();
+        return `
+        <div class="cd-fu-item">
+          <div class="cd-fu-icon" style="background:${bg};color:${clr}">${icon}</div>
+          <div style="flex:1;min-width:0">
+            <div class="cd-fu-title">${fmtFollowupType(f.followupType)}</div>
+            <div class="cd-fu-date">📅 ${fmtDate(f.scheduledDate)}</div>
+          </div>
+          <div class="cd-fu-actions">
+            ${isOverdue ? '<span class="cd-due-badge">Due Today</span>' : ''}
+            <button class="btn btn-secondary btn-sm" style="font-size:11px" onclick="markFollowUpDone('${f._id}')">✓ Done</button>
+          </div>
+        </div>`;
+      }).join('');
     } else {
-      el2.innerHTML = '<div class="empty"><div class="icon">✅</div>All caught up!</div>';
+      el2.innerHTML = `
+        <div class="cd-empty">
+          <div class="cd-empty-icon">✅</div>
+          <div class="cd-empty-title">All caught up!</div>
+          <div class="cd-empty-sub">No follow-ups due right now.</div>
+        </div>`;
     }
 
-    // Hot leads
+    // ── Hot Leads ────────────────────────────────────────
     const el3 = document.getElementById('cd_hot_leads');
-    if (d.hotLeads.length) {
+    if (d.hotLeads?.length) {
       el3.innerHTML = d.hotLeads.map(l => `
-        <div class="followup-item" onclick="openLead('${l._id}')" style="cursor:pointer">
-          <div><div class="fu-type">${esc(l.fullName)} <span class="score-badge hot">${l.leadScore}🔥</span></div><div class="fu-date">${esc(l.courseInterest || '—')} · ${esc(l.phone || '—')}</div></div>
-          <span class="status-badge ${l.status}">${fmtStatus(l.status)}</span>
+        <div class="cd-lead-item" onclick="openLead('${l._id}')">
+          <div class="cd-lead-avatar" style="background:${avatarColor(l.fullName)}">${ini(l.fullName)}</div>
+          <div style="flex:1;min-width:0">
+            <div class="cd-lead-name">${esc(l.fullName)} <span style="font-size:11px;background:rgba(239,68,68,.15);color:#ef4444;padding:1px 6px;border-radius:5px;font-weight:700">${l.leadScore}🔥</span></div>
+            <div class="cd-lead-meta">${esc(l.courseInterest||'—')} · ${esc(l.phone||'—')}</div>
+          </div>
+          <span class="status-badge ${l.status}" style="font-size:11px">${fmtStatus(l.status)}</span>
         </div>`).join('');
     } else {
-      el3.innerHTML = '<div class="empty">No hot leads</div>';
+      el3.innerHTML = `
+        <div class="cd-empty">
+          <div class="cd-empty-icon">🔥</div>
+          <div class="cd-empty-title">No hot leads</div>
+          <div class="cd-empty-sub">You don't have any hot leads at the moment.</div>
+          <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="switchView('leads')">View All Leads</button>
+        </div>`;
     }
 
-    // Enrollment pending
+    // ── Enrollment Pending ───────────────────────────────
     const el4 = document.getElementById('cd_enroll_list');
-    if (d.enrollmentPending.length) {
+    if (d.enrollmentPending?.length) {
       el4.innerHTML = d.enrollmentPending.map(l => `
-        <div class="followup-item" onclick="openLead('${l._id}')" style="cursor:pointer">
-          <div><div class="fu-type">${esc(l.fullName)}</div><div class="fu-date">${esc(l.courseInterest || '—')}</div></div>
-          <span class="status-badge ${l.status}">${fmtStatus(l.status)}</span>
+        <div class="cd-lead-item" onclick="openLead('${l._id}')">
+          <div class="cd-lead-avatar" style="background:${avatarColor(l.fullName)}">${ini(l.fullName)}</div>
+          <div style="flex:1;min-width:0">
+            <div class="cd-lead-name">${esc(l.fullName)}</div>
+            <div class="cd-lead-meta">${esc(l.courseInterest||'—')} · Grade ${esc(l.grade||'?')}</div>
+          </div>
+          <span class="status-badge ${l.status}" style="font-size:11px">${fmtStatus(l.status)}</span>
         </div>`).join('');
     } else {
-      el4.innerHTML = '<div class="empty">No pending enrollments</div>';
+      el4.innerHTML = `
+        <div class="cd-empty">
+          <div class="cd-empty-icon">🎓</div>
+          <div class="cd-empty-title">No pending enrollments</div>
+          <div class="cd-empty-sub">You don't have any pending enrollments.</div>
+          <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="switchView('enrollments')">View All Enrollments</button>
+        </div>`;
     }
+
   } catch(e) { toast(e.message, 'error'); }
 }
 
