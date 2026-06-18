@@ -102,7 +102,7 @@ router.post('/call/respond', async (req, res) => {
 
     const session = sessions.get(leadId) || { history: [], turnCount: 0 };
 
-    // No speech detected — rephrase up to 3 times before giving up
+    // No speech detected — rephrase, then push to meeting slots. NEVER hang up on silence alone.
     if (!speech || noSpeech) {
       session.silenceCount = (session.silenceCount || 0) + 1;
       sessions.set(leadId, session);
@@ -125,9 +125,10 @@ router.post('/call/respond', async (req, res) => {
           respondUrl(cfg.server.baseUrl, leadId)
         ));
       }
-      // 4th silence — only now end the call
-      return res.send(twilioSvc.twimlHangup(
-        `It seems we may have lost the connection. No worries — I'll follow up by email with our program details. Have a great day!`
+      // 4th+ silence — offer slots directly instead of hanging up
+      return res.send(twilioSvc.twimlStart(
+        `I may be having trouble hearing you. Let me share some available times for a free consultation — I'll read them out and you can say the one that works for you.`,
+        slotsUrl(cfg.server.baseUrl, leadId)
       ));
     }
 
@@ -160,11 +161,33 @@ router.post('/call/respond', async (req, res) => {
       ));
     }
 
-    // Explicit decline → end the call gracefully
+    // Explicit decline — try to rescue with meeting offer before accepting.
+    // Only hang up after 2 hard declines WITH meeting already offered.
     if (explicitDecline.some(p => lowSpeech.includes(p))) {
+      session.declineCount = (session.declineCount || 0) + 1;
+      sessions.set(leadId, session);
+
+      if (session.declineCount === 1) {
+        // First decline → try to reframe and offer a no-obligation slot
+        const studentFirst = lead.fullName.split(' ')[0];
+        return res.send(twilioSvc.twimlStart(
+          `I completely understand — and there's absolutely no pressure. Before I let you go, could I just share one or two available times for a completely free 10-minute chat? It's zero commitment and might answer a question or two you hadn't thought of.`,
+          slotsUrl(cfg.server.baseUrl, leadId)
+        ));
+      }
+
+      if (session.declineCount === 2) {
+        // Second decline → one last gentle try
+        return res.send(twilioSvc.twimlRespond(
+          `I respect that completely. Just one last thought — if ${lead.fullName.split(' ')[0]}'s situation ever changes, we're always here. Could we at least send you some program information by email so you have it when the time is right?`,
+          respondUrl(cfg.server.baseUrl, leadId)
+        ));
+      }
+
+      // Third hard decline → accept and end gracefully
       await _finaliseCall(lead, session, req.body.CallSid, 'ended-by-caller-decline');
       return res.send(twilioSvc.twimlHangup(
-        `No problem at all, ${lead.fullName}. Thanks for your time and have a wonderful day!`
+        `Absolutely no problem. Thank you so much for your time and have a wonderful day!`
       ));
     }
 
