@@ -514,6 +514,9 @@ tbody tr:last-child td { border-bottom: none; }
 .detail-cell { background: var(--panel2); padding: 10px 14px; border-radius: 8px; }
 .detail-cell .lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
 .detail-cell .val { font-size: 14px; margin-top: 3px; font-weight: 500; word-break: break-word; }
+/* Aliases for Settings profile page */
+.detail-cell .detail-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.detail-cell .detail-value { font-size: 14px; margin-top: 3px; font-weight: 500; word-break: break-word; }
 
 .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin: 20px 0 10px; font-weight: 700; }
 .section-title:first-child { margin-top: 0; }
@@ -1597,7 +1600,7 @@ audio { width: 100%; margin-top: 10px; }
             <option value="counselor">Admissions Counselor</option>
             <option value="admin">Administrator</option>
           </select>
-      </div>
+        </div>
       </div>
       <div style="display:flex;gap:10px;margin-top:16px">
         <button class="btn btn-primary" onclick="saveCounselorForm()" style="flex:1" id="counselorFormSaveBtn">💾 Save</button>
@@ -2001,10 +2004,12 @@ function toast(msg, kind = 'info') {
 })();
 
 async function api(path, opts = {}) {
-  const res = await fetch('/api' + path, {
-    headers: { 'Content-Type': 'application/json' },
-    ...opts,
-  });
+  const headers = {
+    ...(opts.body ? { 'Content-Type': 'application/json' } : {}),
+    'Authorization': 'Bearer ' + (window._authToken || ''),
+    ...(opts.headers || {}),
+  };
+  const res = await fetch('/api' + path, { ...opts, headers });
   if (res.status === 401) {
     // Session expired — clear and redirect to login
     if (window._sbClient) window._sbClient.auth.signOut().catch(() => {});
@@ -2130,14 +2135,17 @@ async function saveProfile() {
   const fullName = document.getElementById('ep_fullName').value.trim();
   const phone    = document.getElementById('ep_phone').value.trim();
   if (!fullName) { toast('Full name is required', 'error'); return; }
+  const btn = document.querySelector('[onclick="saveProfile()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
-    await fetch('/auth/profile', {
+    const res = await fetch('/auth/profile', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._authToken || '') },
       body: JSON.stringify({ fullName, phone }),
     });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || res.statusText); }
     // Reload profile
-    const updated = await fetch('/auth/me').then(r => r.json());
+    const updated = await fetch('/auth/me', { headers: { 'Authorization': 'Bearer ' + (window._authToken || '') } }).then(r => r.json());
     window._currentUser = updated;
     prefillProfileTab(updated);
     document.getElementById('headerUserShort').textContent = updated.fullName?.split(' ')[0] || 'User';
@@ -2146,22 +2154,27 @@ async function saveProfile() {
     showSettingsPanel('profile');
   } catch (e) {
     toast('❌ ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Save Changes'; }
   }
 }
 
 async function changePassword() {
   const current = document.getElementById('cp_current').value;
   const nw      = document.getElementById('cp_new').value;
-  const confirm = document.getElementById('cp_confirm').value;
+  const conf    = document.getElementById('cp_confirm').value;
   if (!current || !nw) { toast('All fields are required', 'error'); return; }
   if (nw.length < 8)   { toast('New password must be at least 8 characters', 'error'); return; }
-  if (nw !== confirm)  { toast('Passwords do not match', 'error'); return; }
+  if (nw !== conf)     { toast('Passwords do not match', 'error'); return; }
+  const btn = document.querySelector('[onclick="changePassword()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Updating…'; }
   try {
-    await fetch('/auth/change-password', {
+    const res = await fetch('/auth/change-password', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._authToken || '') },
       body: JSON.stringify({ currentPassword: current, newPassword: nw }),
     });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || res.statusText); }
     document.getElementById('cp_current').value = '';
     document.getElementById('cp_new').value     = '';
     document.getElementById('cp_confirm').value = '';
@@ -2169,6 +2182,8 @@ async function changePassword() {
     setTimeout(() => confirmLogout(), 2500);
   } catch (e) {
     toast('❌ ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔑 Update Password'; }
   }
 }
 
@@ -3762,7 +3777,8 @@ async function loadPipeline() {
 }
 
 function exportPipelineCSV() {
-  toast('Export coming soon','info');
+  window.open('/api/leads/export', '_blank');
+  toast('Downloading pipeline CSV…', 'info');
 }
 
 function openStageModal(key) {
