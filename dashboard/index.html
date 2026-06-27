@@ -3270,7 +3270,7 @@ async function openLead(id) {
         <div class="detail-grid">
           <div class="detail-cell"><div class="lbl">Date / Time</div><div class="val">${new Date(m.scheduledAt).toLocaleString()}</div></div>
           <div class="detail-cell"><div class="lbl">Status</div><div class="val">${esc(m.status)}</div></div>
-          ${m.meetLink ? `<div class="detail-cell" style="grid-column:1/-1"><div class="lbl">Google Meet Link</div><div class="val"><a href="${m.meetLink}" target="_blank" style="color:var(--brand)">🎥 ${m.meetLink}</a></div></div>` : ''}
+          ${m.meetLink ? `<div class="detail-cell" style="grid-column:1/-1"><div class="lbl">Video Meeting Link</div><div class="val"><a href="${m.meetLink}" target="_blank" style="color:var(--brand)">🎥 ${m.meetLink}</a></div></div>` : ''}
         </div>`;
     }
 

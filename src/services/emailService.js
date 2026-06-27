@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Email Service — powered by Brevo (formerly Sendinblue)
  * Uses Brevo Transactional Email API (REST, no SMTP config needed).
  * Docs: https://developers.brevo.com/reference/sendtransacemail
@@ -484,10 +484,10 @@ ${this._programCards(l.courseInterest)}
 
 <div class="box">
   📅 <strong>${t}</strong><br>
-  🎥 Format: Google Meet (video call)<br>
+  🎥 Format: Video Meeting (no signup required)<br>
   ⏱ Duration: 45–60 minutes<br>
   👩‍💼 Counselor: ${c.counselorName}<br><br>
-  ${meetLink ? `<a href="${meetLink}" style="color:#2563eb;font-weight:700">🔗 Click to Join Google Meet</a>` : 'A Google Meet link will be sent shortly.'}
+  ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" style="color:#2563eb;font-weight:700">🔗 Click to Join Video Meeting</a>` : 'A Video Meeting link will be sent shortly.'}
 </div>
 
 <p><strong>Please bring to the meeting:</strong></p>
@@ -500,7 +500,7 @@ ${this._programCards(l.courseInterest)}
 
 <p>Need to reschedule? Just reply at least <strong>24 hours in advance</strong> and we'll find a new time that works.</p>
 
-${meetLink ? `<a href="${meetLink}" class="btn">Join Google Meet</a>` : ''}
+${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">Join Video Meeting</a>` : ''}
 
 <div class="sig">
   <strong>Shashi Kumar</strong>
@@ -547,12 +547,12 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Google Meet</a>` : ''}
 
 <div class="box">
   📅 <strong>Tomorrow: ${t}</strong><br>
-  ${meetLink ? `🔗 <a href="${meetLink}" style="color:#2563eb;font-weight:700">Join Google Meet</a>` : ''}
+  ${meetLink ? `🔗 <a href="${meetLink}#config.prejoinPageEnabled=true" style="color:#2563eb;font-weight:700">Join Video Meeting</a>` : ''}
 </div>
 
 <p>We're looking forward to discussing the best path for ${l.fullName}'s goals. If anything comes up, please let us know at least <strong>2 hours in advance</strong>.</p>
 
-${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : ''}
+${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">Join Tomorrow's Video Meeting</a>` : ''}
 
 <div class="sig">
   <strong>Shashi Kumar</strong>

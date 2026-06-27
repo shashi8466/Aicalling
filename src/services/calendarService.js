@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Google Calendar Service
  * – Find available slots
  * – Book consultation meeting + Google Meet link
@@ -111,21 +111,19 @@ class CalendarService {
     return slots;
   }
 
-  /** Book a meeting and return event details incl. Google Meet link.
-   *  Resilient strategy:
-   *   1. Try configured calendar with Google Meet
-   *   2. If calendar unreachable → fallback to 'primary'
-   *   3. If Meet conference creation fails → retry event without Meet (just calendar event)
-   *   4. Always return SOMETHING so the call doesn't error out — even a basic event is success
-   */
   async bookMeeting(lead, slot) {
     const inviteeList = [lead.email];
     if (lead.parentEmail)                       inviteeList.push(lead.parentEmail);
     if (cfg.company.counselorEmail)             inviteeList.push(cfg.company.counselorEmail);
 
+    // Generate a unique Jitsi room name
+    const jitsiRoom = `Aiprep365-${lead.fullName.replace(/\s+/g,'')}-${Date.now().toString(36)}`;
+    const jitsiUrl  = `https://meet.jit.si/${jitsiRoom}`;
+
     const baseBody = {
       summary:     `Admissions Consultation – ${lead.fullName} (${lead.courseInterest || 'Test Prep'})`,
-      description: this._description(lead) + `\n\nInvitees to add manually:\n${inviteeList.map(e => `  • ${e}`).join('\n')}`,
+      description: this._description(lead) + `\n\n🎥 Video Meeting Link:\n${jitsiUrl}\n\n(Opens in any browser — no signup needed)\n\nInvitees to add manually:\n${inviteeList.map(e => `  • ${e}`).join('\n')}`,
+      location:    jitsiUrl,
       start:       { dateTime: slot.start, timeZone: TZ },
       end:         { dateTime: slot.end,   timeZone: TZ },
       reminders:   {
@@ -137,16 +135,6 @@ class CalendarService {
       },
     };
 
-    const meetBody = {
-      ...baseBody,
-      conferenceData: {
-        createRequest: {
-          requestId:             `tpp-${lead._id}-${Date.now()}`,
-          conferenceSolutionKey: { type: 'hangoutsMeet' },
-        },
-      },
-    };
-
     // Order of calendars to try
     const calendarIds = [];
     if (this.calendarId && this.calendarId !== 'primary') calendarIds.push(this.calendarId);
@@ -154,57 +142,21 @@ class CalendarService {
 
     let lastErr = null;
     for (const calId of calendarIds) {
-      // Try WITH Google Meet first
       try {
         const event = await this.cal.events.insert({
-          calendarId:           calId,
-          conferenceDataVersion: 1,
-          requestBody:          meetBody,
+          calendarId:  calId,
+          requestBody: baseBody,
         });
-        const meetLink = event.data.conferenceData?.entryPoints?.find(e => e.entryPointType === 'video')?.uri;
-        logger.info(`Meeting booked on calendar "${calId}" with Meet link: ${meetLink || '(none)'}`);
+        logger.info(`Meeting booked on "${calId}" with Jitsi: ${jitsiUrl}`);
         return {
           googleEventId: event.data.id,
-          meetLink:      meetLink || '',
+          meetLink:      jitsiUrl,
           calendarUsed:  calId,
           scheduledAt:   new Date(slot.start),
         };
       } catch (err) {
         lastErr = err;
-        const msg = err.message || 'unknown';
-        logger.warn(`bookMeeting with Meet on "${calId}" failed: ${msg}`);
-
-        // If the problem is Meet conferencing specifically, retry without it
-        // and use Jitsi Meet (free, no signup) instead
-        if (msg.toLowerCase().includes('conference') || msg.toLowerCase().includes('hangout')) {
-          try {
-            // Generate a unique Jitsi room name
-            const jitsiRoom = `Aiprep365-${lead.fullName.replace(/\s+/g,'')}-${Date.now().toString(36)}`;
-            const jitsiUrl  = `https://meet.jit.si/${jitsiRoom}`;
-
-            const bodyWithJitsi = {
-              ...baseBody,
-              description: baseBody.description + `\n\n🎥 Video Meeting Link:\n${jitsiUrl}\n\n(Opens in any browser — no signup needed)`,
-              location:    jitsiUrl,
-            };
-
-            const event = await this.cal.events.insert({
-              calendarId:  calId,
-              requestBody: bodyWithJitsi,
-            });
-            logger.info(`Meeting booked on "${calId}" with Jitsi: ${jitsiUrl}`);
-            return {
-              googleEventId: event.data.id,
-              meetLink:      jitsiUrl,
-              calendarUsed:  calId,
-              scheduledAt:   new Date(slot.start),
-            };
-          } catch (err2) {
-            lastErr = err2;
-            logger.warn(`bookMeeting fallback on "${calId}" also failed: ${err2.message}`);
-          }
-        }
-        // try next calendar in the list
+        logger.warn(`bookMeeting on "${calId}" failed: ${err.message}`);
       }
     }
 
