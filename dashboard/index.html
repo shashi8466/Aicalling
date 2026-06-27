@@ -1598,6 +1598,7 @@ audio { width: 100%; margin-top: 10px; }
             <option value="admin">Administrator</option>
           </select>
       </div>
+      </div>
       <div style="display:flex;gap:10px;margin-top:16px">
         <button class="btn btn-primary" onclick="saveCounselorForm()" style="flex:1" id="counselorFormSaveBtn">💾 Save</button>
         <button class="btn btn-secondary" onclick="closeCounselorForm()">Cancel</button>
@@ -4149,28 +4150,47 @@ async function saveLeadForm() {
 }
 
 async function confirmDeleteLead(id, name) {
-  if (!confirm(`Are you sure you want to delete lead "${name}"?`)) return;
+  document.getElementById('deleteLeadId').value = id;
+  document.getElementById('deleteLeadName').textContent = name;
+  document.getElementById('deleteLeadModal').classList.add('active');
+}
+function closeDeleteLead() {
+  document.getElementById('deleteLeadModal').classList.remove('active');
+}
+async function deleteLead() {
+  const id   = document.getElementById('deleteLeadId').value;
+  const name = document.getElementById('deleteLeadName').textContent;
+  if (!id) return;
   try {
     const r = await api('/leads/' + id, { method: 'DELETE' });
     toast('🗑️ ' + (r.message || 'Lead deleted'), 'success');
+    closeDeleteLead();
     closeModal();
     await loadLeads();
   } catch(e) { toast('❌ ' + e.message, 'error'); }
 }
-function closeDeleteLead() {}
-async function deleteLead() {}
 
 // ─── Delete Call Record ──────────────────────────────
 async function confirmDeleteCall(leadId, callId, leadName, attemptNum) {
-  if (!confirm(`Are you sure you want to delete call attempt #${attemptNum} for "${leadName}"?`)) return;
+  document.getElementById('deleteCallLeadId').value = leadId;
+  document.getElementById('deleteCallId').value = callId;
+  document.getElementById('deleteCallDesc').textContent = `Attempt #${attemptNum} for "${leadName}"`;
+  document.getElementById('deleteCallModal').classList.add('active');
+}
+function closeDeleteCall() {
+  document.getElementById('deleteCallModal').classList.remove('active');
+}
+async function deleteCall() {
+  const leadId = document.getElementById('deleteCallLeadId').value;
+  const callId = document.getElementById('deleteCallId').value;
+  if (!leadId || !callId) return;
   try {
     const r = await api(`/leads/${leadId}/calls/${callId}`, { method: 'DELETE' });
     toast('🗑️ ' + (r.message || 'Call record deleted'), 'success');
+    closeDeleteCall();
     await loadCalls();
   } catch(e) { toast('❌ ' + e.message, 'error'); }
 }
-function closeDeleteCall() {}
-async function deleteCall() {}
 
 // ─── Meeting Outcome ────────────────────────────────
 function logOutcome(leadId, name) {
@@ -4369,6 +4389,8 @@ function switchFuTab(tabId, weekLabel) {
 }
 
 // ─── Mobile Menu ────────────────────────────────────
+// Alias for showView — used in counselor dashboard buttons
+function switchView(name) { showView(name); }
 function toggleMobileMenu() {
   const sidebar = document.querySelector('.sidebar');
   const app = document.querySelector('.app');
