@@ -1,4 +1,4 @@
-﻿/**
+/**
  * AI Conversation Service
  * Drives Shashi Kumar's voice via OpenAI or Claude.
  * Used inside the Twilio webhook loop.
@@ -164,7 +164,7 @@ async function _callOpenAI(system, history, userMessage) {
   ];
   const res = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
-    max_tokens: 250,
+    max_tokens: 150,
     temperature: 0.65,
     messages: [{ role: 'system', content: system }, ...messages],
   });
@@ -178,7 +178,7 @@ async function _callClaude(system, history, userMessage) {
   ];
   const res = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 200,
+    max_tokens: 120,
     system,
     messages,
   });

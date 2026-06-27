@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Twilio Voice Service
  * – Initiates outbound calls
  * – Builds TwiML responses for conversation turns
@@ -83,20 +83,18 @@ class TwilioService {
     // 1. Speak fully — not interruptible
     this._speak(r, text);
 
-    // 2. Brief pause so the student knows it's their turn
-    r.pause({ length: 1 });
-
-    // 3. Now listen for their response
+    // 2. Now listen for their response immediately
     r.gather({
-      input:        'speech',
-      action:       gatherUrl,
-      method:       'POST',
-      speechTimeout: 'auto',
+      input:         'speech',
+      action:        gatherUrl,
+      method:        'POST',
+      speechTimeout: '1',
+      speechModel:   'phone_call',
       language:      LANG,
-      timeout:       6,       // wait up to 6 s for them to start speaking
+      timeout:       5,       // wait up to 5s for them to start speaking
     });
 
-    // 4. Fallback if no speech at all
+    // 3. Fallback if no speech at all
     r.redirect({ method: 'POST' }, gatherUrl + '&noSpeech=1');
     return r.toString();
   }
@@ -123,16 +121,16 @@ class TwilioService {
 
     // Speak slot options fully — not interruptible
     this._speak(r, fullText);
-    r.pause({ length: 1 });
 
-    // Then listen for their slot choice
+    // Then listen for their slot choice immediately
     r.gather({
-      input:        'speech',
-      action:       bookUrl,
-      method:       'POST',
-      speechTimeout: 'auto',
+      input:         'speech',
+      action:        bookUrl,
+      method:        'POST',
+      speechTimeout: '1',
+      speechModel:   'phone_call',
       language:      LANG,
-      timeout:       12,
+      timeout:       8,
     });
     r.redirect({ method: 'POST' }, bookUrl + '&noSpeech=1');
     return r.toString();
@@ -142,7 +140,6 @@ class TwilioService {
   twimlBookingConfirm(text) {
     const r = new VR();
     this._speak(r, text);
-    r.pause({ length: 1 });
     r.hangup();
     return r.toString();
   }

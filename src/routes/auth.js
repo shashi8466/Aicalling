@@ -51,6 +51,7 @@ router.post('/signup', async (req, res) => {
         email:     email.trim().toLowerCase(),
         role,
         phone:     (phone || '').trim(),
+        is_active: role !== 'admin', // New admins start as inactive/unapproved
       }, { onConflict: 'id' })
       .select()
       .single();

@@ -31,7 +31,7 @@ async function requireAuth(req, res, next) {
       return res.status(401).json({ error: 'User profile not found' });
     }
     if (!profile.is_active) {
-      return res.status(403).json({ error: 'Your account has been deactivated' });
+      return res.status(403).json({ error: 'Your account is inactive or pending admin approval' });
     }
 
     req.user    = user;

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Twilio Webhook Routes
  * ─────────────────────────────────────────────────────────
  * POST /webhook/call/start      – called when call connects
@@ -343,7 +343,7 @@ router.post('/call/respond', async (req, res) => {
       const sysPrompt = buildFollowUpSystem(lead);
       const msgs = [...session.history.slice(-12), { role: 'user', content: speech }];
       const r = await _openai.chat.completions.create({
-        model: 'gpt-4o-mini', max_tokens: 250, temperature: 0.65,
+        model: 'gpt-4o-mini', max_tokens: 150, temperature: 0.65,
         messages: [{ role: 'system', content: sysPrompt }, ...msgs],
       });
       aiReply = r.choices[0].message.content.trim();

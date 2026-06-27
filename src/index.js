@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Aiprep365 – AI Admissions Agent
  * Entry point — auto-starts localtunnel so Twilio webhooks always work.
  *
@@ -61,6 +61,20 @@ app.post('/admin/poll', (_req, res) => {
 });
 
 const dashDir = path.join(__dirname, '../dashboard');
+
+// Redirect legacy/explicit .html paths to clean URLs
+app.get('/login.html', (req, res) => {
+  res.redirect(301, '/login');
+});
+app.get('/index.html', (req, res) => {
+  res.redirect(301, '/');
+});
+
+// Route for clean login URL
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(dashDir, 'login.html'));
+});
+
 if (fs.existsSync(dashDir)) app.use('/', express.static(dashDir));
 
 // ── Global error handler ────────────────────────────────────────────────────
