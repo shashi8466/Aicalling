@@ -3,7 +3,7 @@
 # https://render.com/docs/blueprint-spec
 services:
   - type: web
-    name: testpreppundits-ai-agent
+    name: aiprep365-ai-agent
     runtime: node
     plan: free                         # upgrade to "starter" ($7/mo) for always-on
     region: oregon                     # or singapore / frankfurt
@@ -20,7 +20,7 @@ services:
       - key: SKIP_TUNNEL
         value: "true"
       - key: BASE_URL
-        sync: false                    # set this manually after first deploy → e.g. https://testpreppundits-ai-agent.onrender.com
+        sync: false                    # set this manually after first deploy → e.g. https://aiprep365-ai-agent.onrender.com
 
       # Twilio
       - key: TWILIO_ACCOUNT_SID
@@ -54,8 +54,12 @@ services:
       - key: GOOGLE_CALENDAR_ID
         value: primary
 
-      # MongoDB Atlas
-      - key: MONGODB_URI
+      # Supabase DB
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
         sync: false
 
       # Company
@@ -66,7 +70,7 @@ services:
       - key: COUNSELOR_PHONE
         sync: false
       - key: COMPANY_WEBSITE
-        value: https://testpreppundits.com
+        value: https://aiprep365.com
 
       # Behaviour
       - key: SHEETS_POLL_INTERVAL_SECONDS

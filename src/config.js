@@ -1,4 +1,4 @@
-require('dotenv').config();
+﻿require('dotenv').config();
 
 module.exports = {
   twilio: {
@@ -22,8 +22,8 @@ module.exports = {
   // Brevo transactional email (no SMTP needed — REST API only)
   brevo: {
     apiKey:    process.env.BREVO_API_KEY,
-    fromEmail: process.env.BREVO_FROM_EMAIL || 'admissions@testpreppundits.com',
-    fromName:  process.env.BREVO_FROM_NAME  || 'Shashi Kumar – Test Prep Pundits',
+    fromEmail: process.env.BREVO_FROM_EMAIL || 'admissions@Aiprep365.com',
+    fromName:  process.env.BREVO_FROM_NAME  || 'Shashi Kumar – Aiprep365',
   },
 
   google: {
@@ -35,8 +35,15 @@ module.exports = {
     calendarId:  process.env.GOOGLE_CALENDAR_ID || 'primary',
   },
 
+  supabase: {
+    url:             process.env.SUPABASE_URL || '',
+    serviceRoleKey:  process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+    anonKey:         process.env.SUPABASE_ANON_KEY || '',
+  },
+
+  // Legacy — kept so existing config-check endpoint still shows the field.
   db: {
-    uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/testpreppundits',
+    uri: process.env.MONGODB_URI || '',
   },
 
   server: {
@@ -49,7 +56,7 @@ module.exports = {
     counselorName:  process.env.COUNSELOR_NAME  || 'Shashi Kumar',
     counselorEmail: process.env.COUNSELOR_EMAIL || process.env.BREVO_FROM_EMAIL || '',
     counselorPhone: process.env.COUNSELOR_PHONE || '',
-    website:        process.env.COMPANY_WEBSITE || 'https://testpreppundits.com',
+    website:        process.env.COMPANY_WEBSITE || 'https://Aiprep365.com',
   },
 
   call: {

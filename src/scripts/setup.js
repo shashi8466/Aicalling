@@ -6,7 +6,6 @@
 require('dotenv').config();
 const twilio    = require('twilio');
 const { google } = require('googleapis');
-const mongoose  = require('mongoose');
 const axios     = require('axios');
 const OpenAI    = require('openai');
 const cfg       = require('../config');
@@ -17,7 +16,7 @@ const WARN = '⚠️ ';
 
 async function run() {
   console.log('\n══════════════════════════════════════════════════');
-  console.log('  Test Prep Pundits – AI Agent  |  Setup Check');
+  console.log('  Aiprep365 – AI Agent  |  Setup Check');
   console.log('══════════════════════════════════════════════════\n');
 
   // 1 ─ Twilio
@@ -85,14 +84,15 @@ async function run() {
     console.log(`${FAIL}  Google Cal    → ${e.message}`);
   }
 
-  // 6 ─ MongoDB
+  // 6 ─ Supabase
   try {
-    await mongoose.connect(cfg.db.uri, { serverSelectionTimeoutMS: 4000 });
-    console.log(`${OK}  MongoDB       → connected`);
-    await mongoose.connection.close();
+    const supabase = require('../db/supabase');
+    const { error: pingErr } = await supabase.from('leads').select('id').limit(1);
+    if (pingErr) throw pingErr;
+    console.log(`${OK}  Supabase      → connected | leads table found`);
   } catch (e) {
-    console.log(`${FAIL}  MongoDB       → ${e.message}`);
-    console.log(`       Tip: make sure MongoDB is running  →  mongod`);
+    console.log(`${FAIL}  Supabase      → ${e.message}`);
+    console.log(`       Tip: make sure you ran the SQL scripts in the Supabase SQL editor`);
   }
 
   // 7 ─ BASE_URL

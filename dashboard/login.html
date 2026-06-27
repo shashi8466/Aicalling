@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign In — Aiprep365</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:      #0f172a;
+  --panel:   #1e293b;
+  --panel2:  #273449;
+  --border:  #334155;
+  --text:    #e2e8f0;
+  --muted:   #94a3b8;
+  --brand:   #3b82f6;
+  --brand2:  #2563eb;
+  --success: #10b981;
+  --danger:  #ef4444;
+}
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+/* Background decoration */
+body::before {
+  content: '';
+  position: fixed;
+  top: -50%;
+  left: -20%;
+  width: 70%;
+  height: 140%;
+  background: radial-gradient(ellipse, rgba(59,130,246,.07) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.login-card {
+  position: relative;
+  z-index: 1;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 44px 40px 36px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 25px 60px rgba(0,0,0,.45);
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 32px;
+}
+.brand img {
+  width: 72px;
+  height: auto;
+  background: #fff;
+  padding: 8px;
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.25);
+}
+.brand-name {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.5px;
+}
+.brand-sub {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: -4px;
+}
+
+h2 {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.subtitle {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 28px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+.form-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.form-group input {
+  width: 100%;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  transition: border-color .15s, box-shadow .15s;
+  outline: none;
+}
+.form-group input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+}
+.form-group input::placeholder { color: #475569; }
+
+/* Password field with show/hide toggle */
+.pw-wrap {
+  position: relative;
+}
+.pw-wrap input {
+  padding-right: 44px;
+}
+.pw-toggle {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px;
+  line-height: 1;
+}
+.pw-toggle:hover { color: var(--text); }
+
+.btn-login {
+  width: 100%;
+  padding: 13px;
+  background: var(--brand);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s, transform .1s, box-shadow .15s;
+  margin-top: 8px;
+  box-shadow: 0 4px 14px rgba(59,130,246,.3);
+}
+.btn-login:hover { background: var(--brand2); box-shadow: 0 6px 20px rgba(59,130,246,.35); }
+.btn-login:active { transform: scale(.98); }
+.btn-login:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.error-box {
+  display: none;
+  background: rgba(239,68,68,.12);
+  border: 1px solid rgba(239,68,68,.4);
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 13px;
+  color: #fca5a5;
+  margin-top: 14px;
+}
+.error-box.show { display: flex; align-items: flex-start; gap: 8px; }
+
+.loading-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.footer-note {
+  text-align: center;
+  font-size: 12px;
+  color: #475569;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 480px) {
+  .login-card { padding: 32px 24px 28px; border-radius: 16px; }
+}
+
+/* Tabs and signup/direct signin additions */
+.auth-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+.auth-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+.auth-tab.active {
+  color: var(--brand);
+  background: rgba(59, 130, 246, 0.1);
+}
+.auth-tab:hover:not(.active) {
+  color: var(--text);
+}
+.signup-only {
+  display: none;
+}
+.form-group select {
+  width: 100%;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  transition: border-color .15s, box-shadow .15s;
+  outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px;
+}
+.form-group select:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+}
+.form-group select option {
+  background: var(--panel);
+  color: var(--text);
+}
+</style>
+</head>
+<body>
+
+<div class="login-card">
+  <div class="brand">
+    <img src="/assets/logo.png" alt="Aiprep365">
+    <div class="brand-name">Aiprep365</div>
+    <div class="brand-sub">AI Admissions Agent</div>
+  </div>
+
+  <div class="auth-tabs">
+    <button type="button" class="auth-tab active" onclick="switchMode('signin')" id="tabSignin">Sign In</button>
+    <button type="button" class="auth-tab" onclick="switchMode('signup')" id="tabSignup">Sign Up</button>
+  </div>
+
+  <h2>Welcome back</h2>
+  <p class="subtitle">Sign in to your dashboard</p>
+
+  <form id="loginForm" onsubmit="handleAuthSubmit(event)">
+    <div class="form-group signup-only" id="groupFullName">
+      <label>Full Name</label>
+      <input type="text" id="fullName" placeholder="John Doe">
+    </div>
+
+    <div class="form-group">
+      <label>Email address</label>
+      <input type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email" required>
+    </div>
+
+    <div class="form-group signup-only" id="groupPhone">
+      <label>Phone Number</label>
+      <input type="tel" id="phone" placeholder="+1 (555) 000-0000">
+    </div>
+
+    <div class="form-group signup-only" id="groupRole">
+      <label>User Role</label>
+      <select id="signupRole">
+        <option value="admin">Admin</option>
+        <option value="counselor" selected>Admissions Counselor</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Password</label>
+      <div class="pw-wrap">
+        <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" required>
+        <button type="button" class="pw-toggle" onclick="togglePw()" id="pwToggleBtn" title="Show/hide password">👁</button>
+      </div>
+    </div>
+
+    <button type="submit" class="btn-login" id="loginBtn">Sign In</button>
+  </form>
+
+  <div class="error-box" id="errorBox">
+    <span>⚠️</span>
+    <span id="errorMsg">Invalid email or password.</span>
+  </div>
+
+  <p class="footer-note">Aiprep365 © 2025 · Admin use only</p>
+</div>
+
+<script>
+let sbClient = null;
+let currentMode = 'signin';
+
+// Fetch Supabase config from backend, then init client
+async function initSupabase() {
+  try {
+    const cfg = await fetch('/auth/config').then(r => r.json());
+    if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
+      showError('Server configuration error. Please contact support.');
+      return false;
+    }
+    sbClient = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
+      auth: {
+        storageKey:       'aiprep365_auth',
+        autoRefreshToken: true,
+        persistSession:   true,
+      }
+    });
+    // Store public config for dashboard use
+    localStorage.setItem('sb_pub_config', JSON.stringify(cfg));
+    return true;
+  } catch (e) {
+    showError('Cannot connect to server. Please try again.');
+    return false;
+  }
+}
+
+// Check if already logged in
+async function checkExistingSession() {
+  if (!sbClient) return;
+  const { data: { session } } = await sbClient.auth.getSession();
+  if (session) {
+    window.location.href = '/';
+  }
+}
+
+function switchMode(mode) {
+  currentMode = mode;
+  hideError();
+  
+  const title = document.querySelector('h2');
+  const subtitle = document.querySelector('.subtitle');
+  const tabSignin = document.getElementById('tabSignin');
+  const tabSignup = document.getElementById('tabSignup');
+  const signupFields = document.querySelectorAll('.signup-only');
+  const submitBtn = document.getElementById('loginBtn');
+  const fullNameInput = document.getElementById('fullName');
+
+  if (mode === 'signup') {
+    title.textContent = 'Create account';
+    subtitle.textContent = 'Register a new admin/counselor';
+    tabSignup.classList.add('active');
+    tabSignin.classList.remove('active');
+    signupFields.forEach(f => f.style.display = 'block');
+    fullNameInput.required = true;
+    submitBtn.textContent = 'Register & Sign In';
+  } else {
+    title.textContent = 'Welcome back';
+    subtitle.textContent = 'Sign in to your dashboard';
+    tabSignin.classList.add('active');
+    tabSignup.classList.remove('active');
+    signupFields.forEach(f => f.style.display = 'none');
+    fullNameInput.required = false;
+    submitBtn.textContent = 'Sign In';
+  }
+}
+
+async function handleAuthSubmit(e) {
+  e.preventDefault();
+  if (currentMode === 'signup') {
+    await handleSignup();
+  } else {
+    await handleLogin();
+  }
+}
+
+async function handleSignup() {
+  const fullName = document.getElementById('fullName').value.trim();
+  const email    = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const phone    = document.getElementById('phone').value.trim();
+  const role     = document.getElementById('signupRole').value;
+  const btn      = document.getElementById('loginBtn');
+
+  if (!fullName) return showError('Full name is required');
+  if (password.length < 8) return showError('Password must be at least 8 characters');
+
+  btn.disabled    = true;
+  btn.innerHTML   = '<span class="loading-spinner"></span> Creating account…';
+
+  try {
+    const signupRes = await fetch('/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fullName, email, password, phone, role })
+    });
+
+    const signupData = await signupRes.json();
+    if (!signupRes.ok) {
+      throw new Error(signupData.error || 'Registration failed');
+    }
+
+    const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
+    if (error) {
+      showError(friendlyError(error.message));
+      btn.disabled  = false;
+      btn.innerHTML = 'Register & Sign In';
+      return;
+    }
+    window.location.href = '/';
+  } catch (err) {
+    showError(err.message || 'Unexpected error. Please try again.');
+    btn.disabled  = false;
+    btn.innerHTML = 'Register & Sign In';
+  }
+}
+
+async function handleLogin() {
+  const email    = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const btn      = document.getElementById('loginBtn');
+
+  btn.disabled    = true;
+  btn.innerHTML   = '<span class="loading-spinner"></span> Signing in…';
+
+  try {
+    const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
+    if (error) {
+      showError(friendlyError(error.message));
+      btn.disabled  = false;
+      btn.innerHTML = 'Sign In';
+      return;
+    }
+    window.location.href = '/';
+  } catch (err) {
+    showError('Unexpected error. Please try again.');
+    btn.disabled  = false;
+    btn.innerHTML = 'Sign In';
+  }
+}
+
+function togglePw() {
+  const inp = document.getElementById('loginPassword');
+  const btn = document.getElementById('pwToggleBtn');
+  if (inp.type === 'password') {
+    inp.type    = 'text';
+    btn.textContent = '🙈';
+  } else {
+    inp.type    = 'password';
+    btn.textContent = '👁';
+  }
+}
+
+function showError(msg) {
+  document.getElementById('errorMsg').textContent = msg;
+  document.getElementById('errorBox').classList.add('show');
+}
+function hideError() {
+  document.getElementById('errorBox').classList.remove('show');
+}
+function friendlyError(msg) {
+  if (!msg) return 'Sign in failed. Please try again.';
+  if (msg.includes('Invalid login credentials')) return 'Incorrect email or password.';
+  if (msg.includes('Email not confirmed'))        return 'Email not confirmed. Contact your admin.';
+  if (msg.includes('User not found'))             return 'No account found with this email.';
+  if (msg.includes('Too many requests'))          return 'Too many attempts. Please wait a moment.';
+  return msg;
+}
+
+// Boot
+(async () => {
+  const ok = await initSupabase();
+  if (ok) await checkExistingSession();
+})();
+</script>
+</body>
+</html>

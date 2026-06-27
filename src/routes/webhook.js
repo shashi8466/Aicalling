@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Twilio Webhook Routes
  * ─────────────────────────────────────────────────────────
  * POST /webhook/call/start      – called when call connects
@@ -95,8 +95,8 @@ router.post('/call/start', async (req, res) => {
 
     const studentFirst = lead.fullName.split(' ')[0];
     const opener = isFollowUp
-      ? `Hello, this is Shashi from Test Prep Pundits. May I please speak with ${studentFirst} or their parent?`
-      : `Hello, this is Shashi from Test Prep Pundits. Am I speaking with ${studentFirst}?`;
+      ? `Hello, this is Shashi from Aiprep365. May I please speak with ${studentFirst} or their parent?`
+      : `Hello, this is Shashi from Aiprep365. Am I speaking with ${studentFirst}?`;
 
     res.send(twilioSvc.twimlStart(opener, respondUrl(cfg.server.baseUrl, leadId)));
   } catch (err) {
@@ -189,7 +189,7 @@ router.post('/call/respond', async (req, res) => {
       if (confirmed) {
         session.history.push({ role: 'user', content: speech });
         const followUp =
-          `Great! I noticed that you recently completed a demo test with Test Prep Pundits. ` +
+          `Great! I noticed that you recently completed a demo test with Aiprep365. ` +
           `I'm calling to help you learn more about our SAT, ACT, AP, and College Admissions programs. ` +
           `Which program are you interested in?`;
         session.history.push({ role: 'assistant', content: followUp });
@@ -244,7 +244,7 @@ router.post('/call/respond', async (req, res) => {
       await _finaliseCall(lead, session, req.body.CallSid, 'completed-after-booking');
       const studentFirst = lead.fullName.split(' ')[0];
       return res.send(twilioSvc.twimlHangup(
-        `Thank you for choosing Test Prep Pundits. We look forward to helping ${studentFirst} achieve their goals. Have a wonderful day!`
+        `Thank you for choosing Aiprep365. We look forward to helping ${studentFirst} achieve their goals. Have a wonderful day!`
       ));
     }
 

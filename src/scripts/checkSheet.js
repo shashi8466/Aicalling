@@ -1,4 +1,4 @@
-require('dotenv').config();
+﻿require('dotenv').config();
 const { google } = require('googleapis');
 const cfg = require('../config');
 
@@ -23,7 +23,7 @@ async function run() {
     return;
   }
 
-  console.log('\n📋 Sheet: "Test Prep Pundits Leads Information"');
+  console.log('\n📋 Sheet: "Aiprep365 Leads Information"');
   console.log('   ID:', cfg.google.sheetsId);
   console.log('   Rows read:', rows.length);
   console.log('\n── Header Row (Row 1) ──────────────────────────');

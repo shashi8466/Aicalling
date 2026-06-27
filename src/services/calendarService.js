@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Google Calendar Service
  * – Find available slots
  * – Book consultation meeting + Google Meet link
@@ -179,7 +179,7 @@ class CalendarService {
         if (msg.toLowerCase().includes('conference') || msg.toLowerCase().includes('hangout')) {
           try {
             // Generate a unique Jitsi room name
-            const jitsiRoom = `TestPrepPundits-${lead.fullName.replace(/\s+/g,'')}-${Date.now().toString(36)}`;
+            const jitsiRoom = `Aiprep365-${lead.fullName.replace(/\s+/g,'')}-${Date.now().toString(36)}`;
             const jitsiUrl  = `https://meet.jit.si/${jitsiRoom}`;
 
             const bodyWithJitsi = {
@@ -227,7 +227,7 @@ class CalendarService {
   _description(lead) {
     const q = lead.qualification || {};
     return [
-      `📚 Test Prep Pundits – Admissions Consultation`,
+      `📚 Aiprep365 – Admissions Consultation`,
       ``,
       `Student : ${lead.fullName}  |  Grade: ${lead.grade || 'N/A'}`,
       `Program : ${lead.courseInterest || 'N/A'}`,

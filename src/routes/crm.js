@@ -2,15 +2,16 @@
  * CRM Routes — Meeting Outcomes, Objections, Enrollments, Payments, Revenue
  * All under /api/crm/*
  */
-const express       = require('express');
-const router        = express.Router();
-const Lead          = require('../models/Lead');
-const MeetingOutcome= require('../models/MeetingOutcome');
-const FollowUp      = require('../models/FollowUp');
-const LeadObjection = require('../models/LeadObjection');
-const Enrollment    = require('../models/Enrollment');
-const Payment       = require('../models/Payment');
-const logger        = require('../logger');
+const express        = require('express');
+const router         = express.Router();
+const supabase       = require('../db/supabase');
+const Lead           = require('../models/Lead');
+const MeetingOutcome = require('../models/MeetingOutcome');
+const FollowUp       = require('../models/FollowUp');
+const LeadObjection  = require('../models/LeadObjection');
+const Enrollment     = require('../models/Enrollment');
+const Payment        = require('../models/Payment');
+const logger         = require('../logger');
 
 // ═══════════════════════════════════════════════════════════════════════
 //   MEETING OUTCOMES
@@ -18,12 +19,24 @@ const logger        = require('../logger');
 router.get('/meeting-outcomes', async (req, res) => {
   try {
     const { leadId } = req.query;
-    const q = leadId ? { leadId } : {};
-    const outcomes = await MeetingOutcome.find(q)
-      .sort({ createdAt: -1 })
-      .limit(200)
-      .populate('leadId', 'fullName email grade courseInterest _id');
-    res.json({ outcomes, total: outcomes.length });
+    const filter = leadId ? { leadId } : {};
+    const outcomes = await MeetingOutcome.find(filter, { limit: 200 });
+
+    // Manual join: enrich each outcome with lead fields
+    const leadIds = [...new Set(outcomes.map(o => o.leadId).filter(Boolean))];
+    const leadMap = {};
+    if (leadIds.length) {
+      const { data: lRows } = await supabase
+        .from('leads')
+        .select('id, full_name, email, grade, course_interest')
+        .in('id', leadIds);
+      (lRows || []).forEach(r => {
+        leadMap[r.id] = { _id: r.id, id: r.id, fullName: r.full_name, email: r.email,
+                          grade: r.grade, courseInterest: r.course_interest };
+      });
+    }
+    const enriched = outcomes.map(o => ({ ...o, leadId: leadMap[o.leadId] || o.leadId }));
+    res.json({ outcomes: enriched, total: enriched.length });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -34,7 +47,6 @@ router.post('/meeting-outcomes', async (req, res) => {
 
     const doc = await MeetingOutcome.create({ leadId, meetingId, outcome, notes, counselorId });
 
-    // Auto-update lead status based on outcome
     const statusMap = {
       'ready-to-enroll':        'enrollment-pending',
       'interested':             'proposal-sent',
@@ -43,14 +55,8 @@ router.post('/meeting-outcomes', async (req, res) => {
       'not-interested':         'lost',
     };
     const newStatus = statusMap[outcome];
-    if (newStatus) {
-      await Lead.findByIdAndUpdate(leadId, { status: newStatus });
-    }
-
-    // Schedule follow-ups for non-enrolled leads
-    if (outcome !== 'not-interested') {
-      await scheduleFollowUps(leadId);
-    }
+    if (newStatus) await Lead.findByIdAndUpdate(leadId, { status: newStatus });
+    if (outcome !== 'not-interested') await scheduleFollowUps(leadId);
 
     res.status(201).json(doc);
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -64,7 +70,6 @@ router.get('/meeting-outcomes/:id', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// Update an outcome (and re-apply the lead status move if outcome changed)
 router.patch('/meeting-outcomes/:id', async (req, res) => {
   try {
     const { outcome, notes } = req.body;
@@ -76,7 +81,6 @@ router.patch('/meeting-outcomes/:id', async (req, res) => {
     if (notes   !== undefined) doc.notes   = notes;
     await doc.save();
 
-    // Re-apply the pipeline move + reschedule follow-ups if the outcome changed
     if (outcomeChanged) {
       const statusMap = {
         'ready-to-enroll':        'enrollment-pending',
@@ -94,7 +98,6 @@ router.patch('/meeting-outcomes/:id', async (req, res) => {
   } catch(e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
-// Delete an outcome
 router.delete('/meeting-outcomes/:id', async (req, res) => {
   try {
     const doc = await MeetingOutcome.findByIdAndDelete(req.params.id);
@@ -109,20 +112,20 @@ router.delete('/meeting-outcomes/:id', async (req, res) => {
 router.get('/follow-ups', async (req, res) => {
   try {
     const { leadId, completed } = req.query;
-    const q = {};
-    if (leadId) q.leadId = leadId;
-    if (completed !== undefined) q.completed = completed === 'true';
-    const docs = await FollowUp.find(q).sort({ scheduledDate: 1 }).limit(500);
+    const filter = {};
+    if (leadId)            filter.leadId    = leadId;
+    if (completed !== undefined) filter.completed = completed === 'true';
+    const docs = await FollowUp.find(filter, { sort: { scheduledDate: 1 }, limit: 500 });
     res.json(docs);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 router.get('/follow-ups/pending', async (req, res) => {
   try {
-    const now = new Date();
-    const docs = await FollowUp.find({ completed: false, scheduledDate: { $lte: now } })
-      .sort({ scheduledDate: 1 })
-      .limit(100);
+    const docs = await FollowUp.find(
+      { completed: false, scheduledDate: { $lte: new Date() } },
+      { sort: { scheduledDate: 1 }, limit: 100 }
+    );
     res.json(docs);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -153,8 +156,8 @@ router.post('/follow-ups/schedule/:leadId', async (req, res) => {
 router.get('/objections', async (req, res) => {
   try {
     const { leadId } = req.query;
-    const q = leadId ? { leadId } : {};
-    const docs = await LeadObjection.find(q).sort({ createdAt: -1 }).limit(200);
+    const filter = leadId ? { leadId } : {};
+    const docs = await LeadObjection.find(filter, { limit: 200 });
     res.json(docs);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -181,12 +184,18 @@ router.patch('/objections/:id/resolve', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// JS aggregation replacing MongoDB $group pipeline
 router.get('/objections/stats', async (req, res) => {
   try {
-    const stats = await LeadObjection.aggregate([
-      { $group: { _id: '$objectionType', count: { $sum: 1 }, resolved: { $sum: { $cond: ['$resolved', 1, 0] } } } },
-      { $sort: { count: -1 } },
-    ]);
+    const allObjs = await LeadObjection.find({}, { limit: 2000 });
+    const statsMap = {};
+    allObjs.forEach(o => {
+      const k = o.objectionType || 'unknown';
+      if (!statsMap[k]) statsMap[k] = { _id: k, count: 0, resolved: 0 };
+      statsMap[k].count++;
+      if (o.resolved) statsMap[k].resolved++;
+    });
+    const stats = Object.values(statsMap).sort((a, b) => b.count - a.count);
     res.json(stats);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -197,10 +206,10 @@ router.get('/objections/stats', async (req, res) => {
 router.get('/enrollments', async (req, res) => {
   try {
     const { status, program } = req.query;
-    const q = {};
-    if (status)  q.enrollmentStatus = status;
-    if (program) q.program = program;
-    const docs = await Enrollment.find(q).sort({ createdAt: -1 }).limit(200);
+    const filter = {};
+    if (status)  filter.enrollmentStatus = status;
+    if (program) filter.program          = program;
+    const docs = await Enrollment.find(filter, { sort: { createdAt: -1 }, limit: 200 });
     res.json(docs);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -209,17 +218,15 @@ router.get('/enrollments/:id', async (req, res) => {
   try {
     const doc = await Enrollment.findById(req.params.id);
     if (!doc) return res.status(404).json({ error: 'Not found' });
-    const payments = await Payment.find({ enrollmentId: doc._id }).sort({ createdAt: -1 });
+    const payments = await Payment.find({ enrollmentId: doc._id }, { sort: { createdAt: -1 } });
     res.json({ enrollment: doc, payments });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 router.post('/enrollments', async (req, res) => {
   try {
-    const {
-      leadId, studentName, grade, parentName, parentEmail, parentPhone,
-      program, examDate, learningMode, paymentPlan, programFee, notes,
-    } = req.body;
+    const { leadId, studentName, grade, parentName, parentEmail, parentPhone,
+            program, examDate, learningMode, paymentPlan, programFee, notes } = req.body;
     if (!studentName || !program) return res.status(400).json({ error: 'studentName and program required' });
 
     const doc = await Enrollment.create({
@@ -228,20 +235,13 @@ router.post('/enrollments', async (req, res) => {
       learningMode, paymentPlan, programFee: Number(programFee) || 0, notes,
     });
 
-    // Update lead status to enrolled
-    if (leadId) {
-      await Lead.findByIdAndUpdate(leadId, { status: 'enrolled' });
-    }
+    if (leadId) await Lead.findByIdAndUpdate(leadId, { status: 'enrolled' });
 
-    // Create initial payment record
     if (programFee && Number(programFee) > 0) {
       await Payment.create({
-        enrollmentId: doc._id,
-        leadId,
-        amount: Number(programFee),
-        amountPaid: 0,
-        paymentStatus: 'pending',
-        program,
+        enrollmentId: doc._id, leadId,
+        amount: Number(programFee), amountPaid: 0,
+        paymentStatus: 'pending', program,
       });
     }
 
@@ -267,20 +267,21 @@ router.patch('/enrollments/:id', async (req, res) => {
 router.get('/payments', async (req, res) => {
   try {
     const { enrollmentId, status } = req.query;
-    const q = {};
-    if (enrollmentId) q.enrollmentId = enrollmentId;
-    if (status)       q.paymentStatus = status;
-    const docs = await Payment.find(q).sort({ createdAt: -1 }).limit(200);
+    const filter = {};
+    if (enrollmentId) filter.enrollmentId  = enrollmentId;
+    if (status)       filter.paymentStatus = status;
+    const docs = await Payment.find(filter, { sort: { createdAt: -1 }, limit: 200 });
     res.json(docs);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 router.post('/payments', async (req, res) => {
   try {
-    const { enrollmentId, leadId, amount, amountPaid, paymentDate, paymentMethod, transactionId, notes, program } = req.body;
+    const { enrollmentId, leadId, amount, amountPaid, paymentDate,
+            paymentMethod, transactionId, notes, program } = req.body;
     if (!enrollmentId || !amount) return res.status(400).json({ error: 'enrollmentId and amount required' });
 
-    const paid = Number(amountPaid) || 0;
+    const paid  = Number(amountPaid) || 0;
     const total = Number(amount);
     let paymentStatus = 'pending';
     if (paid >= total) paymentStatus = 'paid';
@@ -293,7 +294,6 @@ router.post('/payments', async (req, res) => {
       notes: notes || '', program: program || '',
     });
 
-    // Update enrollment status if fully paid
     if (paymentStatus === 'paid') {
       await Enrollment.findByIdAndUpdate(enrollmentId, { enrollmentStatus: 'confirmed' });
     }
@@ -310,10 +310,9 @@ router.patch('/payments/:id', async (req, res) => {
     const allowed = ['amountPaid','paymentStatus','paymentDate','paymentMethod','transactionId','notes'];
     allowed.forEach(k => { if (req.body[k] !== undefined) doc[k] = req.body[k]; });
 
-    // Auto-update status
-    if (doc.amountPaid >= doc.amount) doc.paymentStatus = 'paid';
-    else if (doc.amountPaid > 0)      doc.paymentStatus = 'partial-paid';
-    else                              doc.paymentStatus = 'pending';
+    if      (doc.amountPaid >= doc.amount) doc.paymentStatus = 'paid';
+    else if (doc.amountPaid > 0)           doc.paymentStatus = 'partial-paid';
+    else                                   doc.paymentStatus = 'pending';
 
     await doc.save();
     res.json(doc);
@@ -326,10 +325,10 @@ router.patch('/payments/:id', async (req, res) => {
 router.get('/revenue', async (req, res) => {
   try {
     const { range = '30' } = req.query;
-    const days = parseInt(range) || 30;
+    const days  = parseInt(range) || 30;
     const since = new Date(Date.now() - days * 86400000);
 
-    // Pipeline counts
+    // Lead funnel counts
     const [totalLeads, qualifiedLeads, meetingsScheduled, meetingsCompleted, enrolled] = await Promise.all([
       Lead.countDocuments({}),
       Lead.countDocuments({ isQualified: true }),
@@ -338,69 +337,89 @@ router.get('/revenue', async (req, res) => {
       Lead.countDocuments({ status: 'enrolled' }),
     ]);
 
-    // Revenue by program
-    const revByProgram = await Payment.aggregate([
-      { $match: { paymentStatus: { $in: ['paid', 'partial-paid'] } } },
-      { $group: { _id: '$program', revenue: { $sum: '$amountPaid' }, count: { $sum: 1 } } },
-      { $sort: { revenue: -1 } },
-    ]);
+    // All payment rows for JS aggregation
+    const { data: allPmts } = await supabase
+      .from('payments')
+      .select('amount, amount_paid, payment_status, program, payment_date');
+    const pmts = allPmts || [];
+    const paidPmts = pmts.filter(p => ['paid','partial-paid'].includes(p.payment_status));
 
-    // Total revenue
-    const revTotalAgg = await Payment.aggregate([
-      { $match: { paymentStatus: { $in: ['paid', 'partial-paid'] } } },
-      { $group: { _id: null, total: { $sum: '$amountPaid' }, pending: { $sum: { $subtract: ['$amount', '$amountPaid'] } } } },
-    ]);
-    const totalRevenue  = revTotalAgg[0]?.total   || 0;
-    const pendingRevenue= revTotalAgg[0]?.pending  || 0;
+    const totalRevenue   = paidPmts.reduce((s, p) => s + (p.amount_paid || 0), 0);
+    const pendingRevenue = pmts.reduce((s, p) => s + Math.max(0, (p.amount || 0) - (p.amount_paid || 0)), 0);
 
-    // Revenue trend (daily, last N days)
-    const revTrend = await Payment.aggregate([
-      { $match: { paymentDate: { $gte: since }, paymentStatus: { $in: ['paid','partial-paid'] } } },
-      { $group: {
-        _id: { $dateToString: { format: '%Y-%m-%d', date: '$paymentDate' } },
-        revenue: { $sum: '$amountPaid' },
-      }},
-      { $sort: { _id: 1 } },
-    ]);
+    // revByProgram
+    const progMap = {};
+    paidPmts.forEach(p => {
+      const k = p.program || 'unknown';
+      if (!progMap[k]) progMap[k] = { _id: k, revenue: 0, count: 0 };
+      progMap[k].revenue += p.amount_paid || 0;
+      progMap[k].count++;
+    });
+    const revByProgram = Object.values(progMap).sort((a, b) => b.revenue - a.revenue);
 
-    // Monthly enrollments
-    const monthlyEnrollments = await Enrollment.aggregate([
-      { $match: { createdAt: { $gte: since } } },
-      { $group: {
-        _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } },
-        count: { $sum: 1 },
-      }},
-      { $sort: { _id: 1 } },
-    ]);
+    // revTrend (daily, last N days)
+    const trendMap = {};
+    paidPmts
+      .filter(p => p.payment_date && new Date(p.payment_date) >= since)
+      .forEach(p => {
+        const day = String(p.payment_date).slice(0, 10);
+        trendMap[day] = (trendMap[day] || 0) + (p.amount_paid || 0);
+      });
+    const revTrend = Object.entries(trendMap)
+      .map(([_id, revenue]) => ({ _id, revenue }))
+      .sort((a, b) => a._id.localeCompare(b._id));
+
+    // Monthly enrollments and by-program
+    const { data: allEnrolls } = await supabase
+      .from('enrollments')
+      .select('program, created_at');
+    const enrollRows = allEnrolls || [];
+
+    const enrollProgMap = {};
+    enrollRows.forEach(e => {
+      const k = e.program || 'unknown';
+      if (!enrollProgMap[k]) enrollProgMap[k] = { _id: k, count: 0 };
+      enrollProgMap[k].count++;
+    });
+    const enrollByProgram = Object.values(enrollProgMap).sort((a, b) => b.count - a.count);
+
+    const monthMap = {};
+    enrollRows
+      .filter(e => new Date(e.created_at) >= since)
+      .forEach(e => {
+        const month = String(e.created_at).slice(0, 7);
+        monthMap[month] = (monthMap[month] || 0) + 1;
+      });
+    const monthlyEnrollments = Object.entries(monthMap)
+      .map(([_id, count]) => ({ _id, count }))
+      .sort((a, b) => a._id.localeCompare(b._id));
 
     // Conversion metrics
-    const leadToMeeting   = totalLeads ? ((meetingsScheduled / totalLeads) * 100).toFixed(1) : '0.0';
-    const meetingToEnroll = meetingsCompleted ? ((enrolled / meetingsCompleted) * 100).toFixed(1) : '0.0';
-    const overallConversion = totalLeads ? ((enrolled / totalLeads) * 100).toFixed(1) : '0.0';
+    const leadToMeeting    = totalLeads ? ((meetingsScheduled / totalLeads) * 100).toFixed(1) : '0.0';
+    const meetingToEnroll  = meetingsCompleted ? ((enrolled / meetingsCompleted) * 100).toFixed(1) : '0.0';
+    const overallConversion= totalLeads ? ((enrolled / totalLeads) * 100).toFixed(1) : '0.0';
 
-    // Enrollments by program
-    const enrollByProgram = await Enrollment.aggregate([
-      { $group: { _id: '$program', count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-    ]);
-
-    // Counselor pipeline stats
-    const pipeline = {
-      new:              await Lead.countDocuments({ status: 'new' }),
-      contacted:        await Lead.countDocuments({ status: 'contacted' }),
-      qualified:        await Lead.countDocuments({ status: 'qualified' }),
-      meetingScheduled: meetingsScheduled,
-      meetingCompleted: meetingsCompleted,
-      proposalSent:     await Lead.countDocuments({ status: 'proposal-sent' }),
-      interested:       await Lead.countDocuments({ status: 'interested' }),
-      enrollmentPending:await Lead.countDocuments({ status: 'enrollment-pending' }),
-      paymentPending:   await Lead.countDocuments({ status: 'payment-pending' }),
-      enrolled,
-      lost:             await Lead.countDocuments({ status: 'lost' }),
-    };
+    // Pipeline counts (sequential is fine here — all in parallel below)
+    const pipelineStatuses = ['new','contacted','qualified','meeting-scheduled','meeting-completed',
+      'proposal-sent','interested','enrollment-pending','payment-pending','enrolled','lost'];
+    const pipelineCounts = await Promise.all(pipelineStatuses.map(s => Lead.countDocuments({ status: s })));
+    const pipeline = {};
+    pipelineStatuses.forEach((s, i) => { pipeline[s] = pipelineCounts[i]; });
 
     res.json({
-      pipeline,
+      pipeline: {
+        new:               pipeline['new'],
+        contacted:         pipeline['contacted'],
+        qualified:         pipeline['qualified'],
+        meetingScheduled:  meetingsScheduled,
+        meetingCompleted:  meetingsCompleted,
+        proposalSent:      pipeline['proposal-sent'],
+        interested:        pipeline['interested'],
+        enrollmentPending: pipeline['enrollment-pending'],
+        paymentPending:    pipeline['payment-pending'],
+        enrolled,
+        lost:              pipeline['lost'],
+      },
       totalRevenue, pendingRevenue,
       revByProgram, revTrend,
       monthlyEnrollments, enrollByProgram,
@@ -416,63 +435,78 @@ router.get('/revenue', async (req, res) => {
 router.get('/counselor-dashboard', async (req, res) => {
   try {
     const { range = 'today' } = req.query;
-    let since;
     const now = new Date();
+    let since;
     if (range === 'today') {
       since = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     } else if (range === 'week') {
       since = new Date(now.getTime() - 7 * 86400000);
     } else {
-      since = new Date(now.getFullYear(), now.getMonth(), 1); // start of month
+      since = new Date(now.getFullYear(), now.getMonth(), 1);
     }
 
-    // Meetings today/this period
-    const meetingsInRange = await Lead.countDocuments({
-      'meeting.scheduledAt': { $gte: since, $lte: new Date(since.getTime() + (range === 'today' ? 86400000 : range === 'week' ? 7*86400000 : 31*86400000)) },
-    });
+    const rangeMs = range === 'today' ? 86400000 : range === 'week' ? 7 * 86400000 : 31 * 86400000;
+    const rangeEnd = new Date(since.getTime() + rangeMs);
+
+    // Fetch meeting column only for JSONB path counts
+    const { data: meetingLeads } = await supabase
+      .from('leads')
+      .select('id, full_name, phone, email, meeting, course_interest, grade')
+      .not('meeting', 'is', null);
+    const meetingRows = (meetingLeads || []).filter(r => r.meeting?.scheduledAt);
+
+    const meetingsInRange = meetingRows.filter(r => {
+      const at = new Date(r.meeting.scheduledAt);
+      return at >= since && at < rangeEnd;
+    }).length;
 
     // Hot leads
-    const hotLeads = await Lead.find({ leadCategory: 'hot', status: { $nin: ['enrolled','lost','do-not-call'] } })
-      .sort({ leadScore: -1 }).limit(10)
-      .select('fullName phone email grade courseInterest leadScore status meeting');
+    const hotLeads = await Lead.find(
+      { leadCategory: 'hot', status: { $nin: ['enrolled','lost','do-not-call'] } },
+      { sort: { leadScore: -1 }, limit: 10 }
+    );
 
     // Enrollment pending
-    const enrollmentPending = await Lead.find({ status: { $in: ['enrollment-pending','payment-pending','proposal-sent'] } })
-      .sort({ updatedAt: -1 }).limit(10)
-      .select('fullName phone email courseInterest leadScore status');
+    const enrollmentPending = await Lead.find(
+      { status: { $in: ['enrollment-pending','payment-pending','proposal-sent'] } },
+      { sort: { updatedAt: -1 }, limit: 10 }
+    );
 
-    // Recent follow-ups due
-    const pendingFollowUps = await FollowUp.find({
-      completed: false,
-      scheduledDate: { $lte: new Date(Date.now() + 24 * 3600000) }, // due within 24h
-    }).sort({ scheduledDate: 1 }).limit(10);
+    // Pending follow-ups due within 24 h
+    const pendingFollowUps = await FollowUp.find(
+      { completed: false, scheduledDate: { $lte: new Date(Date.now() + 24 * 3600000) } },
+      { sort: { scheduledDate: 1 }, limit: 10 }
+    );
 
-    // Revenue pipeline (total pending payments)
-    const revPipeline = await Payment.aggregate([
-      { $match: { paymentStatus: { $in: ['pending', 'partial-paid'] } } },
-      { $group: { _id: null, total: { $sum: { $subtract: ['$amount', '$amountPaid'] } } } },
-    ]);
+    // Revenue pipeline (pending payments) — JS aggregation
+    const { data: pendingPmts } = await supabase
+      .from('payments')
+      .select('amount, amount_paid, payment_status')
+      .in('payment_status', ['pending', 'partial-paid']);
+    const revenuePipeline = (pendingPmts || [])
+      .reduce((s, p) => s + Math.max(0, (p.amount || 0) - (p.amount_paid || 0)), 0);
 
-    // Today's meetings
+    // Today's meetings (with full lead data)
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const todayEnd   = new Date(todayStart.getTime() + 86400000);
-    const todayMeetings = await Lead.find({
-      'meeting.scheduledAt': { $gte: todayStart, $lt: todayEnd },
-    }).select('fullName phone email meeting courseInterest grade').sort({ 'meeting.scheduledAt': 1 });
+    const todayMeetings = meetingRows
+      .filter(r => {
+        const at = new Date(r.meeting.scheduledAt);
+        return at >= todayStart && at < todayEnd;
+      })
+      .sort((a, b) => new Date(a.meeting.scheduledAt) - new Date(b.meeting.scheduledAt))
+      .map(r => ({
+        _id: r.id, id: r.id,
+        fullName: r.full_name, phone: r.phone, email: r.email,
+        meeting: r.meeting, courseInterest: r.course_interest, grade: r.grade,
+      }));
 
-    res.json({
-      meetingsInRange,
-      hotLeads,
-      enrollmentPending,
-      pendingFollowUps,
-      revenuePipeline: revPipeline[0]?.total || 0,
-      todayMeetings,
-    });
+    res.json({ meetingsInRange, hotLeads, enrollmentPending, pendingFollowUps, revenuePipeline, todayMeetings });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // ═══════════════════════════════════════════════════════════════════════
-//   PIPELINE BOARD (Kanban-style counts)
+//   PIPELINE BOARD (Kanban-style counts + lead cards)
 // ═══════════════════════════════════════════════════════════════════════
 router.get('/pipeline', async (req, res) => {
   try {
@@ -480,18 +514,18 @@ router.get('/pipeline', async (req, res) => {
       'new','contacted','qualified','meeting-scheduled','meeting-completed',
       'proposal-sent','interested','enrollment-pending','payment-pending','enrolled','lost',
     ];
-    const counts = await Promise.all(allStatuses.map(s => Lead.countDocuments({ status: s })));
-    const leads  = await Lead.find({ status: { $in: allStatuses } })
-      .sort({ leadScore: -1, updatedAt: -1 })
-      .limit(500)
-      .select('fullName grade email phone courseInterest leadScore leadCategory status meeting createdAt updatedAt');
+
+    const [counts, leads] = await Promise.all([
+      Promise.all(allStatuses.map(s => Lead.countDocuments({ status: s }))),
+      Lead.find(
+        { status: { $in: allStatuses } },
+        { sort: { leadScore: -1, updatedAt: -1 }, limit: 500 }
+      ),
+    ]);
 
     const pipeline = {};
     allStatuses.forEach((s, i) => {
-      pipeline[s] = {
-        count: counts[i],
-        leads: leads.filter(l => l.status === s),
-      };
+      pipeline[s] = { count: counts[i], leads: leads.filter(l => l.status === s) };
     });
 
     res.json(pipeline);
@@ -502,42 +536,34 @@ router.get('/pipeline', async (req, res) => {
 //   HELPER: schedule follow-up sequence for a lead
 // ═══════════════════════════════════════════════════════════════════════
 async function scheduleFollowUps(leadId) {
-  const now = new Date();
+  const now  = new Date();
   const days = d => new Date(now.getTime() + d * 86400000);
 
-  // Full Week 1–4 plan + ongoing monthly cadence
-  // No WhatsApp — removed from automation
-  // One Success Stories email per week guaranteed
   const plan = [
-    // ── Week 1 ──────────────────────────────────────────────────────────
-    { type: 'email-day1',              at: days(1)  },
-    { type: 'ai-call-day2',            at: days(2)  },
-    { type: 'success-stories-day3',    at: days(3)  },  // Week 1 success story
-    { type: 'ai-call-day4',            at: days(4)  },
-    { type: 'email-day5',              at: days(5)  },
-    { type: 'ai-call-day6',            at: days(6)  },
-    { type: 'counselor-reminder-day7', at: days(7)  },
-    // ── Week 2 ──────────────────────────────────────────────────────────
-    { type: 'email-day8',              at: days(8)  },
-    { type: 'success-stories-day9',    at: days(9)  },  // Week 2 success story
-    { type: 'ai-call-day10',           at: days(10) },
-    { type: 'email-day12',             at: days(12) },
-    { type: 'counselor-reminder-day14',at: days(14) },
-    // ── Week 3 ──────────────────────────────────────────────────────────
-    { type: 'ai-call-week3',           at: days(17) },
-    { type: 'success-stories-week3',   at: days(18) },  // Week 3 success story
-    { type: 'parent-discussion-week3', at: days(19) },
+    { type: 'email-day1',               at: days(1)  },
+    { type: 'ai-call-day2',             at: days(2)  },
+    { type: 'success-stories-day3',     at: days(3)  },
+    { type: 'ai-call-day4',             at: days(4)  },
+    { type: 'email-day5',               at: days(5)  },
+    { type: 'ai-call-day6',             at: days(6)  },
+    { type: 'counselor-reminder-day7',  at: days(7)  },
+    { type: 'email-day8',               at: days(8)  },
+    { type: 'success-stories-day9',     at: days(9)  },
+    { type: 'ai-call-day10',            at: days(10) },
+    { type: 'email-day12',              at: days(12) },
+    { type: 'counselor-reminder-day14', at: days(14) },
+    { type: 'ai-call-week3',            at: days(17) },
+    { type: 'success-stories-week3',    at: days(18) },
+    { type: 'parent-discussion-week3',  at: days(19) },
     { type: 'enrollment-reminder-week3',at: days(21) },
-    // ── Week 4 ──────────────────────────────────────────────────────────
-    { type: 'ai-call-week4',           at: days(24) },
-    { type: 'success-stories-week4',   at: days(25) },  // Week 4 success story
-    { type: 'program-benefits-week4',  at: days(26) },
-    { type: 'limited-seat-week4',      at: days(27) },
-    { type: 'counselor-reminder-week4',at: days(28) },
-    // ── Ongoing cadence starts at Day 30 — success stories every 7 days ─
+    { type: 'ai-call-week4',            at: days(24) },
+    { type: 'success-stories-week4',    at: days(25) },
+    { type: 'program-benefits-week4',   at: days(26) },
+    { type: 'limited-seat-week4',       at: days(27) },
+    { type: 'counselor-reminder-week4', at: days(28) },
     { type: 'nurture-ai-call',            at: days(30), cycle: 1 },
     { type: 'nurture-email',              at: days(33), cycle: 1 },
-    { type: 'nurture-success-stories',    at: days(37), cycle: 1 },  // every 7d
+    { type: 'nurture-success-stories',    at: days(37), cycle: 1 },
     { type: 'nurture-counselor-reminder', at: days(44), cycle: 1 },
     { type: 'nurture-lead-review',        at: days(60), cycle: 1 },
   ];
@@ -548,9 +574,9 @@ async function scheduleFollowUps(leadId) {
     if (!existing) {
       const doc = await FollowUp.create({
         leadId,
-        followupType: p.type,
+        followupType:  p.type,
         scheduledDate: p.at,
-        cycle: p.cycle || 0,
+        cycle:         p.cycle || 0,
       });
       docs.push(doc);
     }

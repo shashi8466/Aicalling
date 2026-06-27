@@ -13,7 +13,7 @@ git init
 git add .
 git commit -m "Initial commit"
 # Create a new repo at https://github.com/new (private is fine)
-git remote add origin https://github.com/YOUR_USERNAME/testpreppundits-agent.git
+git remote add origin https://github.com/YOUR_USERNAME/aiprep365-agent.git
 git branch -M main
 git push -u origin main
 ```
@@ -23,7 +23,7 @@ git push -u origin main
 2. Click **New** → **Blueprint**
 3. Connect your GitHub repo → Render auto-detects `render.yaml`
 4. Click **Apply** — service builds in ~2 minutes
-5. Get your URL: `https://testpreppundits-ai-agent.onrender.com`
+5. Get your URL: `https://aiprep365-ai-agent.onrender.com`
 
 ### Step 3 — Set environment variables
 In Render dashboard → your service → **Environment** → add these:
@@ -41,7 +41,9 @@ In Render dashboard → your service → **Environment** → add these:
 | `GOOGLE_CLIENT_EMAIL` | *from your `.env`* |
 | `GOOGLE_PRIVATE_KEY` | *whole `-----BEGIN PRIVATE KEY-----` block, paste as ONE line with `\n` characters preserved* |
 | `GOOGLE_SHEETS_ID` | *from your `.env`* |
-| `MONGODB_URI` | *from your `.env`* |
+| `SUPABASE_URL` | *from your `.env`* |
+| `SUPABASE_SERVICE_ROLE_KEY` | *from your `.env`* |
+| `SUPABASE_ANON_KEY` | *from your `.env`* |
 | `COUNSELOR_EMAIL` | *from your `.env`* |
 | `COUNSELOR_PHONE` | *from your `.env`* |
 
@@ -87,7 +89,9 @@ fly deploy
 docker build -t tpp-agent .
 docker run -d -p 3000:3000 \
   -e BASE_URL=https://yourdomain.com \
-  -e MONGODB_URI=mongodb+srv://... \
+  -e SUPABASE_URL=https://your-project.supabase.co \
+  -e SUPABASE_SERVICE_ROLE_KEY=ey... \
+  -e SUPABASE_ANON_KEY=ey... \
   -e OPENAI_API_KEY=sk-... \
   -e TWILIO_ACCOUNT_SID=... \
   -e TWILIO_AUTH_TOKEN=... \

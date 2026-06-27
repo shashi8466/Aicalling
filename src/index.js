@@ -1,5 +1,5 @@
-/**
- * Test Prep Pundits – AI Admissions Agent
+﻿/**
+ * Aiprep365 – AI Admissions Agent
  * Entry point — auto-starts localtunnel so Twilio webhooks always work.
  *
  * Pipeline:
@@ -8,7 +8,6 @@
  */
 require('dotenv').config();
 const express  = require('express');
-const mongoose = require('mongoose');
 const cors     = require('cors');
 const helmet   = require('helmet');
 const path     = require('path');
@@ -18,10 +17,13 @@ const cfg    = require('./config');
 const logger = require('./logger');
 const poller = require('./jobs/poller');
 
-const webhookRouter  = require('./routes/webhook');
-const apiRouter      = require('./routes/api');
-const crmRouter      = require('./routes/crm');
-const followUpEngine = require('./jobs/followUpEngine');
+const webhookRouter    = require('./routes/webhook');
+const apiRouter        = require('./routes/api');
+const crmRouter        = require('./routes/crm');
+const authRouter       = require('./routes/auth');
+const counselorsRouter = require('./routes/counselors');
+const { requireAuth, requireAdmin } = require('./middleware/auth');
+const followUpEngine   = require('./jobs/followUpEngine');
 
 const app = express();
 
@@ -37,9 +39,17 @@ app.use((req, res, next) => {
 });
 
 // ── Routes ──────────────────────────────────────────────────────────────────
+// Twilio webhooks — NO auth (Twilio posts without our JWT)
 app.use('/webhook', webhookRouter);
-app.use('/api',     apiRouter);
+
+// Public auth bootstrap (returns Supabase URL + anon key)
+app.use('/auth', authRouter);
+
+// Protected dashboard API — all /api/* require a valid Supabase JWT
+app.use('/api', requireAuth);
+app.use('/api', apiRouter);
 app.use('/api/crm', crmRouter);
+app.use('/api/counselors', requireAdmin, counselorsRouter);
 
 app.get('/health', (_req, res) =>
   res.json({ status: 'ok', uptime: Math.round(process.uptime()), ts: new Date() })
@@ -82,9 +92,11 @@ const tunnelMgr = require('./utils/tunnel');
 // ── Boot ─────────────────────────────────────────────────────────────────────
 async function boot() {
   try {
-    // 1. MongoDB
-    await mongoose.connect(cfg.db.uri);
-    logger.info('MongoDB connected ✅');
+    // 1. Supabase — verify connectivity
+    const supabase = require('./db/supabase');
+    const { error: pingErr } = await supabase.from('leads').select('id').limit(1);
+    if (pingErr) throw new Error(`Supabase connection failed: ${pingErr.message}`);
+    logger.info('Supabase connected ✅');
 
     // 2. Google Sheet headers
     const sheetsSvc = require('./services/sheetsService');
@@ -129,7 +141,7 @@ async function boot() {
     const activeUrl = tunnelUrl || cfg.server.baseUrl;
     const webhookUrl = `${activeUrl}/webhook/call/start`;
 
-    console.log('\n\x1b[1m\x1b[32m  🚀 Test Prep Pundits — AI Admissions Agent is READY!\x1b[0m');
+    console.log('\n\x1b[1m\x1b[32m  🚀 Aiprep365 — AI Admissions Agent is READY!\x1b[0m');
     console.log('  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log(`  \x1b[1m➜\x1b[0m  \x1b[1mLocal URL:\x1b[0m     \x1b[36m${localUrl}\x1b[0m`);
     if (tunnelUrl) {
@@ -151,7 +163,6 @@ async function shutdown(signal) {
   logger.info(`${signal} received — shutting down…`);
   tunnelMgr.stopTunnel();
   poller.stop();
-  await mongoose.connection.close();
   process.exit(0);
 }
 process.on('SIGTERM', () => shutdown('SIGTERM'));

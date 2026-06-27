@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Email Service — powered by Brevo (formerly Sendinblue)
  * Uses Brevo Transactional Email API (REST, no SMTP config needed).
  * Docs: https://developers.brevo.com/reference/sendtransacemail
@@ -23,7 +23,7 @@ class EmailService {
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
-      subject: `Welcome to Test Prep Pundits – We'll be in touch, ${lead.fullName}! 🎓`,
+      subject: `Welcome to Aiprep365 – We'll be in touch, ${lead.fullName}! 🎓`,
       html:    this._wrap(this._newLeadBody(lead)),
     });
   }
@@ -59,7 +59,7 @@ class EmailService {
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
-      subject: `We tried to reach you – ${lead.fullName} | Test Prep Pundits`,
+      subject: `We tried to reach you – ${lead.fullName} | Aiprep365`,
       html:    this._wrap(this._noAnswerBody(lead)),
     });
   }
@@ -129,7 +129,7 @@ class EmailService {
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
-      subject: `Why students choose Test Prep Pundits — ${lead.fullName}'s program breakdown`,
+      subject: `Why students choose Aiprep365 — ${lead.fullName}'s program breakdown`,
       html:    this._wrap(this._programBenefitsBody(lead)),
     });
   }
@@ -316,13 +316,13 @@ td{border-collapse:collapse}
 <body>
 <div class="wrap">
   <div class="hdr">
-    <img src="${cfg.server.baseUrl || cfg.company.website}/assets/logo.png" alt="Test Prep Pundits" style="width:120px;height:auto;background:#fff;padding:10px;border-radius:12px;display:inline-block;margin-bottom:8px"/>
-    <h1>Test Prep Pundits</h1>
+    <img src="${cfg.server.baseUrl || cfg.company.website}/assets/logo.png" alt="Aiprep365" style="width:120px;height:auto;background:#fff;padding:10px;border-radius:12px;display:inline-block;margin-bottom:8px"/>
+    <h1>Aiprep365</h1>
     <p>AI Admissions Agent · Your Path to Academic Excellence</p>
   </div>
   <div class="body">${inner}</div>
   <div class="ftr">
-    © ${year} Test Prep Pundits &nbsp;|&nbsp;
+    © ${year} Aiprep365 &nbsp;|&nbsp;
     <a href="${website}">${website}</a><br>
     Questions? Call or text ${phone}
   </div>
@@ -337,7 +337,7 @@ td{border-collapse:collapse}
     const c = cfg.company;
     return `
 <h2>Hi ${l.parentName || l.fullName}! 👋</h2>
-<p>Thank you for reaching out to <strong>Test Prep Pundits</strong>! I'm <strong>Shashi Kumar</strong>, your dedicated Admissions Counselor, and I'm genuinely excited to help <strong>${l.fullName}</strong> reach their academic goals.</p>
+<p>Thank you for reaching out to <strong>Aiprep365</strong>! I'm <strong>Shashi Kumar</strong>, your dedicated Admissions Counselor, and I'm genuinely excited to help <strong>${l.fullName}</strong> reach their academic goals.</p>
 
 <div class="box">
   📞 <strong>We'll be calling you shortly</strong> at <strong>${l.phone}</strong> to learn more and answer any questions.<br>
@@ -357,7 +357,7 @@ ${this._programCards(l.courseInterest)}
 
 <div class="sig">
   <strong>Shashi Kumar</strong>
-  Admissions Counselor | Test Prep Pundits<br>
+  Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}<br>
   🌐 <a href="${c.website}">${c.website}</a>
 </div>`;
@@ -504,7 +504,7 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Google Meet</a>` : ''}
 
 <div class="sig">
   <strong>Shashi Kumar</strong>
-  Admissions Counselor | Test Prep Pundits<br>
+  Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
 </div>`;
   }
@@ -513,7 +513,7 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Google Meet</a>` : ''}
     const c = cfg.company;
     return `
 <h2>We tried to reach you! 📞</h2>
-<p>Hi ${l.parentName || l.fullName}! I'm <strong>Shashi Kumar</strong> from Test Prep Pundits. I recently called regarding <strong>${l.courseInterest || 'our test prep programs'}</strong> for ${l.fullName} but wasn't able to connect.</p>
+<p>Hi ${l.parentName || l.fullName}! I'm <strong>Shashi Kumar</strong> from Aiprep365. I recently called regarding <strong>${l.courseInterest || 'our test prep programs'}</strong> for ${l.fullName} but wasn't able to connect.</p>
 
 <div class="box">
   📌 <strong>Let's find a time that works for you!</strong><br>
@@ -533,7 +533,7 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Google Meet</a>` : ''}
 
 <div class="sig">
   <strong>Shashi Kumar</strong>
-  Admissions Counselor | Test Prep Pundits<br>
+  Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
 </div>`;
   }
@@ -556,16 +556,16 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
 
 <div class="sig">
   <strong>Shashi Kumar</strong>
-  Admissions Counselor | Test Prep Pundits<br>
+  Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
 </div>`;
   }
 
   _successStoriesBody(l) {
     const c = cfg.company;
-    const site = c.website || 'https://testpreppundits.com';
+    const site = c.website || 'https://Aiprep365.com';
 
-    // SAT Top 1% Scorers — exact names & scores from testpreppundits.com
+    // SAT Top 1% Scorers — exact names & scores from Aiprep365.com
     const satScorers = [
       { name: 'Shiva Sai Teja Kalva',   score: 1590, school: 'Academy for Math, Science, and Engineering, Rockaway, NJ' },
       { name: 'Keshif Rahiman Shaik',   score: 1580, school: 'Sri Chaitanya Techno School Hyderabad, India' },
@@ -624,7 +624,7 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
     return `
 <!-- ══ Header greeting ═══════════════════════════════════════════════════ -->
 <h2 style="color:#1a3c6e;font-size:22px;font-weight:900;margin:0 0 6px">🏆 Real Students. Real Results.</h2>
-<p style="color:#374151;font-size:15px;margin:0 0 20px">Hi ${l.parentName || l.fullName}! We wanted to share what Test Prep Pundits students have achieved — because these aren't just numbers, they're futures changed.</p>
+<p style="color:#374151;font-size:15px;margin:0 0 20px">Hi ${l.parentName || l.fullName}! We wanted to share what Aiprep365 students have achieved — because these aren't just numbers, they're futures changed.</p>
 
 <!-- ══ Latest SAT Stories banner ════════════════════════════════════════ -->
 <table cellpadding="0" cellspacing="0" border="0" width="100%" class="ss-card" style="background:linear-gradient(135deg,#f97316 0%,#1a3c6e 100%);border-radius:14px;margin:0 0 16px">
@@ -695,7 +695,7 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
 
 <div class="sig">
   <strong>Shashi Kumar</strong>
-  Admissions Counselor | Test Prep Pundits<br>
+  Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}<br>
   🌐 <a href="${site}">${site}</a>
 </div>`;
@@ -723,7 +723,7 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
 
 <div class="sig">
   <strong>Shashi Kumar</strong>
-  Admissions Counselor | Test Prep Pundits<br>
+  Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
 </div>`;
   }
@@ -733,7 +733,7 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
     const prog = (l.courseInterest || 'Test Prep');
     return `
 <h2>Why ${l.fullName}'s ${prog} Program Works 📈</h2>
-<p>Hi ${l.parentName || l.fullName}! We know you're evaluating your options — here's a clear breakdown of what makes Test Prep Pundits different.</p>
+<p>Hi ${l.parentName || l.fullName}! We know you're evaluating your options — here's a clear breakdown of what makes Aiprep365 different.</p>
 
 <div class="grid">
   <div class="cell"><div class="lbl">Average Score Gain</div><div class="val">150–200 pts SAT / 4–6 pts ACT</div></div>
@@ -761,7 +761,7 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
 
 <div class="sig">
   <strong>Shashi Kumar</strong>
-  Admissions Counselor | Test Prep Pundits<br>
+  Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
 </div>`;
   }
@@ -792,7 +792,7 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
 
 <div class="sig">
   <strong>Shashi Kumar</strong>
-  Admissions Counselor | Test Prep Pundits<br>
+  Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
 </div>`;
   }
@@ -822,7 +822,7 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
 
 <div class="sig">
   <strong>Shashi Kumar</strong>
-  Admissions Counselor | Test Prep Pundits<br>
+  Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
 </div>`;
   }
@@ -831,7 +831,7 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
     const c = cfg.company;
     return `
 <h2>Hi ${l.parentName || l.fullName}! I wanted to check in 👋</h2>
-<p>This is <strong>Shashi Kumar</strong> from Test Prep Pundits. I've been following up because I genuinely believe ${l.fullName} has what it takes to hit an incredible score — and I don't want them to miss the window.</p>
+<p>This is <strong>Shashi Kumar</strong> from Aiprep365. I've been following up because I genuinely believe ${l.fullName} has what it takes to hit an incredible score — and I don't want them to miss the window.</p>
 
 <div class="box">
   📌 <strong>Where ${l.fullName} stands right now:</strong><br><br>
@@ -854,7 +854,7 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
 
 <div class="sig">
   <strong>Shashi Kumar</strong>
-  Admissions Counselor | Test Prep Pundits<br>
+  Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}<br>
   🌐 <a href="${c.website}">${c.website}</a>
 </div>`;
@@ -884,7 +884,7 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
 
 <div class="sig">
   <strong>Shashi Kumar</strong>
-  Admissions Counselor | Test Prep Pundits<br>
+  Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}<br>
   🌐 <a href="${c.website}">${c.website}</a>
 </div>`;
@@ -894,7 +894,7 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
     const c = cfg.company;
     return `
 <h2>Ready to take the next step? 🚀</h2>
-<p>Hi ${l.parentName || l.fullName}! It was wonderful speaking with you about ${l.fullName}'s academic goals. I hope our consultation gave you a clear picture of how Test Prep Pundits can make a difference.</p>
+<p>Hi ${l.parentName || l.fullName}! It was wonderful speaking with you about ${l.fullName}'s academic goals. I hope our consultation gave you a clear picture of how Aiprep365 can make a difference.</p>
 
 <div class="box">
   🎯 <strong>Recommended Program for ${l.fullName}:</strong><br>
@@ -915,7 +915,7 @@ ${meetLink ? `<a href="${meetLink}" class="btn">Join Tomorrow's Meeting</a>` : '
 
 <div class="sig">
   <strong>Shashi Kumar</strong>
-  Admissions Counselor | Test Prep Pundits<br>
+  Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
 </div>`;
   }

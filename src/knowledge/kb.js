@@ -1,5 +1,5 @@
-/**
- * Compact, keyword-indexed knowledge base for Test Prep Pundits.
+﻿/**
+ * Compact, keyword-indexed knowledge base for Aiprep365.
  * getKnowledge(query) returns the 1-3 most relevant snippets.
  */
 
@@ -15,7 +15,7 @@ No wrong-answer penalty. Calculator allowed for all Math questions.`,
   },
   {
     keys: ['sat program','sat tutoring','sat class','sat price','sat cost','sat prep'],
-    text: `SAT PROGRAMS – Test Prep Pundits
+    text: `SAT PROGRAMS – Aiprep365
 • One-on-One Private Tutoring – from $150/hr (avg +150–200 pts)
 • Group Classes (8 wks, 6–10 students) – $599
 • SAT Boot Camp (4-wk intensive) – $799
@@ -35,7 +35,7 @@ Key differences vs SAT: ACT has Science; SAT Math goes deeper; ACT is faster-pac
   },
   {
     keys: ['act program','act tutoring','act class','act price','act cost','act prep'],
-    text: `ACT PROGRAMS – Test Prep Pundits
+    text: `ACT PROGRAMS – Aiprep365
 • One-on-One Tutoring – from $150/hr
 • Group ACT Prep (8 wks) – $599
 • ACT Boot Camp (4-wk intensive) – $799

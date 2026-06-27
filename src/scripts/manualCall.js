@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Manual call trigger script
  * Usage:  node src/scripts/manualCall.js
  *
@@ -19,7 +19,7 @@ const Lead        = require('../models/Lead');
 
 async function run() {
   console.log('\n══════════════════════════════════════════');
-  console.log('  Manual Call Trigger – Test Prep Pundits');
+  console.log('  Manual Call Trigger – Aiprep365');
   console.log('══════════════════════════════════════════\n');
 
   // 1. MongoDB

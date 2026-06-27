@@ -1,23 +1,41 @@
-const mongoose = require('mongoose');
+const supabase = require('../db/supabase');
+const { Document, toSnake } = require('../db/document');
 
-const leadObjectionSchema = new mongoose.Schema({
-  leadId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lead', required: true, index: true },
-  objectionType: {
-    type: String,
-    enum: [
-      'too-expensive', 'need-parent-approval', 'comparing-competitors',
-      'exam-date-not-decided', 'need-more-information', 'already-have-tutor',
-      'not-ready-yet', 'busy-schedule', 'other',
-    ],
-    required: true,
+const TABLE = 'lead_objections';
+const W = row => row ? new Document(TABLE, row) : null;
+
+const LeadObjection = {
+  async find(filter = {}, opts = {}) {
+    let q = supabase.from(TABLE).select('*');
+    if (filter.leadId) q = q.eq('lead_id', filter.leadId);
+    const { data, error } = await q.order('created_at', { ascending: false }).limit(opts.limit || 300);
+    if (error) throw new Error(error.message);
+    return (data || []).map(W);
   },
-  notes:       { type: String, default: '' },
-  resolved:    { type: Boolean, default: false },
-  resolvedAt:  { type: Date },
-  resolvedNote:{ type: String, default: '' },
-}, { timestamps: true });
 
-leadObjectionSchema.index({ leadId: 1 });
-leadObjectionSchema.index({ objectionType: 1 });
+  async create(data) {
+    const now = new Date().toISOString();
+    const row = { notes: '', resolved: false, resolved_note: '', created_at: now, updated_at: now };
+    for (const [k, v] of Object.entries(data)) {
+      if (k === '_id') continue;
+      row[toSnake(k)] = v;
+    }
+    const { data: created, error } = await supabase.from(TABLE).insert(row).select().single();
+    if (error) throw new Error(error.message);
+    return W(created);
+  },
 
-module.exports = mongoose.model('LeadObjection', leadObjectionSchema);
+  async findByIdAndUpdate(id, update, _opts = {}) {
+    if (!id) return null;
+    const row = { updated_at: new Date().toISOString() };
+    for (const [k, v] of Object.entries(update)) {
+      if (k === '_id') continue;
+      row[toSnake(k)] = v instanceof Date ? v.toISOString() : v;
+    }
+    const { data, error } = await supabase.from(TABLE).update(row).eq('id', id).select().single();
+    if (error || !data) return null;
+    return W(data);
+  },
+};
+
+module.exports = LeadObjection;

@@ -1,39 +1,67 @@
-const mongoose = require('mongoose');
+const supabase = require('../db/supabase');
+const { Document, toSnake } = require('../db/document');
 
-const enrollmentSchema = new mongoose.Schema({
-  leadId:       { type: mongoose.Schema.Types.ObjectId, ref: 'Lead', index: true },
-  studentName:  { type: String, required: true },
-  grade:        { type: String },
-  parentName:   { type: String },
-  parentEmail:  { type: String, lowercase: true },
-  parentPhone:  { type: String },
-  program: {
-    type: String,
-    enum: ['SAT Prep', 'ACT Prep', 'AP Courses', 'College Admissions', 'PSAT', 'Other'],
-    required: true,
-  },
-  examDate:     { type: Date },
-  learningMode: {
-    type: String,
-    enum: ['online', 'in-person', 'hybrid', 'group', 'one-on-one'],
-    default: 'online',
-  },
-  paymentPlan: {
-    type: String,
-    enum: ['full', '2-installments', '3-installments', '6-installments'],
-    default: 'full',
-  },
-  programFee:    { type: Number, default: 0 },  // total program fee in USD
-  enrollmentStatus: {
-    type: String,
-    enum: ['pending', 'confirmed', 'active', 'completed', 'cancelled'],
-    default: 'pending',
-  },
-  notes:        { type: String, default: '' },
-  counselorId:  { type: String, default: 'shashi-kumar' },
-}, { timestamps: true });
+const TABLE = 'enrollments';
+const W = row => row ? new Document(TABLE, row) : null;
 
-enrollmentSchema.index({ enrollmentStatus: 1 });
-enrollmentSchema.index({ program: 1 });
+function applyFilter(q, filter = {}) {
+  for (const [key, val] of Object.entries(filter)) {
+    const col = toSnake(key);
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      for (const [op, opVal] of Object.entries(val)) {
+        const ts = v => (v instanceof Date ? v.toISOString() : v);
+        switch (op) {
+          case '$gte': q = q.gte(col, ts(opVal)); break;
+          case '$lte': q = q.lte(col, ts(opVal)); break;
+          case '$in':  q = q.in(col, opVal);      break;
+        }
+      }
+    } else {
+      q = val == null ? q.is(col, null) : q.eq(col, val);
+    }
+  }
+  return q;
+}
 
-module.exports = mongoose.model('Enrollment', enrollmentSchema);
+const Enrollment = {
+  async find(filter = {}, opts = {}) {
+    let q = supabase.from(TABLE).select('*');
+    q = applyFilter(q, filter);
+    const { data, error } = await q.order('created_at', { ascending: false }).limit(opts.limit || 500);
+    if (error) throw new Error(error.message);
+    return (data || []).map(W);
+  },
+
+  async findById(id) {
+    if (!id) return null;
+    const { data, error } = await supabase.from(TABLE).select('*').eq('id', id).single();
+    if (error || !data) return null;
+    return W(data);
+  },
+
+  async create(data) {
+    const now = new Date().toISOString();
+    const row = { enrollment_status: 'pending', counselor_id: 'shashi-kumar', notes: '', created_at: now, updated_at: now };
+    for (const [k, v] of Object.entries(data)) {
+      if (k === '_id') continue;
+      row[toSnake(k)] = v instanceof Date ? v.toISOString() : v;
+    }
+    const { data: created, error } = await supabase.from(TABLE).insert(row).select().single();
+    if (error) throw new Error(error.message);
+    return W(created);
+  },
+
+  async findByIdAndUpdate(id, update, _opts = {}) {
+    if (!id) return null;
+    const row = { updated_at: new Date().toISOString() };
+    for (const [k, v] of Object.entries(update)) {
+      if (k === '_id') continue;
+      row[toSnake(k)] = v instanceof Date ? v.toISOString() : v;
+    }
+    const { data, error } = await supabase.from(TABLE).update(row).eq('id', id).select().single();
+    if (error || !data) return null;
+    return W(data);
+  },
+};
+
+module.exports = Enrollment;

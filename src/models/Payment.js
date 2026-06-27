@@ -1,24 +1,67 @@
-const mongoose = require('mongoose');
+const supabase = require('../db/supabase');
+const { Document, toSnake } = require('../db/document');
 
-const paymentSchema = new mongoose.Schema({
-  enrollmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Enrollment', required: true, index: true },
-  leadId:       { type: mongoose.Schema.Types.ObjectId, ref: 'Lead', index: true },
-  amount:       { type: Number, required: true },      // total amount due
-  amountPaid:   { type: Number, default: 0 },          // amount paid so far
-  paymentStatus: {
-    type: String,
-    enum: ['pending', 'partial-paid', 'paid', 'refunded'],
-    default: 'pending',
-    index: true,
+const TABLE = 'payments';
+const W = row => row ? new Document(TABLE, row) : null;
+
+function applyFilter(q, filter = {}) {
+  for (const [key, val] of Object.entries(filter)) {
+    const col = toSnake(key);
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      for (const [op, opVal] of Object.entries(val)) {
+        const ts = v => (v instanceof Date ? v.toISOString() : v);
+        switch (op) {
+          case '$in':  q = q.in(col, opVal);      break;
+          case '$gte': q = q.gte(col, ts(opVal)); break;
+          case '$lte': q = q.lte(col, ts(opVal)); break;
+        }
+      }
+    } else {
+      q = val == null ? q.is(col, null) : q.eq(col, val);
+    }
+  }
+  return q;
+}
+
+const Payment = {
+  async find(filter = {}, opts = {}) {
+    let q = supabase.from(TABLE).select('*');
+    q = applyFilter(q, filter);
+    const { data, error } = await q.order('created_at', { ascending: false }).limit(opts.limit || 500);
+    if (error) throw new Error(error.message);
+    return (data || []).map(W);
   },
-  paymentDate:  { type: Date },
-  dueDate:      { type: Date },
-  paymentMethod:{ type: String, default: '' },         // credit card, check, wire
-  transactionId:{ type: String, default: '' },
-  notes:        { type: String, default: '' },
-  program:      { type: String, default: '' },         // for revenue breakdown
-}, { timestamps: true });
 
-paymentSchema.index({ paymentStatus: 1, dueDate: 1 });
+  async findById(id) {
+    if (!id) return null;
+    const { data, error } = await supabase.from(TABLE).select('*').eq('id', id).single();
+    if (error || !data) return null;
+    return W(data);
+  },
 
-module.exports = mongoose.model('Payment', paymentSchema);
+  async create(data) {
+    const now = new Date().toISOString();
+    const row = { amount_paid: 0, payment_status: 'pending', notes: '', created_at: now, updated_at: now };
+    for (const [k, v] of Object.entries(data)) {
+      if (k === '_id') continue;
+      row[toSnake(k)] = v instanceof Date ? v.toISOString() : v;
+    }
+    const { data: created, error } = await supabase.from(TABLE).insert(row).select().single();
+    if (error) throw new Error(error.message);
+    return W(created);
+  },
+
+  async findByIdAndUpdate(id, update, _opts = {}) {
+    if (!id) return null;
+    const row = { updated_at: new Date().toISOString() };
+    for (const [k, v] of Object.entries(update)) {
+      if (k === '_id') continue;
+      row[toSnake(k)] = v instanceof Date ? v.toISOString() : v;
+    }
+    const { data, error } = await supabase.from(TABLE).update(row).eq('id', id).select().single();
+    if (error || !data) return null;
+    return W(data);
+  },
+};
+
+module.exports = Payment;

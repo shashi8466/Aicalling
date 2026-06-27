@@ -1,13 +1,6 @@
 /**
  * Google Sheets Poller
  * Runs on interval, picks up new rows, triggers the call pipeline.
- *
- * Pipeline per new lead:
- *   1. Create Lead in DB
- *   2. Send welcome email
- *   3. Initiate Twilio outbound call (after short delay)
- *   4. Webhook handles conversation → qualification → booking
- *   5. Sheet updated at each step
  */
 const cron      = require('node-cron');
 const Lead      = require('../models/Lead');
@@ -18,8 +11,8 @@ const { scoreLead } = require('../services/leadScoring');
 const cfg       = require('../config');
 const logger    = require('../logger');
 
-let isPolling   = false;   // prevent overlapping runs
-let retryTimers = [];      // pending retry setTimeout handles
+let isPolling   = false;
+let retryTimers = [];
 
 async function pollOnce() {
   if (isPolling) return;
@@ -48,29 +41,20 @@ async function pollOnce() {
   }
 }
 
-/**
- * Process one sheet row.
- * Returns: 'created' | 'synced' | 'skipped'
- */
 async function processRow(row) {
   try {
-    // Look up by sheetRowIndex first (most reliable), then by email/phone
+    // Look up by sheetRowIndex first, then by email/phone
     let exists = await Lead.findOne({ sheetRowIndex: row.sheetRowIndex });
     if (!exists) {
       exists = await Lead.findOne({ $or: [{ email: row.email }, { phone: row.phone }] });
     }
 
-    // ── If exists: sync any changed fields from the sheet ─────────────────
     if (exists) {
       let changed = false;
-      const fieldsToSync = ['fullName', 'grade', 'email', 'phone', 'parentName', 'parentEmail', 'courseInterest'];
+      const fieldsToSync = ['fullName','grade','email','phone','parentName','parentEmail','courseInterest'];
       for (const f of fieldsToSync) {
-        if (row[f] && row[f] !== exists[f]) {
-          exists[f] = row[f];
-          changed = true;
-        }
+        if (row[f] && row[f] !== exists[f]) { exists[f] = row[f]; changed = true; }
       }
-      // Always keep the sheet row index in sync
       if (exists.sheetRowIndex !== row.sheetRowIndex) {
         exists.sheetRowIndex = row.sheetRowIndex;
         changed = true;
@@ -83,31 +67,28 @@ async function processRow(row) {
       return 'skipped';
     }
 
-    // ── Create new lead ───────────────────────────────────────────────────
-    const lead = new Lead({ ...row, status: 'queued' });
+    // Score before creating
+    const { score, category } = scoreLead({ ...row });
 
-    // Initial score before any call data
-    const { score, category } = scoreLead(lead);
-    lead.leadScore    = score;
-    lead.leadCategory = category;
-    await lead.save();
+    const lead = await Lead.create({
+      ...row,
+      status:       'queued',
+      leadScore:    score,
+      leadCategory: category,
+    });
 
     logger.info(`Lead created: ${lead.fullName} | ${lead.phone} | Score=${score} [${category}]`);
 
-    // 2. Update sheet – mark as Queued
     await sheetsSvc.updateRow(lead.sheetRowIndex, {
       status:  'Queued',
       score,
       summary: 'Lead received. Welcome email sent. Call pending.',
     });
 
-    // 3. Welcome email (fire-and-forget)
     emailSvc.sendNewLeadWelcome(lead).catch(err =>
       logger.error('Welcome email failed', { msg: err.message, leadId: lead._id })
     );
 
-    // 4. Place call after delay
-    //    Hot leads → 2 min  |  Others → 3 min
     const delayMs = category === 'hot' ? 2 * 60_000 : 3 * 60_000;
     const timer = setTimeout(() => _placeCall(lead), delayMs);
     retryTimers.push(timer);
@@ -118,11 +99,10 @@ async function processRow(row) {
     return 'skipped';
   }
 }
-// Keep legacy name in module.exports for backward-compat
-const processNewLead = processRow;
+
+const processNewLead = processRow; // legacy alias
 
 async function _placeCall(lead) {
-  // Reload to get latest status (may have changed while waiting)
   const fresh = await Lead.findById(lead._id);
   if (!fresh) return;
   if (['meeting-scheduled','enrolled','do-not-call','lost'].includes(fresh.status)) {
@@ -131,9 +111,10 @@ async function _placeCall(lead) {
   }
 
   try {
-    fresh.status           = 'calling';
-    fresh.totalCallAttempts += 1;
-    fresh.lastCallAt       = new Date();
+    fresh.status            = 'calling';
+    fresh.totalCallAttempts = (fresh.totalCallAttempts || 0) + 1;
+    fresh.lastCallAt        = new Date();
+    fresh.callAttempts      = fresh.callAttempts || [];
     fresh.callAttempts.push({
       attemptNumber: fresh.totalCallAttempts,
       startTime:     new Date(),
@@ -143,20 +124,17 @@ async function _placeCall(lead) {
 
     const { callSid } = await twilioSvc.call(fresh, cfg.server.baseUrl);
 
-    // Store callSid on the attempt record
-    const att = fresh.callAttempts[fresh.callAttempts.length - 1];
-    att.callSid = callSid;
+    fresh.callAttempts[fresh.callAttempts.length - 1].callSid = callSid;
     await fresh.save();
 
     logger.info(`Call initiated for ${fresh.fullName}: SID=${callSid}`);
   } catch (err) {
     logger.error('_placeCall error', { msg: err.message, leadId: fresh._id });
 
-    fresh.status = 'queued';
-    fresh.totalCallAttempts -= 1;   // rollback
+    fresh.status            = 'queued';
+    fresh.totalCallAttempts = Math.max(0, (fresh.totalCallAttempts || 1) - 1);
     await fresh.save();
 
-    // Retry if attempts remain
     if (fresh.totalCallAttempts < cfg.call.maxAttempts) {
       const retryMs = cfg.call.retryDelayMinutes * 60_000;
       logger.info(`Retrying call for ${fresh.fullName} in ${cfg.call.retryDelayMinutes} min`);
@@ -174,15 +152,13 @@ async function _placeCall(lead) {
   }
 }
 
-/** Also retry leads whose nextRetryAt has passed (for server restarts) */
 async function retryPendingLeads() {
   try {
     const pending = await Lead.find({
-      status:       'queued',
-      nextRetryAt:  { $lte: new Date() },
+      status:            'queued',
+      nextRetryAt:       { $lte: new Date() },
       totalCallAttempts: { $lt: cfg.call.maxAttempts },
     });
-
     for (const lead of pending) {
       logger.info(`Retrying pending lead: ${lead.fullName}`);
       await _placeCall(lead);
@@ -192,35 +168,26 @@ async function retryPendingLeads() {
   }
 }
 
-/**
- * Safety net: reset leads stuck in "calling" for too long.
- * A real call can't last 15+ minutes, so if the completed/canceled webhook
- * never arrived (network blip, server restart mid-call), unstick the lead.
- */
 async function unstickStaleCalls() {
   try {
-    const cutoff = new Date(Date.now() - 15 * 60_000); // 15 min ago
-    const stuck = await Lead.find({
-      status:     'calling',
-      lastCallAt: { $lte: cutoff },
-    });
+    const cutoff = new Date(Date.now() - 15 * 60_000);
+    const stuck  = await Lead.find({ status: 'calling', lastCallAt: { $lte: cutoff } });
 
     for (const lead of stuck) {
       lead.status = 'contacted';
-      const last = lead.callAttempts[lead.callAttempts.length - 1];
+      const last  = lead.callAttempts?.[lead.callAttempts.length - 1];
       if (last && !['completed','canceled','failed','no-answer','busy'].includes(last.status)) {
         last.status  = 'completed';
         last.endTime = last.endTime || new Date();
       }
       await lead.save();
-      logger.warn(`Unstuck stale "calling" lead: ${lead.fullName} (last call ${lead.lastCallAt?.toISOString()}) → contacted`);
+      logger.warn(`Unstuck stale "calling" lead: ${lead.fullName} → contacted`);
     }
   } catch (err) {
     logger.error('unstickStaleCalls error', { msg: err.message });
   }
 }
 
-/** Also send reminders for meetings tomorrow */
 async function sendMeetingReminders() {
   try {
     const tomorrow = new Date();
@@ -228,10 +195,11 @@ async function sendMeetingReminders() {
     const dayAfter = new Date(tomorrow);
     dayAfter.setDate(dayAfter.getDate() + 1);
 
+    // JSONB path filters handled by Lead.find jsFilter
     const leads = await Lead.find({
-      'meeting.scheduledAt':   { $gte: tomorrow, $lt: dayAfter },
-      'meeting.status':        'scheduled',
-      'meeting.reminderSent':  false,
+      'meeting.scheduledAt':  { $gte: tomorrow, $lt: dayAfter },
+      'meeting.status':       'scheduled',
+      'meeting.reminderSent': false,
     });
 
     for (const lead of leads) {
@@ -249,21 +217,12 @@ function start() {
   const interval = cfg.sheets.pollIntervalSeconds;
   const expr     = `*/${Math.min(59, Math.max(1, interval))} * * * * *`;
 
-  // Main polling loop
   cron.schedule(expr, pollOnce);
-
-  // Retry pending leads every 5 minutes
   cron.schedule('*/5 * * * *', retryPendingLeads);
-
-  // Unstick stale "calling" leads every 5 minutes
   cron.schedule('*/5 * * * *', unstickStaleCalls);
-
-  // Meeting reminders at 9 AM daily
   cron.schedule('0 9 * * *', sendMeetingReminders);
 
   logger.info(`Sheets poller started – checking every ${interval}s`);
-
-  // Run immediately on boot
   setTimeout(pollOnce, 4000);
 }
 

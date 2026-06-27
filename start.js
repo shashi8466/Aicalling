@@ -1,4 +1,4 @@
-/**
+﻿/**
  * start.js — One-command launcher
  *
  * 1. Opens a localtunnel (public HTTPS URL)
@@ -18,14 +18,14 @@ const ENVFILE = path.join(__dirname, '.env');
 
 async function main() {
   console.log('\n╔══════════════════════════════════════════════════╗');
-  console.log('║   Test Prep Pundits — AI Admissions Agent        ║');
+  console.log('║   Aiprep365 — AI Admissions Agent        ║');
   console.log('╚══════════════════════════════════════════════════╝\n');
 
   // 1. Open localtunnel
   console.log('🌐 Opening public tunnel on port', PORT, '…');
   let tunnel;
   try {
-    tunnel = await lt({ port: PORT, subdomain: 'testpreppundits' });
+    tunnel = await lt({ port: PORT, subdomain: 'Aiprep365' });
   } catch(e) {
     // Random subdomain if preferred one is taken
     tunnel = await lt({ port: PORT });
