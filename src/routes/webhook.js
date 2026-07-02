@@ -239,12 +239,19 @@ router.post('/call/respond', async (req, res) => {
     ];
     const meetingBooked = !!session.meetingBooked;
 
-    // Allow goodbye/bye to end ONLY if meeting is already booked
-    if (meetingBooked && /\b(goodbye|bye|thanks bye|all done|that's it|nothing else|no questions)\b/.test(lowSpeech)) {
+    // Allow call to end when meeting is booked AND caller signals they have no more questions.
+    // This catches all natural "nothing else" phrases so the AI never falls back to [OFFER_MEETING].
+    const noMoreQuestions = [
+      'no', 'nope', 'nothing', 'nothing else', "that's all", 'no thanks',
+      "i'm good", "i'm all set", "no, that's it", "that's okay", "no questions",
+      'everything is clear', 'all good', 'all set', 'goodbye', 'bye',
+      'thanks bye', 'all done', 'that is all', 'no more questions',
+      'no more', 'i am good', 'i am all set',
+    ];
+    if (meetingBooked && noMoreQuestions.some(p => lowSpeech.trim() === p || lowSpeech.trim().startsWith(p + ' ') || lowSpeech.trim().endsWith(' ' + p))) {
       await _finaliseCall(lead, session, req.body.CallSid, 'completed-after-booking');
-      const studentFirst = lead.fullName.split(' ')[0];
       return res.send(twilioSvc.twimlHangup(
-        `Thank you for choosing Aiprep365. We look forward to helping ${studentFirst} achieve their goals. Have a wonderful day!`
+        `Wonderful. Thank you for choosing Aiprep365. We look forward to speaking with you during your consultation. Have a wonderful day. Goodbye.`
       ));
     }
 
@@ -357,9 +364,16 @@ router.post('/call/respond', async (req, res) => {
 
     // Check for special tokens
     if (aiReply.includes('[OFFER_MEETING]')) {
+      // CRITICAL: If meeting is already booked, NEVER offer slots again.
+      // Suppress [OFFER_MEETING] and stay in the post-booking Q&A state instead.
+      if (session.meetingBooked) {
+        logger.warn(`[OFFER_MEETING] suppressed — meeting already booked for ${lead.fullName}. Staying in MEETING_BOOKED state.`);
+        const clean = aiReply.replace('[OFFER_MEETING]', '').trim();
+        const safeReply = clean || 'Is there anything else I can help you with?';
+        return res.send(twilioSvc.twimlRespond(safeReply, respondUrl(cfg.server.baseUrl, leadId)));
+      }
       const clean = aiReply.replace('[OFFER_MEETING]', '').trim();
       // Transition to slot-offering step (handled in /slots)
-      // /slots announces: "I currently have the following available times…"
       return res.send(twilioSvc.twimlStart(
         clean || 'Perfect.',
         slotsUrl(cfg.server.baseUrl, leadId)
@@ -576,11 +590,12 @@ router.post('/call/book', async (req, res) => {
         }
       });
 
+      // ── MEETING_BOOKED state: send a hardcoded confirmation — do NOT route through AI ──
+      // This ensures the AI never falls back to [OFFER_MEETING] on this turn.
       const confirmMsg =
-        `Great! Your consultation has been scheduled for ${chosen.displayTime}. ` +
-        `You will receive a meeting confirmation, a Google Meet link, program details, and a follow-up email shortly. ` +
-        `Is there anything else you'd like to know before we end the call?`;
-      // Use respond TwiML so we can hear their reply, not hang up immediately
+        `Perfect! Your free consultation has been successfully scheduled. ` +
+        `You'll receive a confirmation email with your meeting details and Google Meet link shortly. ` +
+        `Before we finish, is there anything else you'd like to know about SAT, ACT, AP, College Admissions, or your upcoming consultation?`;
       return res.send(twilioSvc.twimlRespond(
         confirmMsg,
         respondUrl(cfg.server.baseUrl, leadId)
