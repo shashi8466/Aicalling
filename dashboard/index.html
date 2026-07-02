@@ -3294,7 +3294,7 @@ async function openLead(id) {
               ${c.sentiment ? `<span>${sentEmoji(c.sentiment)} ${esc(c.sentiment)}</span>` : ''}
             </div>
             ${c.aiSummary ? `<div class="summary"><strong>AI Summary:</strong>\n${esc(c.aiSummary)}</div>` : ''}
-            ${c.recordingUrl ? `<audio controls src="/api/leads/${l._id}/recording/${idx}"></audio>` : ''}
+            ${c.recordingUrl ? `<audio controls preload="none" data-rec="/api/leads/${l._id}/recording/${idx}"></audio>` : ''}
             ${c.transcript ? `
               <details style="margin-top:8px"><summary style="cursor:pointer;color:var(--brand);font-size:12px">📄 View Transcript</summary>
                 <div class="transcript">${esc(c.transcript)}</div>
@@ -3390,10 +3390,44 @@ async function openLead(id) {
 
     document.getElementById('modalBody').innerHTML = body;
     document.getElementById('leadModal').classList.add('active');
+    hydrateRecordings();
   } catch(e) { toast(e.message, 'error'); }
 }
 
-function closeModal() { document.getElementById('leadModal').classList.remove('active'); }
+// Call recordings live behind auth-protected /api routes, so a native
+// <audio src="…"> can't send the Bearer token. Fetch each recording as an
+// authenticated blob (the patched fetch injects the token) and assign an
+// object URL. Downloading the full blob also lets the browser show duration.
+const _recordingObjectUrls = [];
+async function hydrateRecordings() {
+  const players = document.querySelectorAll('#modalBody audio[data-rec]');
+  players.forEach(async (el) => {
+    const url = el.getAttribute('data-rec');
+    el.removeAttribute('data-rec'); // guard against double-load
+    try {
+      const res = await fetch(url); // patched window.fetch adds Authorization
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const blob = await res.blob();
+      if (!blob || blob.size === 0) throw new Error('empty recording');
+      const objUrl = URL.createObjectURL(blob);
+      _recordingObjectUrls.push(objUrl);
+      el.src = objUrl;
+    } catch (_) {
+      const note = document.createElement('div');
+      note.style.cssText = 'font-size:12px;color:var(--muted);margin-top:6px';
+      note.textContent = '🎙️ Recording unavailable';
+      el.replaceWith(note);
+    }
+  });
+}
+
+function closeModal() {
+  document.getElementById('leadModal').classList.remove('active');
+  // Free any blob URLs created for this lead's recordings
+  while (_recordingObjectUrls.length) {
+    try { URL.revokeObjectURL(_recordingObjectUrls.pop()); } catch (_) {}
+  }
+}
 
 // ─── Actions ────────────────────────────────────────
 function isValidPhone(p) {

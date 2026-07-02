@@ -184,6 +184,37 @@ h2 {
 }
 .error-box.show { display: flex; align-items: flex-start; gap: 8px; }
 
+.success-box {
+  display: none;
+  background: rgba(16,185,129,.12);
+  border: 1px solid rgba(16,185,129,.4);
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 13px;
+  color: #6ee7b7;
+  margin-top: 14px;
+}
+.success-box.show { display: flex; align-items: flex-start; gap: 8px; }
+
+.forgot-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -4px;
+  margin-bottom: 4px;
+}
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--brand);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  padding: 2px 0;
+}
+.link-btn:hover { text-decoration: underline; }
+
 .loading-spinner {
   display: inline-block;
   width: 16px;
@@ -317,12 +348,33 @@ h2 {
       </div>
     </div>
 
+    <div class="forgot-row signin-only-inline" id="forgotRow">
+      <a href="#" class="link-btn" id="forgotLink" onclick="showForgot(event)">Forgot password?</a>
+    </div>
+
     <button type="submit" class="btn-login" id="loginBtn">Sign In</button>
+  </form>
+
+  <!-- Forgot-password view (hidden by default) -->
+  <form id="forgotForm" onsubmit="submitForgot(event)" style="display:none;">
+    <div class="form-group">
+      <label>Email address</label>
+      <input type="email" id="forgotEmail" placeholder="you@example.com" autocomplete="email" required>
+    </div>
+    <button type="submit" class="btn-login" id="forgotBtn">Send reset link</button>
+    <div class="forgot-row" style="justify-content:center; margin-top:16px;">
+      <a href="#" class="link-btn" onclick="hideForgot(event)">← Back to sign in</a>
+    </div>
   </form>
 
   <div class="error-box" id="errorBox">
     <span>⚠️</span>
     <span id="errorMsg">Invalid email or password.</span>
+  </div>
+
+  <div class="success-box" id="successBox">
+    <span>✅</span>
+    <span id="successMsg"></span>
   </div>
 
   <p class="footer-note">Aiprep365 © 2025 · Admin use only</p>
@@ -368,7 +420,10 @@ async function checkExistingSession() {
 function switchMode(mode) {
   currentMode = mode;
   hideError();
-  
+  hideSuccess();
+  // Always leave the forgot-password view when switching tabs
+  exitForgotView();
+
   const title = document.querySelector('h2');
   const subtitle = document.querySelector('.subtitle');
   const tabSignin = document.getElementById('tabSignin');
@@ -376,6 +431,7 @@ function switchMode(mode) {
   const signupFields = document.querySelectorAll('.signup-only');
   const submitBtn = document.getElementById('loginBtn');
   const fullNameInput = document.getElementById('fullName');
+  const forgotRow = document.getElementById('forgotRow');
 
   if (mode === 'signup') {
     title.textContent = 'Create account';
@@ -385,6 +441,7 @@ function switchMode(mode) {
     signupFields.forEach(f => f.style.display = 'block');
     fullNameInput.required = true;
     submitBtn.textContent = 'Register & Sign In';
+    forgotRow.style.display = 'none';
   } else {
     title.textContent = 'Welcome back';
     subtitle.textContent = 'Sign in to your dashboard';
@@ -393,6 +450,68 @@ function switchMode(mode) {
     signupFields.forEach(f => f.style.display = 'none');
     fullNameInput.required = false;
     submitBtn.textContent = 'Sign In';
+    forgotRow.style.display = 'flex';
+  }
+}
+
+// ── Forgot-password view toggling ──────────────────────────────────────────
+function showForgot(e) {
+  if (e) e.preventDefault();
+  hideError();
+  hideSuccess();
+  document.getElementById('loginForm').style.display = 'none';
+  document.querySelector('.auth-tabs').style.display = 'none';
+  document.getElementById('forgotForm').style.display = 'block';
+  document.querySelector('h2').textContent = 'Reset your password';
+  document.querySelector('.subtitle').textContent =
+    'Enter your email and we’ll send you a reset link';
+  // Prefill from the login email field if present
+  const loginEmail = document.getElementById('loginEmail').value.trim();
+  if (loginEmail) document.getElementById('forgotEmail').value = loginEmail;
+}
+
+function exitForgotView() {
+  document.getElementById('forgotForm').style.display = 'none';
+  document.querySelector('.auth-tabs').style.display = 'flex';
+  document.getElementById('loginForm').style.display = 'block';
+}
+
+function hideForgot(e) {
+  if (e) e.preventDefault();
+  hideError();
+  hideSuccess();
+  exitForgotView();
+  switchMode('signin');
+}
+
+async function submitForgot(e) {
+  e.preventDefault();
+  hideError();
+  hideSuccess();
+  const email = document.getElementById('forgotEmail').value.trim();
+  const btn   = document.getElementById('forgotBtn');
+  if (!email) return showError('Email is required');
+
+  btn.disabled  = true;
+  btn.innerHTML = '<span class="loading-spinner"></span> Sending…';
+
+  try {
+    const res  = await fetch('/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not send reset email.');
+
+    showSuccess(data.message ||
+      'If an account exists for that email, a password reset link has been sent. Please check your inbox.');
+    btn.disabled  = false;
+    btn.innerHTML = 'Send reset link';
+  } catch (err) {
+    showError(err.message || 'Unexpected error. Please try again.');
+    btn.disabled  = false;
+    btn.innerHTML = 'Send reset link';
   }
 }
 
@@ -517,6 +636,13 @@ function showError(msg) {
 function hideError() {
   document.getElementById('errorBox').classList.remove('show');
 }
+function showSuccess(msg) {
+  document.getElementById('successMsg').textContent = msg;
+  document.getElementById('successBox').classList.add('show');
+}
+function hideSuccess() {
+  document.getElementById('successBox').classList.remove('show');
+}
 function friendlyError(msg) {
   if (!msg) return 'Sign in failed. Please try again.';
   if (msg.includes('Invalid login credentials')) return 'Incorrect email or password.';
@@ -526,10 +652,21 @@ function friendlyError(msg) {
   return msg;
 }
 
+// Show a confirmation banner after a completed password reset
+function checkResetFlag() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('reset') === 'success') {
+    showSuccess('Your password has been reset. Please sign in with your new password.');
+    // Clean the query string so the banner doesn't persist on refresh
+    window.history.replaceState({}, document.title, '/login');
+  }
+}
+
 // Boot
 (async () => {
   const ok = await initSupabase();
   if (ok) await checkExistingSession();
+  checkResetFlag();
 })();
 </script>
 </body>

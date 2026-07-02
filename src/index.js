@@ -75,6 +75,16 @@ app.get('/login', (req, res) => {
   res.sendFile(path.join(dashDir, 'login.html'));
 });
 
+// Redirect legacy explicit .html path to clean URL
+app.get('/reset-password.html', (req, res) => {
+  res.redirect(301, '/reset-password' + (req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''));
+});
+
+// Route for clean password-reset URL (target of the Supabase recovery email link)
+app.get('/reset-password', (req, res) => {
+  res.sendFile(path.join(dashDir, 'reset-password.html'));
+});
+
 if (fs.existsSync(dashDir)) app.use('/', express.static(dashDir));
 
 // ── Global error handler ────────────────────────────────────────────────────
