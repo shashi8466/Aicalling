@@ -528,6 +528,34 @@ tbody tr:last-child td { border-bottom: none; }
 audio { width: 100%; margin-top: 10px; }
 .action-bar { display:flex; gap: 8px; flex-wrap: wrap; padding-top: 16px; border-top: 1px solid var(--border); margin-top: 16px; }
 
+/* Bulk-select action bar */
+.bulk-bar {
+  position: sticky; bottom: 0; z-index: 40;
+  display: none; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: linear-gradient(135deg,#1e293b,#273449);
+  border: 1px solid var(--brand); border-radius: 12px;
+  padding: 12px 20px; margin: 8px 0 0;
+  box-shadow: 0 8px 32px rgba(59,130,246,.25);
+  animation: slideUp .2s ease;
+}
+.bulk-bar.visible { display: flex; }
+@keyframes slideUp { from{transform:translateY(10px);opacity:0} to{transform:translateY(0);opacity:1} }
+.bulk-bar .bulk-count { font-weight: 700; color: var(--brand); font-size: 14px; margin-right: 4px; }
+.bulk-bar select { padding: 7px 11px; border-radius: 8px; background: var(--panel2); color: var(--text); border: 1px solid var(--border); font-size: 13px; }
+.bulk-bar .bulk-clear { margin-left: auto; color: var(--muted); background: transparent; border: none; cursor: pointer; font-size: 13px; }
+
+/* Campaign badge in lead modal */
+.campaign-row { display:flex; align-items:center; gap:10px; background:var(--panel2); padding:10px 14px; border-radius:8px; margin-bottom:18px; }
+.campaign-row .camp-icon { font-size:18px; }
+.campaign-row .camp-name { font-weight:600; font-size:14px; }
+.campaign-row .camp-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+.campaign-row select { margin-left:auto; padding:6px 10px; border-radius:8px; background:var(--panel); color:var(--text); border:1px solid var(--border); font-size:13px; cursor:pointer; }
+.campaign-row select:hover { border-color:var(--brand); }
+
+/* Checkbox column */
+table th.cb-col, table td.cb-col { width:36px; padding:8px 4px 8px 12px; }
+table td.cb-col input[type=checkbox], table th.cb-col input[type=checkbox] { width:16px; height:16px; cursor:pointer; accent-color:var(--brand); }
+
 /* Analytics bars */
 .bar-row { margin-bottom: 12px; }
 .bar-row .label { display:flex; justify-content:space-between; font-size: 13px; margin-bottom: 4px; }
@@ -930,6 +958,38 @@ audio { width: 100%; margin-top: 10px; }
 }
 .cd-tab:hover { background:var(--panel2); color:var(--text); }
 .cd-tab.active { background:rgba(59,130,246,.15); color:var(--brand); }
+
+/* ─── Campaign Leads Sub-View ─────────────────────────── */
+.camp-leads-panel { display:none; flex-direction:column; gap:16px; animation: fadeIn .2s ease; }
+.camp-leads-panel.visible { display:flex; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+.camp-back-bar {
+  display:flex; align-items:center; gap:12px;
+  background: linear-gradient(135deg, rgba(59,130,246,.12), rgba(139,92,246,.08));
+  border: 1px solid rgba(59,130,246,.25);
+  border-radius: 12px; padding: 12px 20px;
+}
+.camp-back-btn {
+  background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+  padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all .15s; display:flex; align-items:center; gap:6px;
+}
+.camp-back-btn:hover { background: var(--brand); border-color: var(--brand); color:#fff; }
+.camp-back-title { font-size:18px; font-weight:700; }
+.camp-back-badge {
+  font-size:11px; padding:3px 10px; border-radius:20px;
+  background: rgba(59,130,246,.15); color: var(--brand); font-weight:600;
+  margin-left:8px;
+}
+.camp-leads-kpis { display:grid; grid-template-columns:repeat(6,1fr); gap:10px; }
+@media(max-width:1100px){ .camp-leads-kpis{grid-template-columns:repeat(3,1fr);} }
+@media(max-width:700px){  .camp-leads-kpis{grid-template-columns:repeat(2,1fr);} }
+.btn-manage-leads {
+  padding:5px 12px; font-size:12px; font-weight:600; border-radius:7px;
+  background:rgba(59,130,246,.15); color:var(--brand); border:1px solid rgba(59,130,246,.3);
+  cursor:pointer; transition:all .15s; white-space:nowrap;
+}
+.btn-manage-leads:hover { background:var(--brand); color:#fff; }
 </style>
 </head>
 <body>
@@ -952,6 +1012,7 @@ audio { width: 100%; margin-top: 10px; }
       <a data-view="counselor"><span class="icon">🏥</span> Counselor Hub</a>
       <a data-view="pipeline"><span class="icon">🔄</span> Pipeline</a>
       <a data-view="enrollments"><span class="icon">📋</span> Enrollments <span class="nav-badge" id="navEnrollCount">0</span></a>
+      <a data-view="campaigns"><span class="icon">📣</span> Campaigns</a>
       <a data-view="counselors"><span class="icon">👤</span> Counselors</a>
       <a data-view="settings"><span class="icon">⚙️</span> Settings</a>
     </nav>
@@ -1069,8 +1130,21 @@ audio { width: 100%; margin-top: 10px; }
                 <option value="">All Categories</option>
                 <option value="hot">🔥 Hot</option><option value="warm">⚡ Warm</option><option value="cold">❄️ Cold</option>
               </select>
+              <select id="leadCampaignFilter" onchange="filterLeads()" style="display:none">
+                <option value="">All Campaigns</option>
+              </select>
               <button class="btn btn-primary btn-sm" onclick="openAddLead()">➕ Add Lead</button>
             </div>
+          </div>
+          <!-- Bulk action bar -->
+          <div class="bulk-bar" id="bulkBar">
+            <span><span class="bulk-count" id="bulkCount">0</span> leads selected</span>
+            <select id="bulkCampaignSel">
+              <option value="">— Assign to Campaign —</option>
+              <option value="__none__">❌ Remove Campaign</option>
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="bulkAssignCampaign()">📣 Assign</button>
+            <button class="bulk-clear" onclick="clearBulkSelect()">✕ Clear</button>
           </div>
           <div id="leadsTable"></div>
         </div>
@@ -1358,6 +1432,88 @@ audio { width: 100%; margin-top: 10px; }
             </div>
           </div>
         </div>
+      </section>
+
+      <!-- ─── CAMPAIGNS ─── -->
+      <section class="view" id="view-campaigns">
+
+        <!-- Level 1: Campaign Overview (shown by default) -->
+        <div id="campaignOverview">
+          <div class="kpi-strip" id="campaignKpis"></div>
+          <div class="card">
+            <div class="card-header">
+              <h3>AI Outreach Campaigns</h3>
+              <div class="filters">
+                <button class="btn btn-secondary btn-sm" onclick="loadCampaigns()">↻ Refresh</button>
+                <button class="btn btn-primary btn-sm" onclick="openCampaignForm()">➕ New Campaign</button>
+              </div>
+            </div>
+            <div id="campaignsTable"></div>
+          </div>
+        </div>
+
+        <!-- Level 2: Per-Campaign Leads Page -->
+        <div class="camp-leads-panel" id="campaignLeadsPanel">
+          <!-- Back bar -->
+          <div class="camp-back-bar">
+            <button class="camp-back-btn" onclick="closeCampaignLeads()">← Back to Campaigns</button>
+            <div>
+              <span class="camp-back-title" id="clpTitle">Campaign Leads</span>
+              <span class="camp-back-badge" id="clpBadge">Loading…</span>
+            </div>
+            <div style="margin-left:auto;display:flex;gap:8px">
+              <button class="btn btn-secondary btn-sm" onclick="refreshCampaignLeads()">↻ Refresh</button>
+              <button class="btn btn-primary btn-sm" onclick="openAddLeadForCampaign()">➕ Add Lead</button>
+            </div>
+          </div>
+
+          <!-- KPI strip -->
+          <div class="camp-leads-kpis" id="clpKpis"></div>
+
+          <!-- Leads table card -->
+          <div class="card">
+            <div class="card-header">
+              <h3 id="clpTableTitle">All Leads</h3>
+              <div class="filters">
+                <input type="text" id="clpSearch" placeholder="Search leads…" oninput="filterCampaignLeads()">
+                <select id="clpStatusFilter" onchange="filterCampaignLeads()">
+                  <option value="">All Statuses</option>
+                  <option value="new">New</option>
+                  <option value="queued">Queued</option>
+                  <option value="calling">Calling</option>
+                  <option value="contacted">Contacted</option>
+                  <option value="qualified">Qualified</option>
+                  <option value="meeting-scheduled">Meeting Scheduled</option>
+                  <option value="meeting-completed">Meeting Completed</option>
+                  <option value="proposal-sent">Proposal Sent</option>
+                  <option value="interested">Interested</option>
+                  <option value="enrollment-pending">Enrollment Pending</option>
+                  <option value="payment-pending">Payment Pending</option>
+                  <option value="enrolled">Enrolled</option>
+                  <option value="lost">Lost</option>
+                </select>
+                <select id="clpCategoryFilter" onchange="filterCampaignLeads()">
+                  <option value="">All Categories</option>
+                  <option value="hot">🔥 Hot</option>
+                  <option value="warm">⚡ Warm</option>
+                  <option value="cold">❄️ Cold</option>
+                </select>
+              </div>
+            </div>
+            <!-- Bulk bar for campaign leads -->
+            <div class="bulk-bar" id="clpBulkBar">
+              <span><span class="bulk-count" id="clpBulkCount">0</span> leads selected</span>
+              <select id="clpBulkCampaignSel">
+                <option value="">— Assign to Campaign —</option>
+                <option value="__none__">❌ Remove Campaign</option>
+              </select>
+              <button class="btn btn-primary btn-sm" onclick="bulkAssignCampaignClp()">📣 Assign</button>
+              <button class="bulk-clear" onclick="clearClpBulkSelect()">✕ Clear</button>
+            </div>
+            <div id="clpLeadsTable"></div>
+          </div>
+        </div>
+
       </section>
 
       <!-- ─── COUNSELORS (Admin only) ─── -->
@@ -1848,6 +2004,12 @@ audio { width: 100%; margin-top: 10px; }
             <option value="enrollment-pending">Enrollment Pending</option>
             <option value="enrolled">Enrolled</option>
             <option value="lost">Lost</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Campaign</label>
+          <select id="lf_campaign">
+            <option value="">— Default (Demo Test Follow-up) —</option>
           </select>
         </div>
         <div class="form-row">
@@ -2601,7 +2763,7 @@ function showView(name) {
     overview:   'Overview', leads: 'All Leads', calls: 'Call Activity',
     meetings:   'Scheduled Meetings', analytics: 'Reports & Analytics',
     counselor:  'Counselor Dashboard', pipeline: 'Enrollment Pipeline',
-    enrollments:'Enrollments', counselors: 'Counselor Management', settings: 'Settings',
+    enrollments:'Enrollments', campaigns: 'Campaign Management', counselors: 'Counselor Management', settings: 'Settings',
   };
   document.getElementById('pageTitle').textContent = titles[name] || name;
   if (name === 'overview')    loadOverview();
@@ -2612,6 +2774,7 @@ function showView(name) {
   if (name === 'counselor')   loadCounselor('today');
   if (name === 'pipeline')    loadPipeline();
   if (name === 'enrollments') loadEnrollments();
+  if (name === 'campaigns')   loadCampaigns();
   if (name === 'counselors')  loadCounselors();
   if (name === 'settings')    showSettingsPanel('profile');
 }
@@ -2822,7 +2985,10 @@ function kpiChip(icon, val, label, color) {
 async function loadLeads() {
   try {
     LEADS = await api('/leads');
+    // Best-effort campaign cache so lead rows can show their campaign badge.
+    if (!CAMPAIGNS.length) { try { const d = await api('/campaigns'); CAMPAIGNS = d.campaigns || []; } catch(_) {} }
     document.getElementById('navLeadCount').textContent = LEADS.length;
+    populateCampaignLeadFilter();
     renderLeadsKpis();
     renderLeadsTable();
     loadOverview();
@@ -2848,32 +3014,119 @@ function renderLeadsKpis() {
 }
 
 function filterLeads() {
-  const search = document.getElementById('leadSearch').value.toLowerCase();
-  const status = document.getElementById('leadStatusFilter').value;
+  const search   = document.getElementById('leadSearch').value.toLowerCase();
+  const status   = document.getElementById('leadStatusFilter').value;
   const category = document.getElementById('leadCategoryFilter').value;
+  const campaign = (document.getElementById('leadCampaignFilter') || {}).value || '';
   let filtered = LEADS;
   if (search)   filtered = filtered.filter(l => (l.fullName+l.email+l.phone).toLowerCase().includes(search));
   if (status)   filtered = filtered.filter(l => l.status === status);
   if (category) filtered = filtered.filter(l => l.leadCategory === category);
+  if (campaign === '__none__') filtered = filtered.filter(l => !l.campaignId);
+  else if (campaign) filtered = filtered.filter(l => l.campaignId === campaign);
+  clearBulkSelect();
   renderTable('leadsTable', filtered, true);
 }
 
-function renderLeadsTable() { renderTable('leadsTable', LEADS, true); }
+function renderLeadsTable() { clearBulkSelect(); renderTable('leadsTable', LEADS, true); }
+
+// ─── Bulk-select helpers ─────────────────────────────
+let _selectedLeads = new Set();
+
+function toggleLeadSelect() {
+  _selectedLeads.clear();
+  document.querySelectorAll('.lead-chk:checked').forEach(el => _selectedLeads.add(el.dataset.id));
+  updateBulkBar();
+}
+
+function selectAllLeads(checked) {
+  _selectedLeads.clear();
+  document.querySelectorAll('.lead-chk').forEach(el => {
+    el.checked = checked;
+    if (checked) _selectedLeads.add(el.dataset.id);
+  });
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  const bar = document.getElementById('bulkBar');
+  if (!bar) return;
+  const n = _selectedLeads.size;
+  document.getElementById('bulkCount').textContent = n;
+  bar.classList.toggle('visible', n > 0);
+  // Populate campaign dropdown from cache
+  const sel = document.getElementById('bulkCampaignSel');
+  if (sel && sel.options.length <= 2 && CAMPAIGNS.length) {
+    CAMPAIGNS.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.id; o.textContent = c.name + (c.status !== 'active' ? ' (' + c.status + ')' : '');
+      sel.appendChild(o);
+    });
+  }
+}
+
+function clearBulkSelect() {
+  _selectedLeads.clear();
+  document.querySelectorAll('.lead-chk').forEach(el => el.checked = false);
+  const chkAll = document.getElementById('chkAll');
+  if (chkAll) chkAll.checked = false;
+  const bar = document.getElementById('bulkBar');
+  if (bar) bar.classList.remove('visible');
+}
+
+async function bulkAssignCampaign() {
+  const sel = document.getElementById('bulkCampaignSel');
+  const val = sel ? sel.value : '';
+  if (!val) { toast('Choose a campaign first', 'error'); return; }
+  if (!_selectedLeads.size) { toast('Select at least one lead', 'error'); return; }
+  const leadIds = [..._selectedLeads];
+  const campaignId = val === '__none__' ? null : val;
+  const label = val === '__none__' ? 'removed' : 'assigned to campaign';
+  try {
+    await api('/campaigns/assign', { method: 'POST', body: JSON.stringify({ campaignId, leadIds }) });
+    toast(`✅ ${leadIds.length} lead(s) ${label}`, 'success');
+    clearBulkSelect();
+    await loadLeads();
+  } catch(e) { toast('❌ ' + e.message, 'error'); }
+}
+
+// ─── Populate campaign filter on leads page ──────────
+function populateCampaignLeadFilter() {
+  const sel = document.getElementById('leadCampaignFilter');
+  if (!sel) return;
+  // Remove old dynamic options
+  while (sel.options.length > 1) sel.remove(1);
+  // Add 'No Campaign' option
+  const noneOpt = document.createElement('option');
+  noneOpt.value = '__none__'; noneOpt.textContent = '— No Campaign';
+  sel.appendChild(noneOpt);
+  CAMPAIGNS.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.id; o.textContent = '📣 ' + c.name;
+    sel.appendChild(o);
+  });
+  sel.style.display = CAMPAIGNS.length ? '' : 'none';
+}
 
 function renderTable(elId, leads, full) {
   const el = document.getElementById(elId);
   if (!leads.length) { el.innerHTML = '<div class="empty"><div class="icon">📭</div>No leads yet. Click <strong>➕ Add Lead</strong> to get started.</div>'; return; }
+  const isLeadsView = elId === 'leadsTable';
   el.innerHTML = `
     <table>
-      <thead><tr><th>Name</th><th>Grade</th><th>Phone</th><th>Program</th><th>Score</th><th>Status</th><th>Calls</th><th>Actions</th></tr></thead>
+      <thead><tr>
+        ${isLeadsView ? `<th class="cb-col"><input type="checkbox" id="chkAll" title="Select all" onchange="selectAllLeads(this.checked)"></th>` : ''}
+        <th>Name</th><th>Grade</th><th>Phone</th><th>Program</th><th>Score</th><th>Status</th><th>Calls</th><th>Actions</th>
+      </tr></thead>
       <tbody>${leads.map(l => {
         const phoneValid = isValidPhone(l.phone);
         return `
-        <tr onclick="openLead('${l._id}')" style="cursor:pointer">
+        <tr onclick="openLead('${l._id}')" style="cursor:pointer" data-lead-id="${l._id}">
+          ${isLeadsView ? `<td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="lead-chk" data-id="${l._id}" onchange="toggleLeadSelect()"></td>` : ''}
           <td data-label="Name"><strong>${esc(l.fullName)}</strong><br><span style="color:var(--muted);font-size:12px">${esc(l.email)}</span></td>
           <td data-label="Grade">${esc(l.grade || '—')}</td>
           <td data-label="Phone" style="font-family:monospace;font-size:12px;color:${phoneValid ? 'inherit' : 'var(--hot)'}" title="${phoneValid ? '' : 'Invalid phone'}">${phoneValid ? '' : '⚠️ '}${esc(l.phone)}</td>
-          <td data-label="Program">${esc(l.courseInterest || '—')}</td>
+          <td data-label="Program">${esc(l.courseInterest || '—')}${l.campaignId ? `<br><span style="font-size:10px;color:var(--brand,#3b82f6)">📣 ${esc(campaignName(l.campaignId))}</span>` : ''}</td>
           <td data-label="Score"><span class="score-badge ${l.leadCategory}">${l.leadScore} ${catEmoji(l.leadCategory)}</span></td>
           <td data-label="Status"><span class="status-badge ${l.status}">${fmtStatus(l.status)}</span></td>
           <td data-label="Calls">${l.totalCallAttempts || 0}</td>
@@ -2893,6 +3146,355 @@ function renderTable(elId, leads, full) {
       `;}).join('')}</tbody>
     </table>
   `;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//   CAMPAIGN MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════
+let CAMPAIGNS = [];           // cache of campaigns (for lead-form selector)
+const CAMPAIGN_STATUS_BADGE = {
+  active:    { label: 'Active',    color: 'var(--success, #10b981)' },
+  paused:    { label: 'Paused',    color: 'var(--warn, #f59e0b)' },
+  completed: { label: 'Completed', color: 'var(--muted, #94a3b8)' },
+};
+
+async function loadCampaigns() {
+  const el = document.getElementById('campaignsTable');
+  el.innerHTML = '<div style="text-align:center;color:var(--muted);padding:24px">Loading campaigns…</div>';
+  try {
+    const data = await api('/campaigns');
+    CAMPAIGNS = data.campaigns || [];
+    renderCampaignKpis(data);
+    renderCampaignsTable(data);
+  } catch (e) {
+    const setup = /set up|schema_campaigns/i.test(e.message);
+    el.innerHTML = `<div class="empty"><div class="icon">📣</div>${esc(e.message)}${
+      setup ? '<br><br><span style="color:var(--muted);font-size:12px">Run <code>supabase/schema_campaigns.sql</code> in the Supabase SQL editor, then refresh.</span>' : ''
+    }</div>`;
+    document.getElementById('campaignKpis').innerHTML = '';
+  }
+}
+
+function renderCampaignKpis(data) {
+  const cs = data.campaigns || [];
+  const sum = (k) => cs.reduce((s, c) => s + (c.stats[k] || 0), 0);
+  const totalLeads = sum('totalLeads');
+  const totalEnroll = sum('enrollments');
+  const active = cs.filter(c => c.status === 'active').length;
+  const overall = totalLeads ? ((totalEnroll / totalLeads) * 100).toFixed(1) : '0.0';
+  document.getElementById('campaignKpis').innerHTML =
+    kpiChip('📣', cs.length,            'Campaigns',       '#3b82f6') +
+    kpiChip('🟢', active,               'Active',          '#10b981') +
+    kpiChip('👥', totalLeads,           'Total Students',  '#6366f1') +
+    kpiChip('📞', sum('callsCompleted'),'Calls Completed', '#f59e0b') +
+    kpiChip('📅', sum('meetingsBooked'),'Meetings Booked', '#8b5cf6') +
+    kpiChip('🎓', totalEnroll,          'Enrollments',     '#22c55e') +
+    kpiChip('📈', overall + '%',        'Overall Conv.',   '#ec4899');
+}
+
+// Campaign-type icon map
+const CAMP_ICONS = {
+  'demo-test-followup': '📝',
+  'sat-batch':          '📘',
+  'act-batch':          '📙',
+  'ap-course':          '📗',
+  'college-admissions': '🎓',
+  'scholarship-webinar':'🏆',
+  'free-mock-test':     '🧪',
+  'parent-counseling':  '👨‍👩‍👧',
+  'custom':             '⚙️',
+};
+
+function renderCampaignsTable(data) {
+  const cs = data.campaigns || [];
+  const el = document.getElementById('campaignsTable');
+  if (!cs.length) { el.innerHTML = '<div class="empty"><div class="icon">📣</div>No campaigns yet.</div>'; return; }
+  el.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Campaign</th><th>Program</th><th>Students</th><th>Calls</th>
+        <th>Meetings</th><th>Enrolled</th><th>Conv. Rate</th><th>Status</th><th>Action</th>
+      </tr></thead>
+      <tbody>${cs.map(c => {
+        const s = c.stats;
+        const icon = CAMP_ICONS[c.type] || CAMP_ICONS['custom'];
+        return `
+        <tr>
+          <td data-label="Campaign">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:22px">${icon}</span>
+              <div>
+                <strong>${esc(c.name)}</strong>${c.isDefault ? ' <span style="font-size:10px;color:var(--muted)">(built-in)</span>' : ''}<br>
+                <span style="color:var(--muted);font-size:12px">${esc(c.goal || c.description || '')}</span>
+              </div>
+            </div>
+          </td>
+          <td data-label="Program">${esc(c.program || '—')}</td>
+          <td data-label="Students"><strong>${s.totalLeads}</strong></td>
+          <td data-label="Calls">${s.callsCompleted}</td>
+          <td data-label="Meetings">${s.meetingsBooked}</td>
+          <td data-label="Enrolled">${s.enrollments}</td>
+          <td data-label="Conv. Rate"><strong>${s.conversionRate}%</strong></td>
+          <td data-label="Status" onclick="event.stopPropagation()">
+            <select onchange="setCampaignStatus('${c.id}', this.value)" style="padding:4px 6px;border-radius:6px;font-size:12px;font-weight:600;background:var(--panel2,#273449);color:${(CAMPAIGN_STATUS_BADGE[c.status]||{}).color||'inherit'};border:1px solid var(--border,#334155)">
+              <option value="active"    ${c.status==='active'?'selected':''}>🟢 Active</option>
+              <option value="paused"    ${c.status==='paused'?'selected':''}>⏸ Paused</option>
+              <option value="completed" ${c.status==='completed'?'selected':''}>✅ Completed</option>
+            </select>
+          </td>
+          <td data-label="Action" onclick="event.stopPropagation()">
+            <button class="btn-manage-leads" onclick="openCampaignLeads('${c.id}','${esc(c.name)}','${c.type}')">
+              📋 Manage Leads
+            </button>
+          </td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+    ${data.unassignedLeads ? `<div style="color:var(--muted);font-size:12px;margin-top:10px">ℹ️ ${data.unassignedLeads} lead(s) reference a removed campaign and are not counted above.</div>` : ''}
+  `;
+}
+
+async function setCampaignStatus(id, status) {
+  try {
+    await api('/campaigns/' + id, { method: 'PATCH', body: JSON.stringify({ status }) });
+    toast('✅ Campaign status updated', 'success');
+    loadCampaigns();
+  } catch (e) { toast('❌ ' + e.message, 'error'); loadCampaigns(); }
+}
+
+function openCampaignForm() {
+  const name = prompt('New campaign name (e.g. "Summer SAT Blitz"):');
+  if (!name || !name.trim()) return;
+  const program = prompt('Program / audience (e.g. SAT, ACT, Scholarships):', '') || '';
+  const goal = prompt('Goal (optional):', '') || '';
+  api('/campaigns', {
+    method: 'POST',
+    body: JSON.stringify({ name: name.trim(), type: 'custom', program: program.trim(), goal: goal.trim() }),
+  }).then(() => {
+    toast('✅ Campaign created', 'success');
+    loadCampaigns();
+  }).catch(e => toast('❌ ' + e.message, 'error'));
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//   CAMPAIGN LEADS SUB-VIEW
+// ═══════════════════════════════════════════════════════════════════════
+let CLP_CAMPAIGN_ID   = null;   // UUID of current campaign in sub-view
+let CLP_CAMPAIGN_NAME = '';     // display name
+let CLP_ALL_LEADS     = [];     // all leads for this campaign (unfiltered)
+
+async function openCampaignLeads(campaignId, campaignName, campaignType) {
+  CLP_CAMPAIGN_ID   = campaignId;
+  CLP_CAMPAIGN_NAME = campaignName;
+  CLP_ALL_LEADS     = [];
+
+  // Show sub-view, hide overview
+  document.getElementById('campaignOverview').style.display  = 'none';
+  const panel = document.getElementById('campaignLeadsPanel');
+  panel.classList.add('visible');
+
+  // Set header
+  document.getElementById('clpTitle').textContent = campaignName;
+  document.getElementById('clpBadge').textContent = 'Loading…';
+  document.getElementById('clpTableTitle').textContent = campaignName + ' — Leads';
+
+  // Clear search/filter
+  document.getElementById('clpSearch').value = '';
+  document.getElementById('clpStatusFilter').value = '';
+  document.getElementById('clpCategoryFilter').value = '';
+  document.getElementById('clpLeadsTable').innerHTML = '<div style="text-align:center;color:var(--muted);padding:24px">Loading leads…</div>';
+
+  // Populate bulk campaign selector
+  const bulkSel = document.getElementById('clpBulkCampaignSel');
+  if (bulkSel && bulkSel.options.length <= 2 && CAMPAIGNS.length) {
+    CAMPAIGNS.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.id;
+      o.textContent = c.name + (c.status !== 'active' ? ' (' + c.status + ')' : '');
+      bulkSel.appendChild(o);
+    });
+  }
+
+  await refreshCampaignLeads();
+}
+
+async function refreshCampaignLeads() {
+  if (!CLP_CAMPAIGN_ID) return;
+  try {
+    const leads = await api('/leads?campaignId=' + CLP_CAMPAIGN_ID);
+    CLP_ALL_LEADS = leads;
+    document.getElementById('clpBadge').textContent = leads.length + ' lead' + (leads.length !== 1 ? 's' : '');
+    renderCampaignLeadsKpis(leads);
+    renderClpTable(leads);
+  } catch(e) {
+    document.getElementById('clpLeadsTable').innerHTML =
+      '<div class="empty"><div class="icon">⚠️</div>' + esc(e.message) + '</div>';
+  }
+}
+
+function closeCampaignLeads() {
+  CLP_CAMPAIGN_ID   = null;
+  CLP_CAMPAIGN_NAME = '';
+  CLP_ALL_LEADS     = [];
+  clearClpBulkSelect();
+  document.getElementById('campaignLeadsPanel').classList.remove('visible');
+  document.getElementById('campaignOverview').style.display = '';
+}
+
+function renderCampaignLeadsKpis(leads) {
+  const el = document.getElementById('clpKpis');
+  if (!el) return;
+  const total     = leads.length;
+  const hot       = leads.filter(l => l.leadCategory === 'hot').length;
+  const contacted = leads.filter(l => l.totalCallAttempts > 0).length;
+  const meetings  = leads.filter(l => ['meeting-scheduled','meeting-completed'].includes(l.status)).length;
+  const enrolled  = leads.filter(l => l.status === 'enrolled').length;
+  const avgScore  = total ? Math.round(leads.reduce((s,l)=>s+(l.leadScore||0),0)/total) : 0;
+  el.innerHTML =
+    kpiChip('👥', total,     'Total Leads',  '#3b82f6') +
+    kpiChip('🔥', hot,       'Hot Leads',    '#ef4444') +
+    kpiChip('📞', contacted, 'Contacted',    '#f59e0b') +
+    kpiChip('📅', meetings,  'Meetings',     '#10b981') +
+    kpiChip('🎓', enrolled,  'Enrolled',     '#ec4899') +
+    kpiChip('⭐', avgScore,  'Avg Score',    '#8b5cf6');
+}
+
+function filterCampaignLeads() {
+  const search   = document.getElementById('clpSearch').value.toLowerCase();
+  const status   = document.getElementById('clpStatusFilter').value;
+  const category = document.getElementById('clpCategoryFilter').value;
+  let filtered = CLP_ALL_LEADS;
+  if (search)   filtered = filtered.filter(l => (l.fullName+l.email+l.phone).toLowerCase().includes(search));
+  if (status)   filtered = filtered.filter(l => l.status === status);
+  if (category) filtered = filtered.filter(l => l.leadCategory === category);
+  clearClpBulkSelect();
+  renderClpTable(filtered);
+}
+
+function renderClpTable(leads) {
+  const el = document.getElementById('clpLeadsTable');
+  if (!leads || !leads.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">📭</div>No leads in this campaign yet.<br><br><button class="btn btn-primary btn-sm" onclick="openAddLeadForCampaign()">➕ Add Lead to Campaign</button></div>';
+    return;
+  }
+  el.innerHTML = `
+    <table>
+      <thead><tr>
+        <th class="cb-col"><input type="checkbox" id="clpChkAll" title="Select all" onchange="clpSelectAll(this.checked)"></th>
+        <th>Name</th><th>Grade</th><th>Phone</th><th>Program</th><th>Score</th><th>Status</th><th>Calls</th><th>Actions</th>
+      </tr></thead>
+      <tbody>${leads.map(l => {
+        const phoneValid = isValidPhone(l.phone);
+        return `
+        <tr onclick="openLead('${l._id}')" style="cursor:pointer" data-lead-id="${l._id}">
+          <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="clp-chk" data-id="${l._id}" onchange="toggleClpSelect()"></td>
+          <td data-label="Name"><strong>${esc(l.fullName)}</strong><br><span style="color:var(--muted);font-size:12px">${esc(l.email)}</span></td>
+          <td data-label="Grade">${esc(l.grade || '—')}</td>
+          <td data-label="Phone" style="font-family:monospace;font-size:12px;color:${phoneValid?'inherit':'var(--hot)'}">${phoneValid?'':'⚠️ '}${esc(l.phone)}</td>
+          <td data-label="Program">${esc(l.courseInterest || '—')}</td>
+          <td data-label="Score"><span class="score-badge ${l.leadCategory}">${l.leadScore} ${catEmoji(l.leadCategory)}</span></td>
+          <td data-label="Status"><span class="status-badge ${l.status}">${fmtStatus(l.status)}</span></td>
+          <td data-label="Calls">${l.totalCallAttempts || 0}</td>
+          <td data-label="Actions" style="white-space:nowrap" onclick="event.stopPropagation()">
+            <div style="display:flex;gap:4px;flex-wrap:wrap">
+              ${l.status === 'calling'
+                ? `<button class="btn btn-sm" style="background:var(--hot);color:#fff" onclick="stopCall('${l._id}')">🛑 Stop</button>`
+                : phoneValid
+                  ? `<button class="btn btn-primary btn-sm" onclick="callLead('${l._id}')">📞 Call</button>`
+                  : `<button class="btn btn-secondary btn-sm" style="opacity:.6" title="Invalid phone">⚠️ Bad #</button>`
+              }
+              <button class="btn btn-secondary btn-sm" onclick="openEditLead('${l._id}')">✏️ Edit</button>
+              <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="confirmDeleteLead('${l._id}','${esc(l.fullName)}')">🗑️</button>
+            </div>
+          </td>
+        </tr>
+      `}).join('')}</tbody>
+    </table>`;
+}
+
+// Add lead pre-assigned to current campaign
+function openAddLeadForCampaign() {
+  openAddLead();
+  // Pre-select the current campaign in the lead form after a tiny delay
+  if (CLP_CAMPAIGN_ID) {
+    setTimeout(() => {
+      const sel = document.getElementById('lf_campaign');
+      if (sel) sel.value = CLP_CAMPAIGN_ID;
+    }, 300);
+  }
+}
+
+// ─── CLP bulk-select helpers ─────────────────────────
+let _clpSelected = new Set();
+
+function toggleClpSelect() {
+  _clpSelected.clear();
+  document.querySelectorAll('.clp-chk:checked').forEach(el => _clpSelected.add(el.dataset.id));
+  updateClpBulkBar();
+}
+
+function clpSelectAll(checked) {
+  _clpSelected.clear();
+  document.querySelectorAll('.clp-chk').forEach(el => {
+    el.checked = checked;
+    if (checked) _clpSelected.add(el.dataset.id);
+  });
+  updateClpBulkBar();
+}
+
+function updateClpBulkBar() {
+  const bar = document.getElementById('clpBulkBar');
+  if (!bar) return;
+  const n = _clpSelected.size;
+  document.getElementById('clpBulkCount').textContent = n;
+  bar.classList.toggle('visible', n > 0);
+}
+
+function clearClpBulkSelect() {
+  _clpSelected.clear();
+  document.querySelectorAll('.clp-chk').forEach(el => el.checked = false);
+  const chk = document.getElementById('clpChkAll');
+  if (chk) chk.checked = false;
+  const bar = document.getElementById('clpBulkBar');
+  if (bar) bar.classList.remove('visible');
+}
+
+async function bulkAssignCampaignClp() {
+  const sel = document.getElementById('clpBulkCampaignSel');
+  const val = sel ? sel.value : '';
+  if (!val) { toast('Choose a campaign first', 'error'); return; }
+  if (!_clpSelected.size) { toast('Select at least one lead', 'error'); return; }
+  const leadIds = [..._clpSelected];
+  const campaignId = val === '__none__' ? null : val;
+  const label = val === '__none__' ? 'removed from campaign' : 'assigned to campaign';
+  try {
+    await api('/campaigns/assign', { method: 'POST', body: JSON.stringify({ campaignId, leadIds }) });
+    toast('✅ ' + leadIds.length + ' lead(s) ' + label, 'success');
+    clearClpBulkSelect();
+    await refreshCampaignLeads();
+    // Also refresh global leads cache
+    LEADS = await api('/leads').catch(() => LEADS);
+  } catch(e) { toast('❌ ' + e.message, 'error'); }
+}
+
+
+function campaignName(id) {
+  const c = CAMPAIGNS.find(x => x.id === id);
+  return c ? c.name : 'Campaign';
+}
+
+// Populate a campaign <select> (used by the lead form). Loads cache if empty.
+async function populateCampaignSelect(selectId, selectedId) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  try {
+    if (!CAMPAIGNS.length) {
+      const data = await api('/campaigns');
+      CAMPAIGNS = data.campaigns || [];
+    }
+  } catch (_) { /* campaigns not set up — leave selector with default only */ }
+  sel.innerHTML = '<option value="">— Default (Demo Test Follow-up) —</option>' +
+    CAMPAIGNS.map(c => `<option value="${c.id}" ${c.id===selectedId?'selected':''}>${esc(c.name)}${c.status!=='active'?' ('+c.status+')':''}</option>`).join('');
 }
 
 // ─── Calls ───────────────────────────────────────────
@@ -3253,6 +3855,19 @@ async function openLead(id) {
         <div class="detail-cell"><div class="lbl">Call Attempts</div><div class="val">${l.totalCallAttempts || 0}</div></div>
         <div class="detail-cell"><div class="lbl">Last Updated</div><div class="val">${new Date(l.updatedAt).toLocaleString()}</div></div>
       </div>
+
+      <div class="section-title">📣 Campaign</div>
+      <div class="campaign-row" id="campaignRowModal">
+        <span class="camp-icon">📣</span>
+        <div>
+          <div class="camp-label">Assigned Campaign</div>
+          <div class="camp-name">${l.campaignId ? esc(campaignName(l.campaignId)) : '<span style="color:var(--muted);font-weight:400">None (uses Demo Test Follow-up)</span>'}</div>
+        </div>
+        <select onchange="updateLeadCampaign('${l._id}', this.value)" title="Reassign campaign">
+          <option value="">— No Campaign —</option>
+          ${CAMPAIGNS.map(c => `<option value="${c.id}" ${c.id === l.campaignId ? 'selected' : ''}>${esc(c.name)}${c.status !== 'active' ? ' (' + c.status + ')' : ''}</option>`).join('')}
+        </select>
+      </div>
     `;
 
     if (q.currentScore || q.targetScore || q.targetExamDate || q.preferredFormat) {
@@ -3391,7 +4006,47 @@ async function openLead(id) {
     document.getElementById('modalBody').innerHTML = body;
     document.getElementById('leadModal').classList.add('active');
     hydrateRecordings();
+    // Lazy-load campaign options into modal if cache not yet ready
+    if (!CAMPAIGNS.length) {
+      try {
+        const d = await api('/campaigns');
+        CAMPAIGNS = d.campaigns || [];
+        // Re-render the campaign row select with now-loaded options
+        const row = document.getElementById('campaignRowModal');
+        if (row) {
+          const sel = row.querySelector('select');
+          if (sel && CAMPAIGNS.length) {
+            const cur = sel.dataset.cur || '';
+            sel.innerHTML = '<option value="">— No Campaign —</option>' +
+              CAMPAIGNS.map(c => `<option value="${c.id}" ${c.id === cur ? 'selected' : ''}>${esc(c.name)}${c.status !== 'active' ? ' (' + c.status + ')' : ''}</option>`).join('');
+          }
+        }
+      } catch(_) {}
+    }
   } catch(e) { toast(e.message, 'error'); }
+}
+
+async function updateLeadCampaign(leadId, campaignId) {
+  try {
+    await api('/leads/' + leadId, {
+      method: 'PATCH',
+      body: JSON.stringify({ campaignId: campaignId || null })
+    });
+    const name = campaignId ? campaignName(campaignId) : 'None';
+    toast(`✅ Campaign updated → ${name}`, 'success');
+    // Refresh the camp-name display in the modal row
+    const row = document.getElementById('campaignRowModal');
+    if (row) {
+      const nameEl = row.querySelector('.camp-name');
+      if (nameEl) nameEl.innerHTML = campaignId
+        ? esc(campaignName(campaignId))
+        : '<span style="color:var(--muted);font-weight:400">None (uses Demo Test Follow-up)</span>';
+    }
+    // Update in-memory LEADS cache
+    const lead = LEADS.find(l => l._id === leadId);
+    if (lead) lead.campaignId = campaignId || null;
+    renderLeadsTable();
+  } catch(e) { toast('❌ ' + e.message, 'error'); }
 }
 
 // Call recordings live behind auth-protected /api routes, so a native
@@ -3437,6 +4092,8 @@ function isValidPhone(p) {
 async function callLead(id) {
   // Find the lead — fetch fresh in case the list is stale
   let lead = LEADS.find(l => l._id === id);
+  // Also check campaign leads cache if we're in a campaign sub-view
+  if (!lead && CLP_ALL_LEADS.length) lead = CLP_ALL_LEADS.find(l => l._id === id);
   if (!lead) {
     try { lead = await api('/leads/' + id); }
     catch(e) { toast('❌ Lead not found', 'error'); return; }
@@ -3454,19 +4111,38 @@ async function callLead(id) {
     return;
   }
 
-  const ok = confirm(`📞 Place a call to ${lead.fullName} at ${lead.phone}?`);
+  // Resolve campaign type — used to pick the correct AI calling script.
+  // If we're inside a campaign leads sub-view, use that campaign's type directly.
+  // This works even before the SQL schema has been applied.
+  let campaignType = null;
+  if (CLP_CAMPAIGN_ID) {
+    // We're inside a campaign leads page — find the type from the CAMPAIGNS global
+    const camp = CAMPAIGNS.find(c => c.id === CLP_CAMPAIGN_ID);
+    if (camp && camp.type) campaignType = camp.type;
+  } else if (lead.campaignId) {
+    // Lead has a campaign assigned — look it up from the CAMPAIGNS cache
+    const camp = CAMPAIGNS.find(c => c.id === lead.campaignId);
+    if (camp && camp.type) campaignType = camp.type;
+  }
+
+  const campLabel = campaignType && campaignType !== 'demo-test-followup'
+    ? ` using the ${campaignType.replace(/-/g,' ')} script` : '';
+  const ok = confirm(`📞 Place a call to ${lead.fullName} at ${lead.phone}?${campLabel ? '\n\n✅ ' + campLabel : ''}`);
   if (!ok) return;
   toast('Placing call…', 'info');
   try {
-    const r = await api('/leads/' + id + '/call', { method: 'POST' });
+    const body = {};
+    if (campaignType) body.campaignType = campaignType;
+    const r = await api('/leads/' + id + '/call', { method: 'POST', body: JSON.stringify(body) });
     toast(`📞 ${r.message || 'Call placed'}`, 'success');
     closeModal();
-    setTimeout(loadLeads, 2000);
+    setTimeout(() => { loadLeads(); if (CLP_CAMPAIGN_ID) refreshCampaignLeads(); }, 2000);
   } catch(e) {
     toast('❌ ' + e.message, 'error');
     console.error('Call failed:', e);
   }
 }
+
 async function stopCall(id) {
   const ok = confirm('🛑 Stop the ongoing call for this lead?\n\nThe call will be hung up immediately and the status reset.');
   if (!ok) return;
@@ -4132,6 +4808,7 @@ function openAddLead() {
   document.getElementById('lf_parentName').value  = '';
   document.getElementById('lf_parentEmail').value = '';
   document.getElementById('lf_notes').value     = '';
+  populateCampaignSelect('lf_campaign', '');
   document.getElementById('leadFormModal').classList.add('active');
 }
 
@@ -4150,6 +4827,7 @@ async function openEditLead(id) {
     document.getElementById('lf_parentName').value  = l.parentName || '';
     document.getElementById('lf_parentEmail').value = l.parentEmail || '';
     document.getElementById('lf_notes').value     = l.notes || '';
+    await populateCampaignSelect('lf_campaign', l.campaignId || '');
     document.getElementById('leadFormModal').classList.add('active');
   } catch(e) { toast('Failed to load lead: ' + e.message, 'error'); }
 }
@@ -4169,12 +4847,16 @@ async function saveLeadForm() {
   const parentName  = document.getElementById('lf_parentName').value.trim();
   const parentEmail = document.getElementById('lf_parentEmail').value.trim();
   const notes    = document.getElementById('lf_notes').value.trim();
+  const campaignId = (document.getElementById('lf_campaign') || {}).value || '';
 
   if (!fullName) { toast('Full name is required', 'error'); return; }
   if (!email)    { toast('Email is required', 'error'); return; }
   if (!phone)    { toast('Phone is required', 'error'); return; }
 
   const payload = { fullName, email, phone, grade, courseInterest, status, parentName, parentEmail, notes };
+  // Assign/clear campaign. On edit, send null to clear; on create, only send when chosen.
+  if (id) payload.campaignId = campaignId || null;
+  else if (campaignId) payload.campaignId = campaignId;
   const btn = document.getElementById('leadFormSaveBtn');
   btn.disabled = true;
   btn.textContent = 'Saving…';
@@ -4191,6 +4873,7 @@ async function saveLeadForm() {
     }
     closeLeadForm();
     await loadLeads();
+    if (CLP_CAMPAIGN_ID) await refreshCampaignLeads();
   } catch(e) {
     toast('❌ ' + e.message, 'error');
   } finally {
@@ -4217,6 +4900,7 @@ async function deleteLead() {
     closeDeleteLead();
     closeModal();
     await loadLeads();
+    if (CLP_CAMPAIGN_ID) await refreshCampaignLeads();
   } catch(e) { toast('❌ ' + e.message, 'error'); }
 }
 
@@ -4484,4 +5168,5 @@ document.addEventListener('touchstart', () => {}, { passive: true });
 </script>
 </body>
 </html>
+
 

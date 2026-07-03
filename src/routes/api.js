@@ -143,7 +143,7 @@ router.get('/analytics', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════
 router.get('/leads', async (req, res) => {
   try {
-    const { status, category, search, limit = 200 } = req.query;
+    const { status, category, search, campaignId, limit = 500 } = req.query;
     const filter = {};
     if (status)   filter.status       = status;
     if (category) filter.leadCategory = category;
@@ -153,6 +153,12 @@ router.get('/leads', async (req, res) => {
         { email:    new RegExp(search, 'i') },
         { phone:    new RegExp(search, 'i') },
       ];
+    }
+    // Campaign filter: '__none__' = leads with no campaign, uuid = specific campaign
+    if (campaignId === '__none__') {
+      filter.campaignId = null;
+    } else if (campaignId) {
+      filter.campaignId = campaignId;
     }
     const leads = await Lead.find(filter, {
       sort:   { leadScore: -1, createdAt: -1 },
@@ -164,6 +170,7 @@ router.get('/leads', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
 
 router.get('/leads/export', async (req, res) => {
   try {
@@ -242,6 +249,17 @@ router.post('/leads/:id/call', async (req, res) => {
       return res.status(503).json({ error: 'Public tunnel is not active. Cannot place call — Twilio webhooks would fail.' });
     }
 
+    // Accept a campaignType hint from the dashboard (e.g. 'sat-batch').
+    // This lets the webhook pick the right script even before the campaigns table exists.
+    // Falls back to the lead's own campaignId → DB lookup → demo default.
+    const campaignSvc = require('../services/campaignService');
+    const campaignReg = require('../campaigns/registry');
+    let campaignId = (req.body && req.body.campaignId) || null;
+    // If not supplied by caller, try to resolve from the lead's stored campaignId
+    if (!campaignId && lead.campaignId) {
+      campaignId = lead.campaignId;
+    }
+
     lead.status = 'calling';
     lead.totalCallAttempts = (lead.totalCallAttempts || 0) + 1;
     lead.lastCallAt = new Date().toISOString();
@@ -253,11 +271,12 @@ router.post('/leads/:id/call', async (req, res) => {
     });
     await lead.save();
 
-    logger.info(`Manual call requested → ${lead.fullName} ${lead.phone} via ${baseUrl}`);
+    logger.info(`Manual call requested → ${lead.fullName} ${lead.phone} via ${baseUrl}` +
+      (campaignId ? ` [campaignId: ${campaignId}]` : ''));
 
     let callSid;
     try {
-      const result = await twilioSvc.call(lead, baseUrl);
+      const result = await twilioSvc.call(lead, baseUrl, campaignId);
       callSid = result.callSid;
     } catch (twilioErr) {
       lead.status = 'queued';
@@ -276,6 +295,7 @@ router.post('/leads/:id/call', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
 
 router.post('/leads/:id/stop-call', async (req, res) => {
   try {
@@ -361,13 +381,20 @@ router.post('/leads/:id/email', async (req, res) => {
 // Create lead manually
 router.post('/leads', async (req, res) => {
   try {
-    const { fullName, email, phone, grade, courseInterest, parentName, parentEmail, status, notes } = req.body;
+    const { fullName, email, phone, grade, courseInterest, parentName, parentEmail, status, notes, campaignId } = req.body;
     if (!fullName?.trim()) return res.status(400).json({ error: 'Full name is required' });
     if (!email?.trim())    return res.status(400).json({ error: 'Email is required' });
     if (!phone?.trim())    return res.status(400).json({ error: 'Phone is required' });
 
-    const existing = await Lead.findOne({ email: email.trim().toLowerCase() });
-    if (existing) return res.status(409).json({ error: `A lead with email "${email}" already exists` });
+    const query = { email: email.trim().toLowerCase() };
+    if (campaignId) {
+      query.campaignId = campaignId;
+    } else {
+      query.campaignId = null;
+    }
+
+    const existing = await Lead.findOne(query);
+    if (existing) return res.status(409).json({ error: `A lead with email "${email}" already exists in this campaign` });
 
     const lead = await Lead.create({
       fullName: fullName.trim(),
@@ -380,12 +407,13 @@ router.post('/leads', async (req, res) => {
       status:  status || 'new',
       notes:   notes?.trim() || '',
       source:  'manual',
+      ...(campaignId ? { campaignId } : {}),
     });
     logger.info(`Lead created manually: ${lead.fullName} <${lead.email}>`);
     res.status(201).json(lead);
   } catch(e) {
     if (e.message?.includes('unique') || e.message?.includes('duplicate')) {
-      return res.status(409).json({ error: 'A lead with this email already exists' });
+      return res.status(409).json({ error: 'A lead with this email already exists in the database. You must drop the unique email constraint in your Supabase SQL Editor.' });
     }
     res.status(500).json({ error: e.message });
   }
@@ -395,7 +423,7 @@ router.post('/leads', async (req, res) => {
 router.patch('/leads/:id', async (req, res) => {
   try {
     const allowed = ['status','leadCategory','notes','fullName','email','phone',
-                     'grade','courseInterest','parentName','parentEmail','meeting.status'];
+                     'grade','courseInterest','parentName','parentEmail','meeting.status','campaignId'];
     const update = {};
     allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
     const lead = await Lead.findByIdAndUpdate(req.params.id, update, { new: true });
@@ -585,3 +613,5 @@ router.get('/config-check', (req, res) => {
 });
 
 module.exports = router;
+
+

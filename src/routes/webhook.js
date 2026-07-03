@@ -18,6 +18,8 @@ const calendarSvc    = require('../services/calendarService');
 const emailSvc       = require('../services/emailService');
 const sheetsSvc      = require('../services/sheetsService');
 const { scoreLead, detectSentiment } = require('../services/leadScoring');
+const campaignSvc    = require('../services/campaignService');
+const campaignReg    = require('../campaigns/registry');
 const logger         = require('../logger');
 const cfg            = require('../config');
 
@@ -69,13 +71,14 @@ function detectProgramIntent(lowSpeech) {
 
 // ── Helper to build the per-turn respond URL ──────────────────────────────────
 function respondUrl(baseUrl, leadId) {
-  return `${baseUrl}/webhook/call/respond?leadId=${leadId}`;
+  // Use a relative path so Twilio automatically resolves it against the current hostname
+  return `/webhook/call/respond?leadId=${leadId}`;
 }
 function slotsUrl(baseUrl, leadId) {
-  return `${baseUrl}/webhook/call/slots?leadId=${leadId}`;
+  return `/webhook/call/slots?leadId=${leadId}`;
 }
 function bookUrl(baseUrl, leadId) {
-  return `${baseUrl}/webhook/call/book?leadId=${leadId}`;
+  return `/webhook/call/book?leadId=${leadId}`;
 }
 
 // ── STEP 1 – Call connects → speak immediately ────────────────────────────────
@@ -91,7 +94,29 @@ router.post('/call/start', async (req, res) => {
     if (!lead) return res.send(twilioSvc.twimlHangup());
 
     const isFollowUp = req.query.followUp === '1';
-    sessions.set(leadId, { history: [], turnCount: 0, isFollowUp });
+
+    // ── Campaign resolution — 3-tier priority ──────────────────────────────────
+    // 1. Query param set by dashboard when placing the call (works without DB)
+    // 2. Lead's stored campaignId → DB lookup (works after SQL schema is applied)
+    // 3. Registry default (Demo Test Follow-up) — always safe
+    let campaignType = campaignReg.DEFAULT_TYPE;
+    let campaignRow = null;
+    let campaign = null;
+    
+    const qCampaignId = req.query.campaignId || null;
+    if (qCampaignId) {
+      campaignRow = await campaignSvc.getById(qCampaignId);
+      if (campaignRow) campaignType = campaignRow.type;
+    } else if (lead.campaignId) {
+      campaignRow = await campaignSvc.getById(lead.campaignId);
+      if (campaignRow) campaignType = campaignRow.type;
+    }
+
+    campaign = campaignReg.getCampaign(campaignType, campaignRow);
+    logger.info(`Campaign resolved from DB: ${campaignType} for lead ${lead.fullName}`);
+    
+
+    sessions.set(leadId, { history: [], turnCount: 0, isFollowUp, campaignType: campaign.type, campaign });
 
     const studentFirst = lead.fullName.split(' ')[0];
     const opener = isFollowUp
@@ -104,6 +129,7 @@ router.post('/call/start', async (req, res) => {
     res.send(twilioSvc.twimlHangup());
   }
 });
+
 
 // ── ASYNC AMD CALLBACK – fires after machine detection completes ───────────────
 // If it's a machine, hang up the live call and leave voicemail via a separate call.
@@ -186,12 +212,11 @@ router.post('/call/respond', async (req, res) => {
     if (session.turnCount === 0) {
       const studentFirst = lead.fullName.split(' ')[0].toLowerCase();
       const confirmed = isIdentityConfirmed(lowSpeech, studentFirst);
+      const campaign  = session.campaign || campaignReg.getCampaign(campaignReg.DEFAULT_TYPE);
       if (confirmed) {
         session.history.push({ role: 'user', content: speech });
-        const followUp =
-          `Great! I noticed that you recently completed a demo test with Aiprep365. ` +
-          `I'm calling to help you learn more about our SAT, ACT, AP, and College Admissions programs. ` +
-          `Which program are you interested in?`;
+        // Campaign-specific opening line (Demo Test Follow-up = original wording).
+        const followUp = campaign.turn0Line(lead);
         session.history.push({ role: 'assistant', content: followUp });
         session.turnCount++;
         sessions.set(leadId, session);
@@ -213,8 +238,9 @@ router.post('/call/respond', async (req, res) => {
         } else {
           // After 3 failed attempts, move forward anyway
           session.history.push({ role: 'user', content: speech });
-          const followUp =
-            `I understand. I'm calling to help you learn more about our SAT, ACT, AP, and College Admissions programs. Which program are you interested in?`;
+          const followUp = (session.campaignType && session.campaignType !== campaignReg.DEFAULT_TYPE)
+            ? `I understand. ${campaign.turn0Line(lead)}`
+            : `I understand. I'm calling to help you learn more about our SAT, ACT, AP, and College Admissions programs. Which program are you interested in?`;
           session.history.push({ role: 'assistant', content: followUp });
           session.turnCount++;
           sessions.set(leadId, session);
@@ -355,7 +381,7 @@ router.post('/call/respond', async (req, res) => {
       });
       aiReply = r.choices[0].message.content.trim();
     } else {
-      aiReply = await aiSvc.chat({ lead, history: session.history.slice(-12), userMessage: speech });
+      aiReply = await aiSvc.chat({ lead, history: session.history.slice(-12), userMessage: speech, campaign: session.campaign });
     }
 
     // Add AI turn
@@ -797,3 +823,5 @@ async function _markAttempt(lead, callSid, status) {
 }
 
 module.exports = router;
+
+

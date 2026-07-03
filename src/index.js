@@ -22,6 +22,7 @@ const apiRouter        = require('./routes/api');
 const crmRouter        = require('./routes/crm');
 const authRouter       = require('./routes/auth');
 const counselorsRouter = require('./routes/counselors');
+const campaignsRouter  = require('./routes/campaigns');
 const { requireAuth, requireAdmin } = require('./middleware/auth');
 const followUpEngine   = require('./jobs/followUpEngine');
 
@@ -49,6 +50,7 @@ app.use('/auth', authRouter);
 app.use('/api', requireAuth);
 app.use('/api', apiRouter);
 app.use('/api/crm', crmRouter);
+app.use('/api/campaigns', campaignsRouter);
 app.use('/api/counselors', requireAdmin, counselorsRouter);
 
 app.get('/health', (_req, res) =>
@@ -85,7 +87,15 @@ app.get('/reset-password', (req, res) => {
   res.sendFile(path.join(dashDir, 'reset-password.html'));
 });
 
-if (fs.existsSync(dashDir)) app.use('/', express.static(dashDir));
+if (fs.existsSync(dashDir)) {
+  app.use('/', express.static(dashDir, {
+    setHeaders: (res, path) => {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }));
+}
 
 // ── Global error handler ────────────────────────────────────────────────────
 app.use((err, req, res, _next) => {
@@ -121,6 +131,9 @@ async function boot() {
     const { error: pingErr } = await supabase.from('leads').select('id').limit(1);
     if (pingErr) throw new Error(`Supabase connection failed: ${pingErr.message}`);
     logger.info('Supabase connected ✅');
+
+    // 1b. Seed default campaigns (no-op if the campaigns table isn't set up yet)
+    require('./services/campaignService').ensureDefaultCampaigns().catch(() => {});
 
     // 2. Google Sheet headers
     const sheetsSvc = require('./services/sheetsService');

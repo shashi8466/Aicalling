@@ -17,9 +17,10 @@ const LANG   = 'en-US';
 class TwilioService {
 
   /** Place an outbound call to `lead.phone` */
-  async call(lead, baseUrl) {
+  async call(lead, baseUrl, campaignId) {
     const leadId = lead._id.toString();
     const params = new URLSearchParams({ leadId });
+    if (campaignId) params.set('campaignId', campaignId);
 
     const call = await client.calls.create({
       to:   lead.phone,
@@ -52,6 +53,7 @@ class TwilioService {
     logger.info(`Outbound call placed → ${lead.phone}  SID=${call.sid}`);
     return { callSid: call.sid, status: call.status };
   }
+
 
   // ── TwiML builders ──────────────────────────────────────────────────
 
@@ -203,3 +205,5 @@ class TwilioService {
 }
 
 module.exports = new TwilioService();
+
+
