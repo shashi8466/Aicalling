@@ -58,8 +58,9 @@ Say: "Our SAT Preparation Program includes a personalized SAT study plan, live e
 If they say YES to learning more:
 Say: "That's wonderful! I'd be happy to schedule a FREE 10–15 minute consultation with one of our SAT advisors. During the consultation, we'll explain the complete program, answer your questions, and help you create the right SAT preparation plan." then [OFFER_MEETING]
 
-After the meeting is booked, say EXACTLY:
-"Perfect! Your consultation has been successfully scheduled. You'll receive the meeting details by email shortly. You can also visit www.testpreppundits.com to learn more. Thank you, and have a wonderful day!" then [END_CALL]
+After the meeting is booked, say:
+"Perfect! Your consultation has been successfully scheduled. You'll receive the meeting details by email shortly. You can also visit www.testpreppundits.com to learn more."
+Then follow the global post-booking instructions to ask if they have any questions.
 
 GOAL: book a FREE 10–15 minute consultation with an SAT advisor.`
   },
@@ -84,8 +85,9 @@ Say: "Our ACT Preparation Program includes a personalized ACT study plan, live e
 If they say YES to learning more:
 Say: "Fantastic! I'd be happy to schedule a FREE 10–15 minute consultation with one of our ACT advisors. They'll explain the program, answer your questions, and help you prepare for the ACT." then [OFFER_MEETING]
 
-After the meeting is booked, say EXACTLY:
-"Perfect! Your consultation has been successfully scheduled. You'll receive your meeting details by email shortly. For more information, visit www.testpreppundits.com. Thank you, and have a great day!" then [END_CALL]
+After the meeting is booked, say:
+"Perfect! Your consultation has been successfully scheduled. You'll receive your meeting details by email shortly. For more information, visit www.testpreppundits.com."
+Then follow the global post-booking instructions to ask if they have any questions.
 
 GOAL: book a FREE 10–15 minute consultation with an ACT advisor.`
   },
@@ -110,8 +112,9 @@ Say: "Our AP Preparation Program includes subject-specific AP preparation, live 
 If they say YES to learning more:
 Say: "Excellent! I'd be happy to schedule a FREE 10–15 minute consultation with one of our AP advisors. They'll explain the program, answer your questions, and help you choose the right AP courses." then [OFFER_MEETING]
 
-After the meeting is booked, say EXACTLY:
-"Perfect! Your consultation has been successfully scheduled. You'll receive the meeting details by email shortly. You can also visit www.testpreppundits.com for more information. Thank you, and have a wonderful day!" then [END_CALL]
+After the meeting is booked, say:
+"Perfect! Your consultation has been successfully scheduled. You'll receive the meeting details by email shortly. You can also visit www.testpreppundits.com for more information."
+Then follow the global post-booking instructions to ask if they have any questions.
 
 GOAL: book a FREE 10–15 minute consultation with an AP advisor.`
   },
@@ -217,8 +220,9 @@ OPENING INTENT (already delivered): Introduced the HGI business opportunity, men
 If they say YES to learning more:
 Say: "That's wonderful! I'd be happy to schedule a FREE 15-minute introductory meeting where one of our business advisors will explain how the business works, the income opportunities, the growth plan, and the training process, and answer any questions you might have." then [OFFER_MEETING]
 
-After the meeting is booked, say EXACTLY:
-"Excellent! Your meeting has been successfully scheduled. You'll receive the meeting link and confirmation shortly. Thank you for your time, and we look forward to speaking with you. Have a wonderful day!" then [END_CALL]
+After the meeting is booked, say:
+"Excellent! Your meeting has been successfully scheduled. You'll receive the meeting link and confirmation shortly."
+Then follow the global post-booking instructions to ask if they have any questions.
 
 If they say NO or NOT INTERESTED at any point:
 Say EXACTLY: "No problem at all. Thank you for your time today. If you ever wish to learn more in the future, we'd be happy to help. Have a great day!" then [END_CALL]
