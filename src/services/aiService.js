@@ -450,4 +450,85 @@ If caller explicitly declines THREE times after meeting was offered each time: "
 [END_CALL]      → ONLY after meeting is booked, OR after 3 hard declines with offer made each time`;
 }
 
-module.exports = { chat, extractQualification, summariseCall, buildFollowUpSystem };
+// ─── Post-call meeting detection from transcript ──────────────────────────────
+/**
+ * Analyzes a completed call transcript to detect if the AI agent verbally
+ * confirmed a consultation booking. Used as a rescue step in _finaliseCall()
+ * for calls where the AI confirmed a time conversationally (bypassing /slots → /book).
+ *
+ * Returns:
+ *   { booked: boolean, scheduledTime: string|null, scheduledDate: string|null,
+ *     confidence: 'high'|'low', rawTime: string|null }
+ */
+async function detectMeetingFromTranscript(transcript, lead) {
+  const prompt = `You are analyzing a call transcript to determine if a consultation meeting was successfully booked.
+
+IMPORTANT CONTEXT:
+- "AGENT" is the AI admissions counselor (Shashi from Aiprep365).
+- "Caller" is the student/parent on the phone.
+- A meeting is BOOKED only if BOTH parties agreed on a specific time AND the AGENT explicitly confirmed it (e.g., "I've scheduled", "I've booked", "you're all set for", "I'll put you down for", "Perfect, so [time] it is").
+- The AGENT verbally offering times does NOT mean booked — the Caller must have agreed.
+
+Look for patterns like:
+  AGENT: "I've scheduled your free consultation for 11:00 a.m."
+  AGENT: "Perfect! I've booked you in for [time]."
+  AGENT: "Wonderful! Your consultation is confirmed for [time]."
+  AGENT: "Great, so [time] works — you're all set."
+
+Return ONLY valid JSON with these exact keys:
+{
+  "booked": true or false,
+  "confidence": "high" or "low",
+  "rawTime": "the exact time phrase the agent said, e.g. '11:00 a.m.' or '2 PM' or null",
+  "scheduledTime": "24-hour HH:MM format e.g. '11:00' or null",
+  "scheduledDate": "one of: 'today', 'tomorrow', or a day name like 'Monday', or null",
+  "reasoning": "one sentence explaining your decision"
+}
+
+Use confidence "high" ONLY when:
+- The AGENT clearly confirmed a specific time
+- The Caller clearly agreed
+
+Use confidence "low" if:
+- The time was mentioned but not firmly confirmed
+- There is ambiguity about whether both parties agreed
+
+Transcript:
+${transcript}`;
+
+  try {
+    let raw;
+    if (cfg.llm.provider === 'anthropic' && anthropic) {
+      const r = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        messages: [{ role: 'user', content: prompt }],
+      });
+      raw = r.content[0].text;
+    } else {
+      const r = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        max_tokens: 300,
+        response_format: { type: 'json_object' },
+        messages: [{ role: 'user', content: prompt }],
+      });
+      raw = r.choices[0].message.content;
+    }
+
+    const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] || '{}');
+    logger.info(`detectMeetingFromTranscript for ${lead.fullName}: booked=${parsed.booked}, confidence=${parsed.confidence}, time=${parsed.rawTime}`);
+    return {
+      booked:        !!parsed.booked,
+      confidence:    parsed.confidence || 'low',
+      rawTime:       parsed.rawTime    || null,
+      scheduledTime: parsed.scheduledTime || null,
+      scheduledDate: parsed.scheduledDate || null,
+      reasoning:     parsed.reasoning   || '',
+    };
+  } catch (err) {
+    logger.error('detectMeetingFromTranscript error', { msg: err.message });
+    return { booked: false, confidence: 'low', rawTime: null, scheduledTime: null, scheduledDate: null };
+  }
+}
+
+module.exports = { chat, extractQualification, summariseCall, buildFollowUpSystem, detectMeetingFromTranscript };

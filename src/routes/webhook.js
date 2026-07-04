@@ -14,6 +14,7 @@ const OpenAI         = require('openai');
 const Lead           = require('../models/Lead');
 const twilioSvc      = require('../services/twilioService');
 const aiSvc          = require('../services/aiService');
+const { detectMeetingFromTranscript } = aiSvc;
 const calendarSvc    = require('../services/calendarService');
 const emailSvc       = require('../services/emailService');
 const sheetsSvc      = require('../services/sheetsService');
@@ -760,6 +761,52 @@ router.post('/call/recording', async (req, res) => {
   }
 });
 
+// ── Internal: parse a verbally confirmed meeting time into a Date ────────────
+/**
+ * Given AI-extracted scheduledTime ("HH:MM") and scheduledDate ("today"/"tomorrow"/day name),
+ * returns a Date object in ET, defaulting gracefully when parts are missing.
+ */
+function _parseMeetingTime(scheduledTime, scheduledDate) {
+  const moment = require('moment-timezone');
+  const TZ = 'America/New_York';
+  const now = moment().tz(TZ);
+
+  // Resolve the date part
+  let base;
+  if (!scheduledDate || scheduledDate === 'today') {
+    base = now.clone();
+  } else if (scheduledDate === 'tomorrow') {
+    base = now.clone().add(1, 'day');
+  } else {
+    // Try to match a day name ("Monday", "Tuesday", etc.)
+    const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+    const targetDay = dayNames.indexOf(scheduledDate.toLowerCase());
+    if (targetDay !== -1) {
+      base = now.clone();
+      const diff = (targetDay - now.day() + 7) % 7 || 7; // always future
+      base.add(diff, 'days');
+    } else {
+      base = now.clone().add(1, 'day'); // safe fallback
+    }
+  }
+
+  // Resolve the time part
+  if (scheduledTime && /^\d{1,2}:\d{2}$/.test(scheduledTime)) {
+    const [hh, mm] = scheduledTime.split(':').map(Number);
+    base.hour(hh).minute(mm).second(0).millisecond(0);
+  } else {
+    // No time extracted — default to 11:00 AM
+    base.hour(11).minute(0).second(0).millisecond(0);
+  }
+
+  // If the resolved time is in the past, push to the same time tomorrow
+  if (base.isBefore(now)) {
+    base.add(1, 'day');
+  }
+
+  return base.toDate();
+}
+
 // ── Internal: finalise a completed call ───────────────────────────────────────
 async function _finaliseCall(lead, session, callSid, reason) {
   try {
@@ -778,6 +825,65 @@ async function _finaliseCall(lead, session, callSid, reason) {
       lead.qualification = { ...(lead.qualification || {}), ...qual };
     }
 
+    // ── POST-CALL MEETING RESCUE ──────────────────────────────────────────────
+    // If the AI verbally confirmed a consultation during the call but the formal
+    // /slots → /book pipeline was never triggered, the meeting record is missing.
+    // We detect this and retroactively create the full meeting record here.
+    const meetingAlreadySaved = !!(lead.meeting?.scheduledAt);
+    if (!meetingAlreadySaved && transcript.length > 80) {
+      try {
+        const detection = await detectMeetingFromTranscript(transcript, lead);
+        if (detection.booked && detection.confidence === 'high') {
+          logger.info(`✅ Post-call meeting rescue triggered for ${lead.fullName} — time: ${detection.rawTime}`);
+
+          // Parse the verbally confirmed time into a real Date
+          const scheduledAt = _parseMeetingTime(detection.scheduledTime, detection.scheduledDate);
+
+          // Generate a unique Jitsi meeting link (same approach as calendarSvc)
+          const jitsiRoom = `Aiprep365-${lead.fullName.replace(/\s+/g, '')}-${Date.now().toString(36)}`;
+          const jitsiUrl  = `https://meet.jit.si/${jitsiRoom}`;
+
+          // Save meeting on the lead
+          lead.meeting = {
+            meetLink:           jitsiUrl,
+            scheduledAt:        scheduledAt,
+            status:             'scheduled',
+            bookedViaTranscript: true,
+          };
+          lead.status      = 'meeting-scheduled';
+          lead.isQualified = true;
+
+          logger.info(`📅 Meeting rescue: scheduled at ${scheduledAt.toISOString()} | link: ${jitsiUrl}`);
+
+          // Fire post-booking tasks asynchronously — never crash _finaliseCall
+          setImmediate(async () => {
+            try {
+              const moment = require('moment-timezone');
+              const scheduledET = moment(scheduledAt).tz('America/New_York');
+              await sheetsSvc.updateRow(lead.sheetRowIndex, {
+                status:      'Meeting Scheduled',
+                score:       lead.leadScore,
+                summary:     `[Auto-rescued] Meeting verbally confirmed for ${scheduledET.format('MMM Do [at] h:mm A z')}. AI time: "${detection.rawTime}".`,
+                meetingDate: scheduledET.format('YYYY-MM-DD'),
+                meetingTime: scheduledET.format('h:mm A z'),
+                meetLink:    jitsiUrl,
+              });
+              await emailSvc.sendMeetingConfirmation(lead);
+              logger.info(`✅ Post-call rescue tasks complete for ${lead.fullName}`);
+            } catch (e) {
+              logger.error('Post-call meeting rescue tasks failed', { msg: e.message });
+            }
+          });
+        } else if (detection.booked && detection.confidence === 'low') {
+          logger.warn(`⚠️  Post-call rescue: low-confidence booking detected for ${lead.fullName} — skipping auto-save. Reason: ${detection.reasoning}`);
+        }
+      } catch (rescueErr) {
+        // Never let the rescue block crash the finalise flow
+        logger.error('Post-call meeting rescue error', { msg: rescueErr.message });
+      }
+    }
+    // ── END POST-CALL MEETING RESCUE ──────────────────────────────────────────
+
     // Update or create call attempt record
     let attempt = callSid ? lead.callAttempts.find(a => a.callSid === callSid) : null;
     if (!attempt && lead.callAttempts.length) attempt = lead.callAttempts[lead.callAttempts.length - 1];
@@ -793,7 +899,10 @@ async function _finaliseCall(lead, session, callSid, reason) {
     lead.leadScore    = score;
     lead.leadCategory = category;
 
-    if (lead.status === 'calling') lead.status = 'contacted';
+    if (lead.status === 'calling' || lead.status === 'contacted') {
+      // Only reset to contacted if rescue didn't already set meeting-scheduled
+      if (lead.status === 'calling') lead.status = 'contacted';
+    }
     await lead.save();
 
     // Update sheet
