@@ -49,8 +49,8 @@ async function generateToken(roomName, participantName, opts = {}) {
   }
 
   // Sanitize identity: LiveKit identity must be unique and URL-safe
-  const identity = participantName.trim().replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-_]/g, '').slice(0, 64)
-    || `guest-${Date.now().toString(36)}`;
+  const safeName = participantName.trim().replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-_]/g, '').slice(0, 40) || 'guest';
+  const identity = `${safeName}-${Date.now().toString(36)}`;
 
   const at = new AccessToken(cfg.livekit.apiKey, cfg.livekit.apiSecret, {
     identity,
