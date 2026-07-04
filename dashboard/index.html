@@ -2602,7 +2602,7 @@ async function viewCounselorStats(id, name, email) {
         return `<tr onclick="closeCounselorStats(); openLead('${l.id || l._id}')" style="cursor:pointer">
           <td><strong>${esc(l.fullName)}</strong><br><span style="color:var(--muted);font-size:11px">${esc(l.email)}</span></td>
           <td>${new Date(l.meeting.scheduledAt).toLocaleString()}</td>
-          <td>${l.meeting.meetLink ? `<a href="${l.meeting.meetLink}" target="_blank" onclick="event.stopPropagation()" style="color:var(--brand)">🎥 Join</a>` : '—'}</td>
+          <td>${l.meeting.meetLink ? `<a href="${l.meeting.hostMeetLink || l.meeting.meetLink}" target="_blank" onclick="event.stopPropagation()" style="color:var(--brand)">🎥 Join</a>` : '—'}</td>
           <td><span class="status-badge ${(l.status||'').replace(/\s/g,'-')}">${fmtStatus(l.meeting.status || l.status)}</span></td>
           <td>${esc(l.meeting.outcome || '—')}</td>
         </tr>`;
@@ -3250,7 +3250,7 @@ function renderCampaignsTable(data) {
         </tr>`;
       }).join('')}</tbody>
     </table>
-    ${data.unassignedLeads ? `<div style="color:var(--muted);font-size:12px;margin-top:10px">ℹ️ ${data.unassignedLeads} lead(s) reference a removed campaign and are not counted above.</div>` : ''}
+    ${data.unassignedLeads ? `<div style="color:var(--muted);font-size:12px;margin-top:10px">ℹ️ ${data.unassignedLeads} lead(s) reference a removed campaign and are not counted above.</div>' : ''}
   `;
 }
 
@@ -3398,7 +3398,7 @@ function renderClpTable(leads) {
           <td data-label="Actions" style="white-space:nowrap" onclick="event.stopPropagation()">
             <div style="display:flex;gap:4px;flex-wrap:wrap">
               ${l.status === 'calling'
-                ? `<button class="btn btn-sm" style="background:var(--hot);color:#fff" onclick="stopCall('${l._id}')">🛑 Stop</button>`
+                ? `<button class="btn btn-sm" style="background:var(--hot);color:#fff" onclick="stopCall('${l._id}')">🛑 Stop</button>'
                 : phoneValid
                   ? `<button class="btn btn-primary btn-sm" onclick="callLead('${l._id}')">📞 Call</button>`
                   : `<button class="btn btn-secondary btn-sm" style="opacity:.6" title="Invalid phone">⚠️ Bad #</button>`
@@ -3885,7 +3885,7 @@ async function openLead(id) {
         <div class="detail-grid">
           <div class="detail-cell"><div class="lbl">Date / Time</div><div class="val">${new Date(m.scheduledAt).toLocaleString()}</div></div>
           <div class="detail-cell"><div class="lbl">Status</div><div class="val">${esc(m.status)}</div></div>
-          ${m.meetLink ? `<div class="detail-cell" style="grid-column:1/-1"><div class="lbl">Video Meeting Link</div><div class="val"><a href="${m.meetLink}" target="_blank" style="color:var(--brand)">🎥 ${m.meetLink}</a></div></div>` : ''}
+          ${m.meetLink ? `<div class="detail-cell" style="grid-column:1/-1"><div class="lbl">Video Meeting Link</div><div class="val"><a href="${m.hostMeetLink || m.meetLink}" target="_blank" style="color:var(--brand)">🎥 ${m.hostMeetLink || m.meetLink}</a></div></div>` : ''}
         </div>`;
     }
 
@@ -4232,7 +4232,7 @@ async function loadCounselor(range = 'today') {
             <div class="cd-lead-name">${esc(l.fullName)}</div>
             <div class="cd-lead-meta">🕐 ${fmtTime(l.meeting?.scheduledAt)} · ${esc(l.courseInterest||'—')}</div>
           </div>
-          ${l.meeting?.meetLink ? `<a href="${l.meeting.meetLink}" target="_blank" onclick="event.stopPropagation()" class="btn btn-primary btn-sm" style="font-size:12px">🎥 Join</a>` : '<span class="status-badge meeting-scheduled" style="font-size:11px">Scheduled</span>'}
+          ${l.meeting?.meetLink ? `<a href="${l.meeting.hostMeetLink || l.meeting.meetLink}" target="_blank" onclick="event.stopPropagation()" class="btn btn-primary btn-sm" style="font-size:12px">🎥 Join</a>` : '<span class="status-badge meeting-scheduled" style="font-size:11px">Scheduled</span>'}
         </div>`).join('');
     } else {
       el1.innerHTML = `

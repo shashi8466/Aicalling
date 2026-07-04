@@ -8,6 +8,7 @@ const { google }  = require('googleapis');
 const moment      = require('moment-timezone');
 const cfg         = require('../config');
 const logger      = require('../logger');
+const livekitSvc  = require('./livekitService');
 
 const TZ            = 'America/New_York';
 const SLOT_MINS     = 60;
@@ -112,21 +113,22 @@ class CalendarService {
   }
 
   async bookMeeting(lead, slot) {
-    const inviteeList = [lead.email];
-    if (lead.parentEmail)                       inviteeList.push(lead.parentEmail);
-    if (cfg.company.counselorEmail)             inviteeList.push(cfg.company.counselorEmail);
+    // Generate LiveKit room name + meeting URLs
+    const roomName    = livekitSvc.generateRoomName(lead);
+    const meetLink    = livekitSvc.generateMeetingUrl(roomName);   // guest URL
+    const hostMeetLink = `${meetLink}?host=true`;                  // counselor URL
 
-    // Generate a unique Jitsi room name
-    const jitsiRoom = `Aiprep365-${lead.fullName.replace(/\s+/g,'')}-${Date.now().toString(36)}`;
-    const jitsiUrl  = `https://meet.jit.si/${jitsiRoom}`;
+    const inviteeList = [lead.email];
+    if (lead.parentEmail)            inviteeList.push(lead.parentEmail);
+    if (cfg.company.counselorEmail)  inviteeList.push(cfg.company.counselorEmail);
 
     const baseBody = {
       summary:     `Admissions Consultation – ${lead.fullName} (${lead.courseInterest || 'Test Prep'})`,
-      description: this._description(lead) + `\n\n🎥 Video Meeting Link:\n${jitsiUrl}\n\n(Opens in any browser — no signup needed)\n\nInvitees to add manually:\n${inviteeList.map(e => `  • ${e}`).join('\n')}`,
-      location:    jitsiUrl,
+      description: this._description(lead, meetLink) + `\n\nInvitees:\n${inviteeList.map(e => `  • ${e}`).join('\n')}`,
+      location:    meetLink,
       start:       { dateTime: slot.start, timeZone: TZ },
       end:         { dateTime: slot.end,   timeZone: TZ },
-      reminders:   {
+      reminders: {
         useDefault: false,
         overrides: [
           { method: 'popup', minutes: 60 },
@@ -138,7 +140,7 @@ class CalendarService {
     // Order of calendars to try
     const calendarIds = [];
     if (this.calendarId && this.calendarId !== 'primary') calendarIds.push(this.calendarId);
-    calendarIds.push('primary');                       // service account's own — always works
+    calendarIds.push('primary');
 
     let lastErr = null;
     for (const calId of calendarIds) {
@@ -147,12 +149,14 @@ class CalendarService {
           calendarId:  calId,
           requestBody: baseBody,
         });
-        logger.info(`Meeting booked on "${calId}" with Jitsi: ${jitsiUrl}`);
+        logger.info(`Meeting booked on "${calId}" | LiveKit room: ${roomName}`);
         return {
           googleEventId: event.data.id,
-          meetLink:      jitsiUrl,
-          calendarUsed:  calId,
-          scheduledAt:   new Date(slot.start),
+          meetLink,
+          hostMeetLink,
+          roomName,
+          calendarUsed: calId,
+          scheduledAt:  new Date(slot.start),
         };
       } catch (err) {
         lastErr = err;
@@ -160,7 +164,7 @@ class CalendarService {
       }
     }
 
-    logger.error('Calendar.bookMeeting — all attempts failed', { msg: lastErr?.message });
+    logger.error('Calendar.bookMeeting — all calendar attempts failed', { msg: lastErr?.message });
     throw new Error(`Calendar booking failed: ${lastErr?.message || 'unknown error'}`);
   }
 
@@ -176,7 +180,7 @@ class CalendarService {
     return res.data.calendars[this.calendarId]?.busy || [];
   }
 
-  _description(lead) {
+  _description(lead, meetLink) {
     const q = lead.qualification || {};
     return [
       `📚 Aiprep365 – Admissions Consultation`,
@@ -190,6 +194,9 @@ class CalendarService {
       `Exam Date     : ${q.targetExamDate || 'not provided'}`,
       `Format Pref   : ${q.preferredFormat || 'not provided'}`,
       `Lead Score    : ${lead.leadScore}/100 (${lead.leadCategory?.toUpperCase()})`,
+      ``,
+      `🎥 Video Meeting Link: ${meetLink}`,
+      `   (No login required — just enter your name and join)`,
       ``,
       `Booked by Shashi Kumar, AI Admissions Counselor.`,
     ].join('\n');

@@ -1,4 +1,4 @@
-﻿require('dotenv').config();
+require('dotenv').config();
 
 module.exports = {
   twilio: {
@@ -13,6 +13,13 @@ module.exports = {
 
   anthropic: {
     apiKey: process.env.ANTHROPIC_API_KEY || null,
+  },
+
+  // LiveKit video meetings (replaces Jitsi)
+  livekit: {
+    url:       process.env.LIVEKIT_URL       || '',   // wss://xxx.livekit.cloud
+    apiKey:    process.env.LIVEKIT_API_KEY   || '',
+    apiSecret: process.env.LIVEKIT_API_SECRET || '',
   },
 
   llm: {

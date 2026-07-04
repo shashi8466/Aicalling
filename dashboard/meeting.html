@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Aiprep365 Consultation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <!-- LiveKit Default Theme Styles -->
+  <link rel="stylesheet" href="https://unpkg.com/@livekit/components-styles@1.1.4/components/index.css" />
+  
+  <style>
+    body { 
+      font-family: system-ui, -apple-system, sans-serif; 
+      margin: 0; 
+      background: #0f172a; 
+      color: white; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      height: 100vh;
+      overflow: hidden;
+    }
+    .join-container { 
+      background: #1e293b; 
+      padding: 2.5rem; 
+      border-radius: 12px; 
+      text-align: center; 
+      max-width: 400px; 
+      width: 90%; 
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5); 
+    }
+    .join-container h2 {
+      margin-top: 0;
+      color: #f8fafc;
+      font-size: 1.5rem;
+    }
+    .join-container p {
+      color: #94a3b8;
+      margin-bottom: 2rem;
+    }
+    input { 
+      width: 100%; 
+      padding: 14px; 
+      margin-bottom: 1.5rem; 
+      box-sizing: border-box; 
+      border-radius: 8px; 
+      border: 1px solid #334155; 
+      background: #0f172a; 
+      color: white;
+      font-size: 1rem;
+    }
+    input:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+    button { 
+      background: #3b82f6; 
+      color: white; 
+      border: none; 
+      padding: 14px 24px; 
+      border-radius: 8px; 
+      cursor: pointer; 
+      width: 100%; 
+      font-weight: 600;
+      font-size: 1rem;
+      transition: background 0.2s;
+    }
+    button:hover { 
+      background: #2563eb; 
+    }
+    button:disabled {
+      background: #475569;
+      cursor: not-allowed;
+    }
+    #root { 
+      width: 100vw; 
+      height: 100vh; 
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .error-msg {
+      color: #ef4444;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+      display: none;
+    }
+  </style>
+
+  <!-- Import Maps for React and LiveKit -->
+  <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.3.1",
+        "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+        "livekit-client": "https://esm.sh/livekit-client@2.5.0",
+        "@livekit/components-react": "https://esm.sh/@livekit/components-react@2.6.0?external=react,react-dom,livekit-client"
+      }
+    }
+  </script>
+  
+  <!-- Babel Standalone for JSX compilation in the browser -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root">
+    <div class="join-container" id="joinUi">
+      <h2>Aiprep365 Consultation</h2>
+      <p>Enter your name to join the meeting</p>
+      <div id="errorMsg" class="error-msg"></div>
+      <input type="text" id="participantName" placeholder="Your Name" autocomplete="name" />
+      <button id="joinBtn" onclick="joinMeeting()">Join Meeting</button>
+    </div>
+  </div>
+
+  <script type="text/babel" data-type="module">
+    import React from 'react';
+    import { createRoot } from 'react-dom/client';
+    import { LiveKitRoom, VideoConference, RoomAudioRenderer } from '@livekit/components-react';
+
+    const root = createRoot(document.getElementById('root'));
+
+    window.joinMeeting = async () => {
+      const nameInput = document.getElementById('participantName');
+      const joinBtn = document.getElementById('joinBtn');
+      const errorMsg = document.getElementById('errorMsg');
+      
+      const name = nameInput.value.trim();
+      if (!name) {
+        errorMsg.textContent = 'Please enter your name.';
+        errorMsg.style.display = 'block';
+        return;
+      }
+      
+      errorMsg.style.display = 'none';
+      joinBtn.disabled = true;
+      joinBtn.textContent = 'Joining...';
+      
+      const roomName = window.location.pathname.split('/').pop();
+      const isHost = new URLSearchParams(window.location.search).get('host') === 'true';
+
+      try {
+        const res = await fetch('/api/meeting/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomName, participantName: name, isHost })
+        });
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.error || 'Failed to get token');
+        
+        // Hide the initial HTML UI and render the React App
+        document.getElementById('joinUi').style.display = 'none';
+        root.render(<MeetingApp token={data.token} url={data.url} />);
+      } catch (err) {
+        errorMsg.textContent = 'Failed to join meeting: ' + err.message;
+        errorMsg.style.display = 'block';
+        joinBtn.disabled = false;
+        joinBtn.textContent = 'Join Meeting';
+      }
+    };
+
+    function MeetingApp({ token, url }) {
+      return (
+        <LiveKitRoom
+          video={true}
+          audio={true}
+          token={token}
+          serverUrl={url}
+          data-lk-theme="default"
+          style={{ height: '100vh', width: '100vw' }}
+          onDisconnected={() => {
+            // When user leaves the meeting, reload the page to go back to the join screen
+            window.location.reload();
+          }}
+        >
+          <VideoConference />
+          <RoomAudioRenderer />
+        </LiveKitRoom>
+      );
+    }
+    
+    // Allow pressing Enter in the input field
+    document.getElementById('participantName').addEventListener('keypress', function (e) {
+      if (e.key === 'Enter') {
+        window.joinMeeting();
+      }
+    });
+  </script>
+</body>
+</html>

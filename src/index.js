@@ -25,6 +25,7 @@ const counselorsRouter = require('./routes/counselors');
 const campaignsRouter  = require('./routes/campaigns');
 const { requireAuth, requireAdmin } = require('./middleware/auth');
 const followUpEngine   = require('./jobs/followUpEngine');
+const livekitSvc       = require('./services/livekitService');
 
 const app = express();
 
@@ -46,7 +47,22 @@ app.use('/webhook', webhookRouter);
 // Public auth bootstrap (returns Supabase URL + anon key)
 app.use('/auth', authRouter);
 
-// Protected dashboard API — all /api/* require a valid Supabase JWT
+// Public API endpoint for meeting tokens (no JWT required)
+app.post('/api/meeting/token', async (req, res) => {
+  try {
+    const { roomName, participantName, isHost } = req.body;
+    if (!roomName || !participantName) {
+      return res.status(400).json({ error: 'roomName and participantName are required' });
+    }
+    const token = await livekitSvc.generateToken(roomName, participantName, { isHost });
+    res.json({ token, url: cfg.livekit.url });
+  } catch (err) {
+    logger.error('Failed to generate LiveKit token', { msg: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Protected dashboard API — all /api/* (except public routes above) require a valid Supabase JWT
 app.use('/api', requireAuth);
 app.use('/api', apiRouter);
 app.use('/api/crm', crmRouter);
@@ -85,6 +101,11 @@ app.get('/reset-password.html', (req, res) => {
 // Route for clean password-reset URL (target of the Supabase recovery email link)
 app.get('/reset-password', (req, res) => {
   res.sendFile(path.join(dashDir, 'reset-password.html'));
+});
+
+// Route for meeting UI
+app.get('/meeting/:roomName', (req, res) => {
+  res.sendFile(path.join(dashDir, 'meeting.html'));
 });
 
 if (fs.existsSync(dashDir)) {

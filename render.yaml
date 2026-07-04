@@ -62,6 +62,14 @@ services:
       - key: SUPABASE_ANON_KEY
         sync: false
 
+      # LiveKit (Video Meetings)
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+
       # Company
       - key: COUNSELOR_NAME
         value: Shashi Kumar

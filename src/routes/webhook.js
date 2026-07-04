@@ -16,6 +16,7 @@ const twilioSvc      = require('../services/twilioService');
 const aiSvc          = require('../services/aiService');
 const { detectMeetingFromTranscript } = aiSvc;
 const calendarSvc    = require('../services/calendarService');
+const livekitSvc     = require('../services/livekitService');
 const emailSvc       = require('../services/emailService');
 const sheetsSvc      = require('../services/sheetsService');
 const { scoreLead, detectSentiment } = require('../services/leadScoring');
@@ -120,9 +121,16 @@ router.post('/call/start', async (req, res) => {
     sessions.set(leadId, { history: [], turnCount: 0, isFollowUp, campaignType: campaign.type, campaign });
 
     const studentFirst = lead.fullName.split(' ')[0];
-    const opener = isFollowUp
-      ? `Hello, this is Shashi from Aiprep365. May I please speak with ${studentFirst} or their parent?`
-      : `Hello, this is Shashi from Aiprep365. Am I speaking with ${studentFirst}?`;
+    
+    // Check if the campaign has a custom opener defined
+    let opener = '';
+    if (campaign.opener) {
+      opener = campaign.opener(lead, isFollowUp);
+    } else {
+      opener = isFollowUp
+        ? `Hello, this is Shashi calling from Test Prep Pundits. May I please speak with ${studentFirst} or their parent?`
+        : `Hello, this is Shashi calling from Test Prep Pundits. Am I speaking with ${studentFirst}?`;
+    }
 
     res.send(twilioSvc.twimlStart(opener, respondUrl(cfg.server.baseUrl, leadId)));
   } catch (err) {
@@ -583,7 +591,9 @@ router.post('/call/book', async (req, res) => {
       // ── Booking succeeded ──
       lead.meeting = {
         googleEventId: booking.googleEventId,
-        meetLink:      booking.meetLink,
+        meetLink:      booking.meetLink,       // LiveKit guest URL
+        hostMeetLink:  booking.hostMeetLink,   // LiveKit counselor URL
+        roomName:      booking.roomName,       // LiveKit room identifier
         scheduledAt:   booking.scheduledAt,
         status:        'scheduled',
       };
@@ -839,15 +849,16 @@ async function _finaliseCall(lead, session, callSid, reason) {
           // Parse the verbally confirmed time into a real Date
           const scheduledAt = _parseMeetingTime(detection.scheduledTime, detection.scheduledDate);
 
-          // Generate a unique Jitsi meeting link (same approach as calendarSvc)
-          const jitsiRoom = `Aiprep365-${lead.fullName.replace(/\s+/g, '')}-${Date.now().toString(36)}`;
-          const jitsiUrl  = `https://meet.jit.si/${jitsiRoom}`;
+          // Generate a unique LiveKit room name and meeting URL
+          const roomName = livekitSvc.generateRoomName(lead);
+          const jitsiUrl = livekitSvc.generateMeetingUrl(roomName);  // kept var name for compatibility
 
           // Save meeting on the lead
           lead.meeting = {
-            meetLink:           jitsiUrl,
-            scheduledAt:        scheduledAt,
-            status:             'scheduled',
+            meetLink:            jitsiUrl,    // LiveKit guest URL
+            roomName:            roomName,    // LiveKit room identifier
+            scheduledAt:         scheduledAt,
+            status:              'scheduled',
             bookedViaTranscript: true,
           };
           lead.status      = 'meeting-scheduled';
