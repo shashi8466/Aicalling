@@ -845,7 +845,8 @@ async function _finaliseCall(lead, session, callSid, reason) {
     const meetingAlreadySaved = !!(lead.meeting?.scheduledAt);
     if (!meetingAlreadySaved && transcript.length > 80) {
       try {
-        const detection = await detectMeetingFromTranscript(transcript, lead);
+        const campaign = session?.campaign || campaignReg.getCampaign(lead.campaignId, lead);
+        const detection = await detectMeetingFromTranscript(transcript, lead, campaign);
         if (detection.booked && detection.confidence === 'high') {
           logger.info(`✅ Post-call meeting rescue triggered for ${lead.fullName} — time: ${detection.rawTime}`);
 

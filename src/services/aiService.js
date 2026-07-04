@@ -461,14 +461,19 @@ If caller explicitly declines THREE times after meeting was offered each time: "
  *   { booked: boolean, scheduledTime: string|null, scheduledDate: string|null,
  *     confidence: 'high'|'low', rawTime: string|null }
  */
-async function detectMeetingFromTranscript(transcript, lead) {
-  const prompt = `You are analyzing a call transcript to determine if a consultation meeting was successfully booked.
+async function detectMeetingFromTranscript(transcript, lead, campaign = null) {
+  const isBusiness = campaign?.type === 'business-partner';
+  const agentRole = isBusiness ? 'HGI business advisor (Ravi)' : 'AI admissions counselor (Shashi from Aiprep365)';
+  const callerRole = isBusiness ? 'potential business partner' : 'student/parent';
+  const meetingType = isBusiness ? 'introductory business meeting' : 'free consultation';
+
+  const prompt = `You are analyzing a call transcript to determine if a ${meetingType} was successfully booked.
 
 IMPORTANT CONTEXT:
-- "AGENT" is the AI admissions counselor (Shashi from Aiprep365).
-- "Caller" is the student/parent on the phone.
-- A meeting is BOOKED only if BOTH parties agreed on a specific time AND the AGENT explicitly confirmed it (e.g., "I've scheduled", "I've booked", "you're all set for", "I'll put you down for", "Perfect, so [time] it is").
-- The AGENT verbally offering times does NOT mean booked — the Caller must have agreed.
+- "AGENT" is the ${agentRole}.
+- "Caller" is the ${callerRole}.
+- A meeting is BOOKED only if BOTH parties agreed on a specific time AND the AGENT explicitly confirmed it (e.g., "I've scheduled", "I've booked", "you're all set for", "I'll put you down for", "Perfect, so [time] it is", "Your meeting has been successfully scheduled", "I'll schedule that for you").
+- The AGENT verbally offering times does NOT mean booked — the Caller must have agreed.`;
 
 Look for patterns like:
   AGENT: "I've scheduled your free consultation for 11:00 a.m."
