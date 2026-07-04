@@ -473,7 +473,7 @@ IMPORTANT CONTEXT:
 - "AGENT" is the ${agentRole}.
 - "Caller" is the ${callerRole}.
 - A meeting is BOOKED only if BOTH parties agreed on a specific time AND the AGENT explicitly confirmed it (e.g., "I've scheduled", "I've booked", "you're all set for", "I'll put you down for", "Perfect, so [time] it is", "Your meeting has been successfully scheduled", "I'll schedule that for you").
-- The AGENT verbally offering times does NOT mean booked — the Caller must have agreed.`;
+- The AGENT verbally offering times does NOT mean booked — the Caller must have agreed.
 
 Look for patterns like:
   AGENT: "I've scheduled your free consultation for 11:00 a.m."
