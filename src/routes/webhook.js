@@ -629,10 +629,13 @@ router.post('/call/book', async (req, res) => {
 
       // ── MEETING_BOOKED state: send a hardcoded confirmation — do NOT route through AI ──
       // This ensures the AI never falls back to [OFFER_MEETING] on this turn.
+      const isBusiness = session.campaign?.type === 'business-partner';
+      const topic = isBusiness ? 'the business opportunity' : 'SAT, ACT, AP, College Admissions';
+      
       const confirmMsg =
-        `Perfect! Your free consultation has been successfully scheduled. ` +
-        `You'll receive a confirmation email with your meeting details and Google Meet link shortly. ` +
-        `Before we finish, is there anything else you'd like to know about SAT, ACT, AP, College Admissions, or your upcoming consultation?`;
+        `Perfect! Your free meeting has been successfully scheduled. ` +
+        `You'll receive a confirmation email with your meeting details and link shortly. ` +
+        `Before we finish, is there anything else you'd like to know about ${topic}, or your upcoming meeting?`;
       return res.send(twilioSvc.twimlRespond(
         confirmMsg,
         respondUrl(cfg.server.baseUrl, leadId)
@@ -671,8 +674,8 @@ router.post('/call/book', async (req, res) => {
     });
 
     const fallbackMsg =
-      `Wonderful! I've noted down ${chosen.displayTime} for ${studentFirst}'s consultation. ` +
-      `Our team will send you the confirmation email with the Google Meet link within the next few minutes. ` +
+      `Got it! Let's lock in ${chosen.displayTime}. ` +
+      `Our team will send you the confirmation email with the meeting link within the next few minutes. ` +
       `Thanks so much, and have a great day!`;
     return res.send(twilioSvc.twimlBookingConfirm(fallbackMsg));
 
@@ -909,6 +912,16 @@ async function _finaliseCall(lead, session, callSid, reason) {
     const { score, category } = scoreLead(lead);
     lead.leadScore    = score;
     lead.leadCategory = category;
+
+    // --- PREVENT RACE CONDITION OVERWRITE ---
+    // The /book endpoint might have run concurrently and saved the meeting.
+    // We must fetch the latest DB state to ensure we don't erase the meeting.
+    const freshLead = await Lead.findById(lead._id);
+    if (freshLead && freshLead.status === 'meeting-scheduled') {
+      lead.status = 'meeting-scheduled';
+      lead.meeting = freshLead.meeting;
+      lead.isQualified = true;
+    }
 
     if (lead.status === 'calling' || lead.status === 'contacted') {
       // Only reset to contacted if rescue didn't already set meeting-scheduled
