@@ -162,6 +162,17 @@
     };
 
     function MeetingApp({ token, url }) {
+      const [disconnected, setDisconnected] = React.useState(false);
+
+      if (disconnected) {
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#fff' }}>
+            <h2>You have left the meeting.</h2>
+            <button onClick={() => window.location.reload()} style={{ padding: '10px 20px', fontSize: '16px', marginTop: '20px', cursor: 'pointer', borderRadius: '8px', border: 'none', background: '#3b82f6', color: 'white' }}>Return to Join Screen</button>
+          </div>
+        );
+      }
+
       return (
         <LiveKitRoom
           video={true}
@@ -172,8 +183,8 @@
           data-lk-theme="default"
           style={{ height: '100vh', width: '100vw' }}
           onDisconnected={() => {
-            // When user leaves the meeting, reload the page to go back to the join screen
-            window.location.reload();
+            console.log('LiveKit disconnected');
+            setDisconnected(true);
           }}
         >
           <VideoConference />
