@@ -888,22 +888,39 @@ async function _finaliseCall(lead, session, callSid, reason) {
     // If the AI verbally confirmed a consultation during the call but the formal
     // /slots → /book pipeline was never triggered, the meeting record is missing.
     // We detect this and retroactively create the full meeting record here.
-    const meetingAlreadySaved = !!(lead.meeting?.scheduledAt);
-    if (!meetingAlreadySaved && transcript.length > 80) {
+    const supabase = require('../db/supabase');
+    const { data: sqlMeetings } = await supabase
+      .from('meetings')
+      .select('id')
+      .eq('lead_id', lead._id)
+      .limit(1);
+    const meetingAlreadySaved = sqlMeetings && sqlMeetings.length > 0;
+
+    const lowerTranscript = transcript.toLowerCase();
+    const hasConfirmationPhrase = 
+      lowerTranscript.includes('successfully scheduled') ||
+      lowerTranscript.includes('confirmed for') ||
+      lowerTranscript.includes('booked you in') ||
+      lowerTranscript.includes('all set for') ||
+      lowerTranscript.includes('scheduled your free') ||
+      lowerTranscript.includes('meeting has been successfully scheduled');
+
+    if (!meetingAlreadySaved && (transcript.length > 80 || hasConfirmationPhrase)) {
       try {
         const campaign = session?.campaign || campaignReg.getCampaign(lead.campaignId, lead);
         const detection = await detectMeetingFromTranscript(transcript, lead, campaign);
-        if (detection.booked && detection.confidence === 'high') {
-          logger.info(`✅ Post-call meeting rescue triggered for ${lead.fullName} — time: ${detection.rawTime}`);
+        if (detection.booked || hasConfirmationPhrase) {
+          logger.info(`✅ Post-call meeting rescue triggered for ${lead.fullName} — time: ${detection.rawTime || 'pre-existing'}`);
 
           // Parse the verbally confirmed time into a real Date
-          const scheduledAt = _parseMeetingTime(detection.scheduledTime, detection.scheduledDate);
+          const scheduledAt = lead.meeting?.scheduledAt 
+            ? new Date(lead.meeting.scheduledAt) 
+            : _parseMeetingTime(detection.scheduledTime, detection.scheduledDate);
 
           // Generate a unique LiveKit room name and meeting URL
-          const roomName = livekitSvc.generateRoomName(lead);
-          const jitsiUrl = livekitSvc.generateMeetingUrl(roomName);  // kept var name for compatibility
+          const roomName = lead.meeting?.roomName || livekitSvc.generateRoomName(lead);
+          const jitsiUrl = lead.meeting?.meetLink || livekitSvc.generateMeetingUrl(roomName);
 
-          // Save meeting on the lead
           // Save meeting on the lead and schedule reminders
           const meetingService = require('../services/meetingService');
           await meetingService.createMeetingAndReminders(lead, {
@@ -922,7 +939,7 @@ async function _finaliseCall(lead, session, callSid, reason) {
               await sheetsSvc.updateRow(lead.sheetRowIndex, {
                 status:      'Meeting Scheduled',
                 score:       lead.leadScore,
-                summary:     `[Auto-rescued] Meeting verbally confirmed for ${scheduledET.format('MMM Do [at] h:mm A z')}. AI time: "${detection.rawTime}".`,
+                summary:     `[Auto-rescued] Meeting confirmed for ${scheduledET.format('MMM Do [at] h:mm A z')}.`,
                 meetingDate: scheduledET.format('YYYY-MM-DD'),
                 meetingTime: scheduledET.format('h:mm A z'),
                 meetLink:    jitsiUrl,
@@ -933,11 +950,8 @@ async function _finaliseCall(lead, session, callSid, reason) {
               logger.error('Post-call meeting rescue tasks failed', { msg: e.message });
             }
           });
-        } else if (detection.booked && detection.confidence === 'low') {
-          logger.warn(`⚠️  Post-call rescue: low-confidence booking detected for ${lead.fullName} — skipping auto-save. Reason: ${detection.reasoning}`);
         }
       } catch (rescueErr) {
-        // Never let the rescue block crash the finalise flow
         logger.error('Post-call meeting rescue error', { msg: rescueErr.message });
       }
     }
@@ -962,14 +976,31 @@ async function _finaliseCall(lead, session, callSid, reason) {
     // The /book endpoint might have run concurrently and saved the meeting.
     // We must fetch the latest DB state to ensure we don't erase the meeting.
     const freshLead = await Lead.findById(lead._id);
-    if (freshLead && freshLead.status === 'meeting-scheduled') {
-      lead.status = 'meeting-scheduled';
-      lead.meeting = freshLead.meeting;
-      lead.isQualified = true;
-    }
+    const hasMeeting = !!(lead.meeting?.scheduledAt) || 
+                       !!(freshLead?.meeting?.scheduledAt) || 
+                       lead.meetingStatus === 'Booked' || 
+                       freshLead?.meetingStatus === 'Booked' ||
+                       lead.status === 'meeting-scheduled' ||
+                       freshLead?.status === 'meeting-scheduled';
 
-    if (lead.status === 'calling' || lead.status === 'contacted') {
-      // Only reset to contacted if rescue didn't already set meeting-scheduled
+    if (hasMeeting) {
+      lead.status = 'meeting-scheduled';
+      lead.meetingStatus = 'Booked';
+      lead.isQualified = true;
+      if (freshLead && freshLead.meeting) {
+        lead.meeting = freshLead.meeting;
+      }
+      
+      // Notify dashboards immediately
+      try {
+        const crmRouter = require('./crm');
+        if (crmRouter.broadcastUpdate) {
+          crmRouter.broadcastUpdate('meeting-booked', { leadId: lead._id });
+        }
+      } catch (sseErr) {
+        logger.error('SSE update broadcast failed', sseErr);
+      }
+    } else if (lead.status === 'calling' || lead.status === 'contacted') {
       if (lead.status === 'calling') lead.status = 'contacted';
     }
     await lead.save();
