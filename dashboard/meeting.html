@@ -338,10 +338,10 @@ html, body { height: 100%; font-family: 'Inter', system-ui, sans-serif; backgrou
 .tb-sep { width: 1px; height: 30px; background: var(--border); margin: 0 3px; flex-shrink: 0; }
 
 @media (max-width: 600px) {
-  :root { --tbar-h: 68px; --panel-w: 100vw; }
-  .tbb { width: 40px; height: 40px; font-size: 15px; }
-  .tbl { font-size: .5rem; }
-  #toolbar { gap: 4px; }
+  :root { --tbar-h: 58px; --panel-w: 100vw; }
+  .tbb { width: 36px; height: 36px; font-size: 14px; }
+  .tbl { display: none; }
+  #toolbar { gap: 3px; padding: 0 4px; }
   .tb-sep { display: none; }
 }
 
@@ -444,7 +444,7 @@ html, body { height: 100%; font-family: 'Inter', system-ui, sans-serif; backgrou
 /* ─── Disconnected ─── */
 #pg-disc {
   display: none; flex-direction: column; align-items: center;
-  justify-content: center; height: 100vh; gap: 1.2rem; text-align: center;
+  justify-content: center; height: 100%; height: 100dvh; gap: 1.2rem; text-align: center;
   padding: 2rem;
   background: radial-gradient(ellipse at 50% 50%, #1e2f5e 0%, #1a1a2e 65%);
 }
