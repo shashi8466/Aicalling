@@ -246,9 +246,17 @@ html, body { height: 100%; font-family: 'Inter', system-ui, sans-serif; backgrou
 }
 #side-panel.open { width: var(--panel-w); flex: 0 0 var(--panel-w); }
 
-.panel-tab-bar {
   display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  position: relative;
 }
+.panel-close-btn {
+  background: none; border: none; color: var(--txt2);
+  padding: 0 16px; cursor: pointer; font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  position: absolute; right: 0; top: 0; bottom: 0;
+}
+.panel-close-btn:hover { color: var(--txt); }
+
 .ptab {
   flex: 1; padding: 12px 0; font-size: .8rem; font-weight: 600;
   text-align: center; cursor: pointer; color: var(--txt2);
@@ -343,6 +351,25 @@ html, body { height: 100%; font-family: 'Inter', system-ui, sans-serif; backgrou
   .tbl { display: none; }
   #toolbar { gap: 3px; padding: 0 4px; }
   .tb-sep { display: none; }
+
+  /* Mobile Bottom Sheet for Side Panel */
+  #side-panel {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    top: auto;
+    height: 0;
+    width: 100vw !important;
+    flex: none !important;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    transition: height .28s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 150;
+    box-shadow: 0 -8px 32px rgba(0,0,0,0.5);
+    background: var(--panel);
+  }
+  #side-panel.open {
+    height: 70%; /* slides up from bottom */
+  }
 }
 
 /* ─── Reactions ─── */
@@ -533,6 +560,7 @@ html, body { height: 100%; font-family: 'Inter', system-ui, sans-serif; backgrou
       <div class="panel-tab-bar">
         <div class="ptab active" data-tab="participants" onclick="switchTab('participants')">People</div>
         <div class="ptab" data-tab="chat" onclick="switchTab('chat')">Chat <span id="chat-dot" style="display:none;color:var(--red)">●</span></div>
+        <button class="panel-close-btn" onclick="doPanel(panelOpen)">✕</button>
       </div>
       <div class="panel-body">
         <!-- Participants pane -->
@@ -984,10 +1012,20 @@ function onTrackUnmute(pub,p){
 }
 
 function onSpeakers(speakers){
-  Object.keys(tiles).forEach(function(sid){ tiles[sid].tile.classList.remove('speaking'); });
-  speakers.forEach(function(p){
-    var t=tiles[p.sid]; if(t) t.tile.classList.add('speaking');
+  var hasSpeaker = speakers.length > 0;
+  Object.keys(tiles).forEach(function(sid){
+    tiles[sid].tile.classList.remove('speaking');
+    tiles[sid].tile.classList.remove('dominant');
   });
+  if (hasSpeaker) {
+    var activeSpeaker = speakers[0];
+    var t = tiles[activeSpeaker.sid];
+    if (t) {
+      t.tile.classList.add('speaking');
+      t.tile.classList.add('dominant');
+    }
+  }
+  reflow();
 }
 
 function onNetQual(qual, p){
@@ -1026,16 +1064,50 @@ function onDisc(){
 /* ════ GRID LAYOUT ════ */
 function reflow(){
   var grid=$('video-grid'); if(!grid) return;
-  var n=Object.keys(tiles).length; if(!n) return;
-  var cols,rows;
-  if(n===1){cols=1;rows=1;}
-  else if(n===2){cols=2;rows=1;}
-  else if(n<=4){cols=2;rows=2;}
-  else if(n<=6){cols=3;rows=2;}
-  else if(n<=9){cols=3;rows=3;}
-  else{cols=4;rows=Math.ceil(n/4);}
-  grid.style.gridTemplateColumns='repeat('+cols+',1fr)';
-  grid.style.gridTemplateRows='repeat('+rows+',1fr)';
+  var keys = Object.keys(tiles);
+  var n=keys.length; if(!n) return;
+
+  var isMobile = window.innerWidth <= 600;
+  var isPortrait = window.innerHeight > window.innerWidth;
+
+  // Reset grid item styles first
+  keys.forEach(function(sid){
+    var tile = tiles[sid].tile;
+    tile.style.gridRow = '';
+    tile.style.gridColumn = '';
+  });
+
+  if (isMobile && isPortrait) {
+    grid.style.gridTemplateColumns = '1fr';
+    
+    // Check if there is a dominant speaker and n > 1
+    var dominantSid = keys.find(function(sid){ return tiles[sid].tile.classList.contains('dominant'); });
+    if (dominantSid && n > 1) {
+      grid.style.gridTemplateRows = '2fr repeat(' + (n - 1) + ', 1fr)';
+      var domTile = tiles[dominantSid].tile;
+      domTile.style.gridRow = '1';
+
+      var rowIdx = 2;
+      keys.forEach(function(sid){
+        if (sid !== dominantSid) {
+          tiles[sid].tile.style.gridRow = '' + (rowIdx++);
+        }
+      });
+    } else {
+      grid.style.gridTemplateRows = 'repeat(' + n + ', 1fr)';
+    }
+  } else {
+    // Desktop layout
+    var cols, rows;
+    if(n===1){cols=1;rows=1;}
+    else if(n===2){cols=2;rows=1;}
+    else if(n<=4){cols=2;rows=2;}
+    else if(n<=6){cols=3;rows=2;}
+    else if(n<=9){cols=3;rows=3;}
+    else{cols=4;rows=Math.ceil(n/4);}
+    grid.style.gridTemplateColumns='repeat('+cols+',1fr)';
+    grid.style.gridTemplateRows='repeat('+rows+',1fr)';
+  }
 }
 
 /* ════ CONTROLS ════ */
@@ -1311,6 +1383,9 @@ document.addEventListener('click',function(e){
     emojiOpen=false; ep.classList.remove('open'); eb.classList.remove('on');
   }
 });
+
+/* ════ RESIZE / ROTATION LISTENER ════ */
+window.addEventListener('resize', reflow);
 
 /* ════ WIRE GLOBAL STUBS ════ */
 window.__M={
