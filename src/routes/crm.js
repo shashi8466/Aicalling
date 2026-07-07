@@ -584,4 +584,60 @@ async function scheduleFollowUps(leadId) {
   return docs;
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+//   CALLBACK REQUESTS
+// ═══════════════════════════════════════════════════════════════════════
+router.get('/callbacks', async (req, res) => {
+  try {
+    const CallbackRequest = require('../models/CallbackRequest');
+    const docs = await CallbackRequest.find({}, { sort: { scheduledAt: -1 }, limit: 200 });
+    res.json(docs);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/callbacks/mock-receive', async (req, res) => {
+  try {
+    const { subject, body, fromEmail, fromName } = req.body;
+    if (!body || !fromEmail) {
+      return res.status(400).json({ error: 'body and fromEmail are required' });
+    }
+    const poller = require('../jobs/emailCallbackPoller');
+    const request = await poller.processEmail(subject || 'Callback Request', body, fromEmail, fromName || 'Unknown Student');
+    res.status(201).json({ ok: true, request });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+//   REAL-TIME UPDATES (SSE)
+// ═══════════════════════════════════════════════════════════════════════
+let updateClients = [];
+
+router.get('/updates/stream', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  updateClients.push(res);
+
+  req.on('close', () => {
+    updateClients = updateClients.filter(c => c !== res);
+  });
+});
+
+function broadcastUpdate(type, data = {}) {
+  updateClients.forEach(c => {
+    try {
+      c.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
+    } catch (err) {
+      // client connection might be broken
+    }
+  });
+}
+
 module.exports = router;
+module.exports.broadcastUpdate = broadcastUpdate;

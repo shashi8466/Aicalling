@@ -56,6 +56,40 @@ class EmailService {
     });
   }
 
+  _buildIcsAttachment(lead, tStr) {
+    try {
+      const start = moment(lead.meeting.scheduledAt);
+      const end = start.clone().add(45, 'minutes'); // 45 mins
+      const formatDate = (m) => m.utc().format('YYYYMMDDTHHmmss[Z]');
+      const meetLink = lead.meeting.meetLink || '';
+
+      const ics = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Aiprep365//NONSGML Event//EN',
+        'CALSCALE:GREGORIAN',
+        'BEGIN:VEVENT',
+        `DTSTART:${formatDate(start)}`,
+        `DTEND:${formatDate(end)}`,
+        `SUMMARY:Aiprep365 Free Admissions Consultation - ${lead.fullName}`,
+        `DESCRIPTION:Join your admissions consultation using this link: ${meetLink}. Join instructions: Please join from a quiet room with a working microphone and camera.`,
+        `LOCATION:${meetLink}`,
+        `URL:${meetLink}`,
+        'STATUS:CONFIRMED',
+        'END:VEVENT',
+        'END:VCALENDAR'
+      ].join('\r\n');
+
+      return {
+        name: 'consultation.ics',
+        content: Buffer.from(ics).toString('base64'),
+      };
+    } catch (e) {
+      logger.error('Failed to generate ICS attachment', e);
+      return null;
+    }
+  }
+
   async sendMeetingConfirmation(lead) {
     if (!lead.email) {
       const err = `Lead ${lead._id} missing email address`;
@@ -71,12 +105,43 @@ class EmailService {
       .tz('America/New_York')
       .format('dddd, MMMM Do [at] h:mm A [ET]');
     const html = await this._wrap(this._meetingConfBody(lead, t), lead);
-    return this._send({
+    const attachment = this._buildIcsAttachment(lead, t);
+
+    // Send email to student (and CC parent)
+    const resStudent = await this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
       subject: `✅ Consultation Confirmed – ${t}`,
       html,
+      attachment,
     });
+
+    // Notify assigned counselor/admin
+    const counselorEmail = cfg.company.counselorEmail || cfg.brevo.fromEmail;
+    if (counselorEmail && counselorEmail !== lead.email) {
+      this._send({
+        to:      counselorEmail,
+        subject: `📅 Assigned Counselor Copy: Consultation Confirmed – ${lead.fullName} – ${t}`,
+        html: `
+          <div style="font-family:sans-serif;padding:20px;color:#333;">
+            <h2 style="color:#1a3c6e;">Assigned Counselor Notification</h2>
+            <p>A meeting has been successfully booked with <strong>${lead.fullName}</strong>.</p>
+            <div style="background:#eff6ff;padding:15px;border-radius:8px;border-left:4px solid #2563eb;margin:15px 0;line-height:1.6;">
+              <strong>Student:</strong> ${lead.fullName}<br>
+              <strong>Email:</strong> ${lead.email}<br>
+              <strong>Phone:</strong> ${lead.phone}<br>
+              <strong>Date & Time:</strong> ${t}<br>
+              <strong>Meeting Link (LiveKit Guest):</strong> <a href="${lead.meeting?.meetLink}">${lead.meeting?.meetLink}</a><br>
+              <strong>Counselor Join Link:</strong> <a href="${lead.meeting?.hostMeetLink || lead.meeting?.meetLink}">${lead.meeting?.hostMeetLink || lead.meeting?.meetLink}</a>
+            </div>
+            <p style="font-size:12px;color:#888;">This is a notification copy sent directly to you as the counselor.</p>
+          </div>
+        `,
+        attachment,
+      }).catch(e => logger.error('Counselor notification copy failed', e));
+    }
+
+    return resStudent;
   }
 
   async sendNoAnswer(lead) {
@@ -95,7 +160,7 @@ class EmailService {
     });
   }
 
-  async sendMeetingReminder(lead) {
+  async sendMeetingReminder(lead, reminderType = '24h') {
     if (!lead.email) {
       const err = `Lead ${lead._id} missing email address`;
       logger.error(err);
@@ -109,12 +174,45 @@ class EmailService {
     const t = moment(lead.meeting.scheduledAt)
       .tz('America/New_York')
       .format('dddd, MMMM Do [at] h:mm A [ET]');
-    const html = await this._wrap(this._reminderBody(lead, t), lead);
+    
+    let subject = `⏰ Reminder: Your Consultation Tomorrow – ${t}`;
+    let body = this._reminderBody(lead, t);
+
+    if (reminderType === '1h') {
+      subject = `⏰ Reminder: Your Consultation is in 1 Hour – ${t}`;
+      body = `
+        <h2>See you in 1 Hour! ⏰</h2>
+        <p>Hi ${lead.parentName || lead.fullName}! This is a friendly reminder that your free admissions consultation is starting in 1 hour.</p>
+        <div class="box">
+          📅 <strong>${t}</strong><br>
+          🎥 Format: Video Meeting (no signup required)<br><br>
+          ${lead.meeting?.meetLink ? `<a href="${lead.meeting.meetLink}#config.prejoinPageEnabled=true" style="color:#2563eb;font-weight:700">🔗 Click to Join Video Meeting</a>` : ''}
+        </div>
+        <p>Join instructions: Please make sure you are in a quiet room with a working internet connection and microphone/camera.</p>
+      `;
+    } else if (reminderType === '10m') {
+      subject = `🚨 Starting in 10 Mins: Join Your Consultation – ${t}`;
+      body = `
+        <h2>Starting in 10 Minutes! 🚨</h2>
+        <p>Hi ${lead.parentName || lead.fullName}! We are ready for you. Your free admissions consultation is starting in 10 minutes.</p>
+        <div class="box">
+          📅 <strong>${t}</strong><br>
+          🎥 Format: Video Meeting<br><br>
+          ${lead.meeting?.meetLink ? `<a href="${lead.meeting.meetLink}#config.prejoinPageEnabled=true" style="color:#2563eb;font-weight:700">🔗 Click to Join Video Meeting Now</a>` : ''}
+        </div>
+        <p>Join instructions: Click the link above to join the LiveKit room. Please ensure your camera and microphone are enabled.</p>
+      `;
+    }
+
+    const html = await this._wrap(body, lead);
+    const attachment = this._buildIcsAttachment(lead, t);
+
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
-      subject: `⏰ Reminder: Your Consultation Tomorrow – ${t}`,
+      subject,
       html,
+      attachment,
     });
   }
 
@@ -221,7 +319,7 @@ class EmailService {
 
   // ── Core Brevo API call ──────────────────────────────────────────────
 
-  async _send({ to, cc, subject, html }) {
+  async _send({ to, cc, subject, html, attachment }) {
     // Validate required config
     if (!cfg.brevo.apiKey) {
       const err = 'BREVO_API_KEY not configured in environment';
@@ -256,6 +354,10 @@ class EmailService {
       subject,
       htmlContent: html,
     };
+
+    if (attachment) {
+      payload.attachment = Array.isArray(attachment) ? attachment : [attachment];
+    }
 
     try {
       const res = await axios.post(BREVO_URL, payload, {
@@ -968,6 +1070,22 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
   Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
 </div>`;
+  }
+
+  async sendAdminNotification(subject, content) {
+    const adminEmail = cfg.adminEmail || 'admin@aiprep365.com';
+    return this._send({
+      to: adminEmail,
+      subject,
+      html: `
+        <div style="font-family:sans-serif;padding:20px;color:#333;">
+          <h2 style="color:#ef4444;">AIPrep365 Notification</h2>
+          <p>${content}</p>
+          <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;">
+          <p style="font-size:12px;color:#888;">This is an automated message sent from your AI Admissions Agent Platform.</p>
+        </div>
+      `
+    });
   }
 }
 

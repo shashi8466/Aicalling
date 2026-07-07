@@ -1012,9 +1012,11 @@ table td.cb-col input[type=checkbox], table th.cb-col input[type=checkbox] { wid
       <a data-view="counselor"><span class="icon">🏥</span> Counselor Hub</a>
       <a data-view="pipeline"><span class="icon">🔄</span> Pipeline</a>
       <a data-view="enrollments"><span class="icon">📋</span> Enrollments <span class="nav-badge" id="navEnrollCount">0</span></a>
+      <a data-view="callbacks"><span class="icon">🤙</span> Callback Requests <span class="nav-badge" id="navCallbackCount">0</span></a>
       <a data-view="campaigns"><span class="icon">📣</span> Campaigns</a>
       <a data-view="counselors"><span class="icon">👤</span> Counselors</a>
       <a data-view="settings"><span class="icon">⚙️</span> Settings</a>
+      <a onclick="doLogout()"><span class="icon">🚪</span> Logout</a>
     </nav>
   </aside>
 
@@ -1566,9 +1568,75 @@ table td.cb-col input[type=checkbox], table th.cb-col input[type=checkbox] { wid
                 </tbody>
               </table>
             </div>
+        </div>
+      </section>
+
+      <!-- ─── CALLBACK REQUESTS ─── -->
+      <section class="view" id="view-callbacks">
+        <div class="an-page">
+          <div class="an-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+            <div>
+              <h2 class="an-title">📞 Callback Requests</h2>
+              <p class="an-sub">Track and simulate inbound student callback requests</p>
+            </div>
+            <button class="btn btn-primary" onclick="showMockCallbackModal()">➕ Mock Inbound Email</button>
+          </div>
+
+          <div class="ov-card">
+            <div class="ov-card-body" style="padding:0">
+              <table class="counselor-table">
+                <thead>
+                  <tr>
+                    <th>Student Name</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Requested Time</th>
+                    <th>Time Zone</th>
+                    <th>Scheduled UTC</th>
+                    <th>Retry Count</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="callbackRequestsTableBody">
+                  <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:32px">Loading callback requests…</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>
+
+      <!-- ─── Mock Inbound Email Modal ─── -->
+      <div class="modal-bg" id="mockEmailModal" onclick="if(event.target===this)closeMockEmailModal()">
+        <div class="modal" style="max-width:500px">
+          <div class="modal-header">
+            <div><h2>➕ Simulate Inbound Email</h2><div class="sub">Mock a callback request email</div></div>
+            <button class="modal-close" onclick="closeMockEmailModal()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-row">
+              <label>Student Name</label>
+              <input type="text" id="me_name" placeholder="e.g. rafeeq anwar mohammad">
+            </div>
+            <div class="form-row">
+              <label>Email Address</label>
+              <input type="email" id="me_email" placeholder="e.g. anwar@testpreppundits.com">
+            </div>
+            <div class="form-row">
+              <label>Phone Number (optional)</label>
+              <input type="text" id="me_phone" placeholder="e.g. +17134520639">
+            </div>
+            <div class="form-row">
+              <label>Email Body (Must contain requested time/timezone)</label>
+              <textarea id="me_body" rows="4" placeholder="e.g. Call me at 5pm cst. Regards, Rafeeq."></textarea>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:16px">
+              <button class="btn btn-primary" onclick="submitMockEmail()" style="flex:1">⚡ Send Email</button>
+              <button class="btn btn-secondary" onclick="closeMockEmailModal()">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- ─── SETTINGS ─── -->
       <section class="view" id="view-settings">
@@ -1585,7 +1653,6 @@ table td.cb-col input[type=checkbox], table th.cb-col input[type=checkbox] { wid
               <a onclick="showSettingsPanel('changePassword')">🔑 Change Password</a>
               <a onclick="showSettingsPanel('account')">⚙️ Account Settings</a>
               <a onclick="showSettingsPanel('notifications')">🔔 Notification Preferences</a>
-              <a class="logout-link" onclick="confirmLogout()">🚪 Logout</a>
             </div>
 
             <!-- Content panels -->
@@ -1675,12 +1742,6 @@ table td.cb-col input[type=checkbox], table th.cb-col input[type=checkbox] { wid
                       <div class="form-row">
                         <label>Two-Factor Authentication</label>
                         <div style="color:var(--muted);font-size:13px">Managed via Supabase dashboard. Contact admin to enable 2FA.</div>
-                      </div>
-                    </div>
-                    <div style="padding:14px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:10px">
-                      <div style="font-size:13px;font-weight:600;color:#fca5a5;margin-bottom:6px">Danger Zone</div>
-                      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Logging out will clear your session on this device.</div>
-                      <button class="btn btn-danger btn-sm" onclick="confirmLogout()">🚪 Log Out of Dashboard</button>
                     </div>
                   </div>
                 </div>
@@ -2042,6 +2103,10 @@ table td.cb-col input[type=checkbox], table th.cb-col input[type=checkbox] { wid
             <option value="Not Booked">Not Booked</option>
             <option value="Booked">Booked</option>
           </select>
+        </div>
+        <div class="form-row">
+          <label>Next Scheduled Call</label>
+          <input type="datetime-local" id="lf_nextScheduledCall">
         </div>
       </div>
       <div class="form-row" style="margin-top:4px">
@@ -2787,6 +2852,7 @@ function showView(name) {
     meetings:   'Scheduled Meetings', analytics: 'Reports & Analytics',
     counselor:  'Counselor Dashboard', pipeline: 'Enrollment Pipeline',
     enrollments:'Enrollments', campaigns: 'Campaign Management', counselors: 'Counselor Management', settings: 'Settings',
+    callbacks:  'Callback Requests',
   };
   document.getElementById('pageTitle').textContent = titles[name] || name;
   if (name === 'overview')    loadOverview();
@@ -2800,6 +2866,91 @@ function showView(name) {
   if (name === 'campaigns')   loadCampaigns();
   if (name === 'counselors')  loadCounselors();
   if (name === 'settings')    showSettingsPanel('profile');
+  if (name === 'callbacks')   loadCallbacks();
+}
+
+// ─── Callback Requests View Logic ───
+async function loadCallbacks() {
+  const el = document.getElementById('callbackRequestsTableBody');
+  el.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:32px">Loading callback requests…</td></tr>';
+  try {
+    const list = await api('/crm/callbacks');
+    document.getElementById('navCallbackCount').textContent = list.length;
+    if (!list.length) {
+      el.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:32px">No callback requests found</td></tr>';
+      return;
+    }
+    el.innerHTML = list.map(c => `
+      <tr>
+        <td data-label="Student Name"><strong>${esc(c.studentName)}</strong></td>
+        <td data-label="Email">${esc(c.email)}</td>
+        <td data-label="Phone" style="font-family:monospace">${esc(c.phone || '—')}</td>
+        <td data-label="Requested Time">${esc(c.requestedTime)}</td>
+        <td data-label="Time Zone">${esc(c.timezone)}</td>
+        <td data-label="Scheduled UTC">${new Date(c.scheduledAt).toLocaleString()}</td>
+        <td data-label="Retry Count">${c.retryCount || 0}</td>
+        <td data-label="Status"><span class="status-badge ${getCallbackStatusClass(c.status)}">${esc(c.status)}</span></td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    el.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--danger);padding:32px">${esc(e.message)}</td></tr>`;
+  }
+}
+
+function getCallbackStatusClass(status) {
+  const map = {
+    'Pending': 'queued',
+    'Scheduled': 'meeting-scheduled',
+    'Calling': 'calling',
+    'Completed': 'meeting-completed',
+    'No Answer': 'lost',
+    'Failed': 'lost',
+    'Cancelled': 'cold'
+  };
+  return map[status] || 'cold';
+}
+
+function showMockCallbackModal() {
+  document.getElementById('me_name').value = '';
+  document.getElementById('me_email').value = '';
+  document.getElementById('me_phone').value = '';
+  document.getElementById('me_body').value = '';
+  document.getElementById('mockEmailModal').classList.add('active');
+}
+
+function closeMockEmailModal() {
+  document.getElementById('mockEmailModal').classList.remove('active');
+}
+
+async function submitMockEmail() {
+  const fromName = document.getElementById('me_name').value.trim();
+  const fromEmail = document.getElementById('me_email').value.trim();
+  const phone = document.getElementById('me_phone').value.trim();
+  const body = document.getElementById('me_body').value.trim();
+
+  if (!fromEmail || !body) {
+    toast('Email and Body are required', 'error');
+    return;
+  }
+
+  const payload = {
+    subject: 'Callback Request',
+    body: phone ? `${body} Phone: ${phone}` : body,
+    fromEmail,
+    fromName
+  };
+
+  try {
+    const res = await api('/crm/callbacks/mock-receive', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    toast('✅ Mock email sent successfully', 'success');
+    closeMockEmailModal();
+    loadCallbacks();
+  } catch (e) {
+    toast('❌ ' + e.message, 'error');
+  }
 }
 
 // ─── Overview ──────────────────────────────────────
@@ -4846,6 +4997,7 @@ function openAddLead() {
   document.getElementById('lf_state').value     = '';
   document.getElementById('lf_timeZone').value  = '';
   document.getElementById('lf_meetingStatus').value = 'Not Booked';
+  document.getElementById('lf_nextScheduledCall').value = '';
   populateCampaignSelect('lf_campaign', '');
   document.getElementById('leadFormModal').classList.add('active');
 }
@@ -4868,6 +5020,15 @@ async function openEditLead(id) {
     document.getElementById('lf_state').value     = l.state || '';
     document.getElementById('lf_timeZone').value  = l.timeZone || '';
     document.getElementById('lf_meetingStatus').value = l.meetingStatus || 'Not Booked';
+    
+    let nextCallFormatted = '';
+    if (l.nextScheduledCall) {
+      const d = new Date(l.nextScheduledCall);
+      const pad = n => String(n).padStart(2, '0');
+      nextCallFormatted = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    document.getElementById('lf_nextScheduledCall').value = nextCallFormatted;
+
     await populateCampaignSelect('lf_campaign', l.campaignId || '');
     document.getElementById('leadFormModal').classList.add('active');
   } catch(e) { toast('Failed to load lead: ' + e.message, 'error'); }
@@ -4892,12 +5053,14 @@ async function saveLeadForm() {
   const state    = document.getElementById('lf_state').value.trim();
   const timeZone = document.getElementById('lf_timeZone').value;
   const meetingStatus = document.getElementById('lf_meetingStatus').value;
+  const nextScheduledCallVal = document.getElementById('lf_nextScheduledCall').value;
+  const nextScheduledCall = nextScheduledCallVal ? new Date(nextScheduledCallVal).toISOString() : null;
 
   if (!fullName) { toast('Full name is required', 'error'); return; }
   if (!email)    { toast('Email is required', 'error'); return; }
   if (!phone)    { toast('Phone is required', 'error'); return; }
 
-  const payload = { fullName, email, phone, grade, courseInterest, status, parentName, parentEmail, notes, state, timeZone, meetingStatus };
+  const payload = { fullName, email, phone, grade, courseInterest, status, parentName, parentEmail, notes, state, timeZone, meetingStatus, nextScheduledCall };
   // Assign/clear campaign. On edit, send null to clear; on create, only send when chosen.
   if (id) payload.campaignId = campaignId || null;
   else if (campaignId) payload.campaignId = campaignId;
@@ -5207,7 +5370,25 @@ document.addEventListener('touchstart', () => {}, { passive: true });
   await initAuth();
   loadLeads();
   loadMeetings();
-  setInterval(() => loadLeads(), 30000);
+  loadCallbacks().catch(() => {});
+  
+  // Real-time EventSource Updates
+  try {
+    const sse = new EventSource('/api/crm/updates/stream');
+    sse.onmessage = (e) => {
+      console.log('Real-time update received:', e.data);
+      loadLeads();
+      loadMeetings();
+      loadCallbacks().catch(() => {});
+    };
+  } catch (err) {
+    console.error('Real-time EventSource failed; falling back to 30s polling', err);
+  }
+
+  setInterval(() => {
+    loadLeads();
+    loadCallbacks().catch(() => {});
+  }, 30000);
 })();
 </script>
 </body>

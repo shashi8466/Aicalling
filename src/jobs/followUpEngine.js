@@ -53,6 +53,15 @@ async function processFollowUp(fu) {
     return _complete(fu, 'skipped-status:' + lead.status);
   }
 
+  // Defer follow-up if a future nextScheduledCall exists
+  if (lead.nextScheduledCall) {
+    const moment = require('moment-timezone');
+    if (moment().isBefore(moment(lead.nextScheduledCall))) {
+      logger.info(`FollowUpEngine: Deferring ${fu.followupType} for ${lead.fullName} because nextScheduledCall is in the future (${lead.nextScheduledCall})`);
+      return;
+    }
+  }
+
   let result = 'processed';
 
   switch (fu.followupType) {

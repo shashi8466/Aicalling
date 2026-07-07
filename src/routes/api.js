@@ -407,6 +407,10 @@ router.post('/leads', async (req, res) => {
       status:  status || 'new',
       notes:   notes?.trim() || '',
       source:  'manual',
+      state:   req.body.state || '',
+      timeZone: req.body.timeZone || '',
+      meetingStatus: req.body.meetingStatus || 'Not Booked',
+      nextScheduledCall: req.body.nextScheduledCall || null,
       ...(campaignId ? { campaignId } : {}),
     });
     logger.info(`Lead created manually: ${lead.fullName} <${lead.email}>`);

@@ -27,6 +27,8 @@ const { requireAuth, requireAdmin } = require('./middleware/auth');
 const followUpEngine   = require('./jobs/followUpEngine');
 const livekitSvc       = require('./services/livekitService');
 const tzScheduler      = require('./jobs/tzScheduler');
+const emailCallbackPoller = require('./jobs/emailCallbackPoller');
+const meetingReminderPoller = require('./jobs/meetingReminderPoller');
 
 const app = express();
 
@@ -187,6 +189,8 @@ async function boot() {
     poller.start();
     followUpEngine.start();
     tzScheduler.start();
+    emailCallbackPoller.start();
+    meetingReminderPoller.start();
 
     // 5b. Keep-alive self-ping for free hosting (Render)
     setInterval(() => {

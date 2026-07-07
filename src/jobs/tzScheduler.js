@@ -26,6 +26,61 @@ async function checkAndPlaceCalls() {
       return;
     }
 
+    // 1b. Process due callback requests
+    const CallbackRequest = require('../models/CallbackRequest');
+    const dueCallbacks = await CallbackRequest.find({
+      status: { $in: ['Scheduled', 'Pending'] },
+      scheduledAt: { $lte: new Date() }
+    });
+
+    for (const cb of dueCallbacks) {
+      try {
+        const lead = await Lead.findById(cb.leadId);
+        if (!lead || ['enrolled', 'lost', 'do-not-call', 'do-not-contact'].includes(lead.status)) {
+          cb.status = 'Cancelled';
+          cb.notes = lead ? `Skipped because lead status is ${lead.status}` : 'Lead not found';
+          await cb.save();
+          continue;
+        }
+
+        logger.info(`tzScheduler: Processing Callback Request for ${cb.studentName} (${cb.phone})`);
+        
+        cb.status = 'Calling';
+        cb.lastAttemptAt = new Date();
+        cb.retryCount = (cb.retryCount || 0) + 1;
+        await cb.save();
+
+        lead.status = 'calling';
+        lead.totalCallAttempts = (lead.totalCallAttempts || 0) + 1;
+        lead.callAttempts = lead.callAttempts || [];
+        lead.callAttempts.push({
+          attemptNumber: lead.totalCallAttempts,
+          startTime: new Date(),
+          status: 'initiated'
+        });
+        await lead.save();
+
+        try {
+          const { callSid } = await twilioSvc.call(lead, baseUrl);
+          lead.callAttempts[lead.callAttempts.length - 1].callSid = callSid;
+          await lead.save();
+          logger.info(`tzScheduler: Callback call connected. SID=${callSid}`);
+        } catch (callErr) {
+          logger.error(`tzScheduler: Twilio Callback Call failed for ${cb.studentName}`, { msg: callErr.message });
+          cb.status = 'Failed';
+          cb.notes = `Twilio call error: ${callErr.message}`;
+          await cb.save();
+          
+          lead.status = 'queued';
+          lead.totalCallAttempts = Math.max(0, lead.totalCallAttempts - 1);
+          lead.callAttempts.pop();
+          await lead.save();
+        }
+      } catch (err) {
+        logger.error(`tzScheduler: Error processing callback request ${cb.id}`, { msg: err.message });
+      }
+    }
+
     // 2. Find all active leads with Meeting Status = Not Booked
     // Active means status is NOT enrolled, lost, do-not-call
     const leads = await Lead.find({
@@ -42,6 +97,44 @@ async function checkAndPlaceCalls() {
 
     for (const lead of leads) {
       try {
+        // Check for specific requested call time
+        if (lead.nextScheduledCall) {
+          const scheduledMoment = moment(lead.nextScheduledCall);
+          if (moment().isBefore(scheduledMoment)) {
+            logger.debug(`tzScheduler: Deferring calling ${lead.fullName} until scheduled time: ${lead.nextScheduledCall}`);
+            continue;
+          }
+
+          logger.info(`tzScheduler: Placing Requested Scheduled Call to ${lead.fullName} (${lead.phone})`);
+
+          // Clear scheduled call so it only runs once
+          lead.nextScheduledCall = null;
+          lead.lastCallAt = new Date();
+          lead.totalCallAttempts = (lead.totalCallAttempts || 0) + 1;
+          lead.status = 'calling';
+          lead.callAttempts = lead.callAttempts || [];
+          lead.callAttempts.push({
+            attemptNumber: lead.totalCallAttempts,
+            startTime: new Date(),
+            status: 'initiated'
+          });
+          await lead.save();
+
+          try {
+            const { callSid } = await twilioSvc.call(lead, baseUrl);
+            lead.callAttempts[lead.callAttempts.length - 1].callSid = callSid;
+            await lead.save();
+            logger.info(`tzScheduler: Scheduled call connected. SID=${callSid}`);
+          } catch (callErr) {
+            logger.error(`tzScheduler: Twilio Scheduled Call failed for ${lead.fullName}`, { msg: callErr.message });
+            lead.status = 'queued';
+            lead.totalCallAttempts = Math.max(0, lead.totalCallAttempts - 1);
+            lead.callAttempts.pop();
+            await lead.save();
+          }
+          continue;
+        }
+
         const tz = lead.timeZone || 'America/New_York';
         const nowLocal = moment().tz(tz);
         const currentHour = nowLocal.hour();

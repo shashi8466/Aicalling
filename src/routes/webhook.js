@@ -12,6 +12,7 @@ const express        = require('express');
 const router         = express.Router();
 const OpenAI         = require('openai');
 const Lead           = require('../models/Lead');
+const CallbackRequest = require('../models/CallbackRequest');
 const twilioSvc      = require('../services/twilioService');
 const aiSvc          = require('../services/aiService');
 const { detectMeetingFromTranscript } = aiSvc;
@@ -589,22 +590,16 @@ router.post('/call/book', async (req, res) => {
 
     if (booking) {
       // ── Booking succeeded ──
-      lead.meeting = {
+      const meetingService = require('../services/meetingService');
+      await meetingService.createMeetingAndReminders(lead, {
         googleEventId: booking.googleEventId,
-        meetLink:      booking.meetLink,       // LiveKit guest URL
-        hostMeetLink:  booking.hostMeetLink,   // LiveKit counselor URL
-        roomName:      booking.roomName,       // LiveKit room identifier
+        meetLink:      booking.meetLink,
+        hostMeetLink:  booking.hostMeetLink,
+        roomName:      booking.roomName,
         scheduledAt:   booking.scheduledAt,
-        status:        'scheduled',
-      };
-      lead.status      = 'meeting-scheduled';
-      lead.meetingStatus = 'Booked';
-      lead.isQualified = true;
+      });
 
-      const { score, category } = scoreLead(lead);
-      lead.leadScore    = score;
-      lead.leadCategory = category;
-      await lead.save();
+      const { score } = scoreLead(lead);
 
       // 🔑 GOLDEN RULE: mark session so future turns know meeting is booked
       session.meetingBooked = true;
@@ -700,6 +695,47 @@ router.post('/call/status', async (req, res) => {
       attempt.status   = CallStatus;
       attempt.duration = parseInt(CallDuration) || 0;
       attempt.endTime  = new Date();
+    }
+
+    // Callback Request specific status management
+    const cb = await CallbackRequest.findOne({ leadId: lead._id, status: 'Calling' });
+    if (cb) {
+      if (CallStatus === 'completed') {
+        cb.status = 'Completed';
+        cb.notes = `Call completed successfully. Duration: ${CallDuration}s.`;
+        await cb.save();
+      } else if (CallStatus === 'canceled') {
+        cb.status = 'Cancelled';
+        cb.notes = 'Call cancelled.';
+        await cb.save();
+      } else if (['no-answer', 'busy', 'failed'].includes(CallStatus)) {
+        if (cb.retryCount === 1) {
+          cb.status = 'Scheduled';
+          cb.scheduledAt = new Date(Date.now() + 15 * 60 * 1000);
+          lead.nextScheduledCall = cb.scheduledAt;
+          cb.notes = 'First attempt unanswered. Retry scheduled in 15 minutes.';
+          await cb.save();
+          await lead.save();
+        } else if (cb.retryCount === 2) {
+          cb.status = 'Scheduled';
+          cb.scheduledAt = new Date(Date.now() + 2 * 3600 * 1000);
+          lead.nextScheduledCall = cb.scheduledAt;
+          cb.notes = 'Second attempt unanswered. Retry scheduled in 2 hours.';
+          await cb.save();
+          await lead.save();
+        } else {
+          cb.status = 'No Answer';
+          lead.nextScheduledCall = null;
+          cb.notes = 'Third attempt unanswered. Callback request marked as No Answer.';
+          await cb.save();
+          await lead.save();
+
+          // Send admin notification
+          const subject = `⚠️ Missed Callback Request: ${lead.fullName}`;
+          const content = `Callback request for student ${lead.fullName} (${lead.phone}) went unanswered 3 times and is now marked as No Answer (Missed).`;
+          emailSvc.sendAdminNotification(subject, content).catch(() => {});
+        }
+      }
     }
 
     if (CallStatus === 'completed') {
@@ -856,16 +892,13 @@ async function _finaliseCall(lead, session, callSid, reason) {
           const jitsiUrl = livekitSvc.generateMeetingUrl(roomName);  // kept var name for compatibility
 
           // Save meeting on the lead
-          lead.meeting = {
-            meetLink:            jitsiUrl,    // LiveKit guest URL
-            roomName:            roomName,    // LiveKit room identifier
-            scheduledAt:         scheduledAt,
-            status:              'scheduled',
-            bookedViaTranscript: true,
-          };
-          lead.status      = 'meeting-scheduled';
-          lead.meetingStatus = 'Booked';
-          lead.isQualified = true;
+          // Save meeting on the lead and schedule reminders
+          const meetingService = require('../services/meetingService');
+          await meetingService.createMeetingAndReminders(lead, {
+            meetLink:    jitsiUrl,
+            roomName:    roomName,
+            scheduledAt: scheduledAt,
+          });
 
           logger.info(`📅 Meeting rescue: scheduled at ${scheduledAt.toISOString()} | link: ${jitsiUrl}`);
 
