@@ -265,6 +265,111 @@ If their response is unclear:
 
 
 // ─── Main entry ───────────────────────────────────────────────────────────────
+class ConversationStream {
+  constructor(provider, openaiClient, anthropicClient, params) {
+    this.provider = provider;
+    this.openai = openaiClient;
+    this.anthropic = anthropicClient;
+    this.params = params;
+    this.sentences = [];
+    this.done = false;
+    this.buffer = '';
+    this.fullText = '';
+    this.promise = this._startStream();
+  }
+
+  async _startStream() {
+    try {
+      if (this.provider === 'anthropic' && this.anthropic) {
+        const stream = await this.anthropic.messages.create({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 120,
+          system: this.params.system,
+          messages: this.params.messages,
+          stream: true,
+        });
+
+        for await (const chunk of stream) {
+          if (chunk.type === 'content_block_delta' && chunk.delta?.text) {
+            const text = chunk.delta.text;
+            this.fullText += text;
+            this.buffer += text;
+            this._processBuffer();
+          }
+        }
+      } else {
+        const stream = await this.openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          max_tokens: 150,
+          temperature: 0.65,
+          messages: [{ role: 'system', content: this.params.system }, ...this.params.messages],
+          stream: true,
+        });
+
+        for await (const chunk of stream) {
+          const text = chunk.choices[0]?.delta?.content || '';
+          this.fullText += text;
+          this.buffer += text;
+          this._processBuffer();
+        }
+      }
+
+      // Add remaining buffer
+      const finalText = this.buffer.trim();
+      if (finalText) {
+        this.sentences.push(finalText);
+      }
+      this.done = true;
+    } catch (err) {
+      logger.error('Stream start failed', err);
+      this.done = true;
+    }
+  }
+
+  _processBuffer() {
+    let match;
+    const sentenceRegex = /[^.!?\n]+[.!?\n]+/g;
+    let lastIndex = 0;
+    while ((match = sentenceRegex.exec(this.buffer)) !== null) {
+      const sentence = match[0].trim();
+      if (sentence) {
+        this.sentences.push(sentence);
+      }
+      lastIndex = sentenceRegex.lastIndex;
+    }
+    if (lastIndex > 0) {
+      this.buffer = this.buffer.slice(lastIndex);
+    }
+  }
+
+  async getSentence(index) {
+    while (this.sentences.length <= index && !this.done) {
+      await new Promise(resolve => setTimeout(resolve, 30));
+    }
+    return this.sentences[index] || null;
+  }
+}
+
+function streamChat({ lead, history, userMessage, campaign, systemOverride }) {
+  const snippets = getKnowledge(userMessage);
+  const knowledge = snippets.length
+    ? `\n\nKNOWLEDGE BASE (use this to answer questions):\n${snippets.join('\n---\n')}`
+    : '';
+
+  const system = systemOverride || (buildSystem(lead, campaign) + knowledge);
+  const messages = [
+    ...history,
+    { role: 'user', content: userMessage },
+  ];
+
+  return new ConversationStream(
+    cfg.llm.provider,
+    openai,
+    anthropic,
+    { system, messages }
+  );
+}
+
 // `campaign` (optional) is a campaign-registry entry that steers the script.
 async function chat({ lead, history, userMessage, campaign }) {
   // Retrieve relevant knowledge snippets
@@ -276,7 +381,7 @@ async function chat({ lead, history, userMessage, campaign }) {
   const system = buildSystem(lead, campaign) + knowledge;
 
   try {
-    if (cfg.llm.provider === 'anthropic') {
+    if (cfg.llm.provider === 'anthropic' && anthropic) {
       return await _callClaude(system, history, userMessage);
     }
     return await _callOpenAI(system, history, userMessage);
@@ -543,4 +648,4 @@ ${transcript}`;
   }
 }
 
-module.exports = { chat, extractQualification, summariseCall, buildFollowUpSystem, detectMeetingFromTranscript };
+module.exports = { chat, streamChat, extractQualification, summariseCall, buildFollowUpSystem, detectMeetingFromTranscript };

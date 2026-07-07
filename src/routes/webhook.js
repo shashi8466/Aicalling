@@ -390,69 +390,126 @@ router.post('/call/respond', async (req, res) => {
       ));
     }
 
-    // Get AI response — use follow-up script if this is a Day-3 follow-up call
-    let aiReply;
+    // Get AI response — stream response for low latency
+    let stream;
     if (session.isFollowUp) {
       const { buildFollowUpSystem } = aiSvc;
-      const _openai = new OpenAI({ apiKey: cfg.openai.apiKey });
       const sysPrompt = buildFollowUpSystem(lead);
       const msgs = [...session.history.slice(-12), { role: 'user', content: speech }];
-      const r = await _openai.chat.completions.create({
-        model: 'gpt-4o-mini', max_tokens: 150, temperature: 0.65,
-        messages: [{ role: 'system', content: sysPrompt }, ...msgs],
+      
+      stream = aiSvc.streamChat({
+        lead,
+        history: session.history.slice(-12),
+        userMessage: speech,
+        systemOverride: sysPrompt
       });
-      aiReply = r.choices[0].message.content.trim();
     } else {
-      aiReply = await aiSvc.chat({ lead, history: session.history.slice(-12), userMessage: speech, campaign: session.campaign });
+      stream = aiSvc.streamChat({
+        lead,
+        history: session.history.slice(-12),
+        userMessage: speech,
+        campaign: session.campaign
+      });
     }
 
-    // Add AI turn
-    session.history.push({ role: 'assistant', content: aiReply });
+    session.activeStream = stream;
     sessions.set(leadId, session);
 
-    // Check for special tokens
-    if (aiReply.includes('[OFFER_MEETING]')) {
-      // CRITICAL: If meeting is already booked, NEVER offer slots again.
-      // Suppress [OFFER_MEETING] and stay in the post-booking Q&A state instead.
-      if (session.meetingBooked) {
-        logger.warn(`[OFFER_MEETING] suppressed — meeting already booked for ${lead.fullName}. Staying in MEETING_BOOKED state.`);
-        const clean = aiReply.replace('[OFFER_MEETING]', '').trim();
-        const safeReply = clean || 'Is there anything else I can help you with?';
-        return res.send(twilioSvc.twimlRespond(safeReply, respondUrl(cfg.server.baseUrl, leadId)));
-      }
-      const clean = aiReply.replace('[OFFER_MEETING]', '').trim();
-      // Transition to slot-offering step (handled in /slots)
-      return res.send(twilioSvc.twimlStart(
-        clean || 'Perfect.',
-        slotsUrl(cfg.server.baseUrl, leadId)
-      ));
-    }
-
-    if (aiReply.includes('[END_CALL]')) {
-      const clean = aiReply.replace('[END_CALL]', '').trim();
-
-      // GOLDEN RULE: only allow [END_CALL] if meeting is booked OR they explicitly declined
-      if (session.meetingBooked) {
-        await _finaliseCall(lead, session, req.body.CallSid, 'completed-after-booking');
-        return res.send(twilioSvc.twimlHangup(clean || 'Thank you for your time. Have a wonderful day!'));
-      }
-
-      // No meeting yet — override the AI and PUSH for one instead of hanging up
-      logger.warn(`[END_CALL] suppressed — meeting not booked for ${lead.fullName}. Forcing slot offering.`);
-      const studentFirst = lead.fullName.split(' ')[0];
-      return res.send(twilioSvc.twimlStart(
-        `Before we wrap up, I'd really hate for ${studentFirst} to miss out on this opportunity. Let me find a time that works for you.`,
-        slotsUrl(cfg.server.baseUrl, leadId)
-      ));
-    }
-
-    res.send(twilioSvc.twimlRespond(aiReply, respondUrl(cfg.server.baseUrl, leadId)));
+    // Redirect immediately to continue endpoint to fetch and speak the first sentence
+    const r = new (require('twilio').twiml.VoiceResponse)();
+    r.redirect({ method: 'POST' }, `/webhook/call/continue?leadId=${leadId}&sentenceIndex=0`);
+    return res.send(r.toString());
   } catch (err) {
     logger.error('webhook/respond error', { msg: err.message });
     res.send(twilioSvc.twimlRespond(
       "I'm sorry, I had a brief issue. Could you say that one more time?",
       respondUrl(cfg.server.baseUrl, leadId)
     ));
+  }
+});
+
+// ── STEP 2.5 – Fetch and speak next sentence from stream (Low Latency) ───────
+router.post('/call/continue', async (req, res) => {
+  const { leadId, sentenceIndex } = req.query;
+  res.type('text/xml');
+
+  try {
+    const lead = await Lead.findById(leadId);
+    if (!lead) return res.send(twilioSvc.twimlHangup());
+
+    const session = sessions.get(leadId);
+    if (!session || !session.activeStream) {
+      // Fallback: if no active stream, just listen
+      return res.send(twilioSvc.twimlListen(respondUrl(cfg.server.baseUrl, leadId)));
+    }
+
+    const idx = parseInt(sentenceIndex, 10) || 0;
+    const sentence = await session.activeStream.getSentence(idx);
+
+    if (sentence) {
+      // Clean special tokens
+      let cleanSentence = sentence;
+      const hasOffer = cleanSentence.includes('[OFFER_MEETING]');
+      const hasEnd = cleanSentence.includes('[END_CALL]');
+      cleanSentence = cleanSentence.replace('[OFFER_MEETING]', '').replace('[END_CALL]', '').trim();
+
+      const r = new (require('twilio').twiml.VoiceResponse)();
+      if (cleanSentence) {
+        // Speak the clean sentence
+        twilioSvc._speak(r, cleanSentence);
+      }
+
+      if (hasOffer) {
+        // Clear stream, save history, transition to slots
+        const fullText = session.activeStream.fullText.trim();
+        session.history.push({ role: 'assistant', content: fullText });
+        delete session.activeStream;
+        sessions.set(leadId, session);
+
+        // CRITICAL: If meeting is already booked, NEVER offer slots again.
+        if (session.meetingBooked) {
+          logger.warn(`[OFFER_MEETING] suppressed during stream — meeting already booked for ${lead.fullName}.`);
+          r.redirect({ method: 'POST' }, `/webhook/call/continue?leadId=${leadId}&sentenceIndex=${idx + 1}`);
+        } else {
+          r.redirect({ method: 'POST' }, slotsUrl(cfg.server.baseUrl, leadId));
+        }
+        return res.send(r.toString());
+      }
+
+      if (hasEnd) {
+        // Clear stream, finalize call, hang up (only if allowed)
+        const fullText = session.activeStream.fullText.trim();
+        session.history.push({ role: 'assistant', content: fullText });
+        delete session.activeStream;
+        sessions.set(leadId, session);
+
+        if (session.meetingBooked) {
+          await _finaliseCall(lead, session, req.body.CallSid, 'completed-after-booking');
+          r.hangup();
+        } else {
+          // Suppress [END_CALL] if no meeting yet — override and force slot offer
+          logger.warn(`[END_CALL] suppressed during stream — meeting not booked for ${lead.fullName}. Forcing slot offering.`);
+          r.redirect({ method: 'POST' }, slotsUrl(cfg.server.baseUrl, leadId));
+        }
+        return res.send(r.toString());
+      }
+
+      // Otherwise, redirect to the next sentence
+      r.redirect({ method: 'POST' }, `/webhook/call/continue?leadId=${leadId}&sentenceIndex=${idx + 1}`);
+      return res.send(r.toString());
+    } else {
+      // Stream finished! Save full reply to history
+      const fullReply = session.activeStream.fullText.trim();
+      session.history.push({ role: 'assistant', content: fullReply });
+      delete session.activeStream;
+      sessions.set(leadId, session);
+
+      // Now listen for their next response
+      return res.send(twilioSvc.twimlListen(respondUrl(cfg.server.baseUrl, leadId)));
+    }
+  } catch (err) {
+    logger.error('continue endpoint error', err);
+    return res.send(twilioSvc.twimlHangup());
   }
 });
 

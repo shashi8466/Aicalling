@@ -91,6 +91,7 @@ class TwilioService {
       action:        gatherUrl,
       method:        'POST',
       speechTimeout: '1',
+      enhanced:      'true',
       speechModel:   'phone_call',
       language:      LANG,
       timeout:       5,       // wait up to 5s for them to start speaking
@@ -104,6 +105,23 @@ class TwilioService {
   /** Mid-conversation turn — same non-interruptible pattern */
   twimlRespond(text, gatherUrl) {
     return this.twimlStart(text, gatherUrl);
+  }
+
+  /** Listen for user speech without speaking anything first */
+  twimlListen(gatherUrl) {
+    const r = new VR();
+    r.gather({
+      input:         'speech',
+      action:        gatherUrl,
+      method:        'POST',
+      speechTimeout: '1',
+      enhanced:      'true',
+      speechModel:   'phone_call',
+      language:      LANG,
+      timeout:       5,
+    });
+    r.redirect({ method: 'POST' }, gatherUrl + '&noSpeech=1');
+    return r.toString();
   }
 
   /** Offer meeting slots – announce real date + time, gather slot choice */
