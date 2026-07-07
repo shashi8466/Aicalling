@@ -581,42 +581,42 @@ html, body { height: 100%; font-family: 'Inter', system-ui, sans-serif; backgrou
 
   <!-- Toolbar -->
   <div id="toolbar">
-    <div class="tb-btn" onclick="toggleMic()">
-      <button id="btn-mic" class="tbb" title="Mute/Unmute">🎤</button>
+    <div class="tb-btn">
+      <button id="btn-mic" class="tbb" title="Mute/Unmute" onclick="toggleMic()">🎤</button>
       <span id="lbl-mic" class="tbl">Mute</span>
     </div>
-    <div class="tb-btn" onclick="toggleCamera()">
-      <button id="btn-cam" class="tbb" title="Camera On/Off">📷</button>
+    <div class="tb-btn">
+      <button id="btn-cam" class="tbb" title="Camera On/Off" onclick="toggleCamera()">📷</button>
       <span id="lbl-cam" class="tbl">Camera</span>
     </div>
-    <div class="tb-btn" onclick="toggleScreen()">
-      <button id="btn-scr" class="tbb" title="Share Screen">🖥️</button>
+    <div class="tb-btn">
+      <button id="btn-scr" class="tbb" title="Share Screen" onclick="toggleScreen()">🖥️</button>
       <span id="lbl-scr" class="tbl">Share</span>
     </div>
     <div class="tb-sep"></div>
-    <div class="tb-btn" onclick="openPanel('chat')">
-      <button id="btn-chat" class="tbb" title="Chat">💬</button>
+    <div class="tb-btn">
+      <button id="btn-chat" class="tbb" title="Chat" onclick="openPanel('chat')">💬</button>
       <span class="tbl">Chat</span>
     </div>
-    <div class="tb-btn" onclick="toggleEmoji()">
-      <button id="btn-emoji" class="tbb" title="Reactions">😀</button>
+    <div class="tb-btn">
+      <button id="btn-emoji" class="tbb" title="Reactions" onclick="toggleEmoji()">😀</button>
       <span class="tbl">React</span>
     </div>
-    <div class="tb-btn" onclick="toggleHand()">
-      <button id="btn-hand" class="tbb" title="Raise/Lower Hand">✋</button>
+    <div class="tb-btn">
+      <button id="btn-hand" class="tbb" title="Raise/Lower Hand" onclick="toggleHand()">✋</button>
       <span id="lbl-hand" class="tbl">Hand</span>
     </div>
-    <div class="tb-btn" onclick="openPanel('participants')">
-      <button id="btn-people" class="tbb" title="Participants">👥</button>
+    <div class="tb-btn">
+      <button id="btn-people" class="tbb" title="Participants" onclick="openPanel('participants')">👥</button>
       <span class="tbl">People</span>
     </div>
     <div class="tb-sep"></div>
-    <div class="tb-btn" onclick="openSettings()">
-      <button class="tbb" title="Settings">⚙️</button>
+    <div class="tb-btn">
+      <button class="tbb" title="Settings" onclick="openSettings()">⚙️</button>
       <span class="tbl">Settings</span>
     </div>
-    <div class="tb-btn" onclick="leaveMeeting()">
-      <button class="tbb leave" title="Leave Meeting">📞</button>
+    <div class="tb-btn">
+      <button class="tbb leave" title="Leave Meeting" onclick="leaveMeeting()">📞</button>
       <span class="tbl" style="color:#f28b82">Leave</span>
     </div>
   </div>
