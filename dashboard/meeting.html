@@ -1,204 +1,1024 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Aiprep365 Consultation</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
-  <!-- LiveKit Default Theme Styles -->
-  <link rel="stylesheet" href="https://unpkg.com/@livekit/components-styles@1.1.4/components/index.css" />
-  
+  <meta name="description" content="Aiprep365 – Join your counseling session" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    body { 
-      font-family: system-ui, -apple-system, sans-serif; 
-      margin: 0; 
-      background: #0f172a; 
-      color: white; 
-      display: flex; 
-      align-items: center; 
-      justify-content: center; 
-      height: 100vh;
+    /* ═══════════════════════════════════════════════
+       RESET & TOKENS
+    ═══════════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --c-bg:       #0d1117;
+      --c-card:     #161b22;
+      --c-tile:     #1c2128;
+      --c-bar:      #0f1318;
+      --c-blue:     #2563eb;
+      --c-violet:   #7c3aed;
+      --c-red:      #dc2626;
+      --c-red-h:    #b91c1c;
+      --c-txt:      #f0f6fc;
+      --c-muted:    #8b949e;
+      --c-border:   rgba(255,255,255,0.07);
+      --toolbar-h:  80px;
+      --topbar-h:   48px;
+      --btn-r:      50px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--c-bg);
+      color: var(--c-txt);
+      font-family: 'Inter', system-ui, sans-serif;
       overflow: hidden;
     }
-    .join-container { 
-      background: #1e293b; 
-      padding: 2.5rem; 
-      border-radius: 12px; 
-      text-align: center; 
-      max-width: 400px; 
-      width: 90%; 
-      box-shadow: 0 10px 25px rgba(0,0,0,0.5); 
-    }
-    .join-container h2 {
-      margin-top: 0;
-      color: #f8fafc;
-      font-size: 1.5rem;
-    }
-    .join-container p {
-      color: #94a3b8;
-      margin-bottom: 2rem;
-    }
-    input { 
-      width: 100%; 
-      padding: 14px; 
-      margin-bottom: 1.5rem; 
-      box-sizing: border-box; 
-      border-radius: 8px; 
-      border: 1px solid #334155; 
-      background: #0f172a; 
-      color: white;
-      font-size: 1rem;
-    }
-    input:focus {
-      outline: none;
-      border-color: #3b82f6;
-      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-    }
-    button { 
-      background: #3b82f6; 
-      color: white; 
-      border: none; 
-      padding: 14px 24px; 
-      border-radius: 8px; 
-      cursor: pointer; 
-      width: 100%; 
-      font-weight: 600;
-      font-size: 1rem;
-      transition: background 0.2s;
-    }
-    button:hover { 
-      background: #2563eb; 
-    }
-    button:disabled {
-      background: #475569;
-      cursor: not-allowed;
-    }
-    #root { 
-      width: 100vw; 
-      height: 100vh; 
+
+    /* ═══════════════════════════════════════════════
+       JOIN SCREEN
+    ═══════════════════════════════════════════════ */
+    #pg-join {
       display: flex;
       align-items: center;
       justify-content: center;
+      height: 100vh;
+      background: radial-gradient(ellipse at 55% 40%, #172040 0%, #0d1117 65%);
     }
-    .error-msg {
-      color: #ef4444;
+
+    .join-box {
+      background: var(--c-card);
+      border: 1px solid var(--c-border);
+      border-radius: 18px;
+      padding: 2.5rem 2rem;
+      width: min(420px, 92vw);
+      box-shadow: 0 28px 56px rgba(0,0,0,.65);
+      text-align: center;
+    }
+
+    .join-icon {
+      width: 58px; height: 58px;
+      background: linear-gradient(135deg, var(--c-blue), var(--c-violet));
+      border-radius: 15px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      margin-bottom: 1.25rem;
+    }
+
+    .join-box h1 {
+      font-size: 1.45rem;
+      font-weight: 700;
+      margin-bottom: .4rem;
+    }
+
+    .join-box p {
+      color: var(--c-muted);
+      font-size: .88rem;
+      margin-bottom: 1.75rem;
+    }
+
+    .join-err {
+      background: rgba(220,38,38,.1);
+      border: 1px solid rgba(220,38,38,.3);
+      color: #fca5a5;
+      border-radius: 8px;
+      padding: 9px 13px;
+      font-size: .83rem;
+      text-align: left;
       margin-bottom: 1rem;
-      font-size: 0.9rem;
       display: none;
     }
-  </style>
 
-  <!-- Import Maps for React and LiveKit -->
-  <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@18.3.1",
-        "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
-        "livekit-client": "https://esm.sh/livekit-client@2.5.0",
-        "@livekit/components-react": "https://esm.sh/@livekit/components-react@2.6.0?external=react,react-dom,livekit-client"
-      }
+    .join-input {
+      display: block;
+      width: 100%;
+      padding: 13px 15px;
+      background: var(--c-bg);
+      border: 1.5px solid var(--c-border);
+      border-radius: 10px;
+      color: var(--c-txt);
+      font-size: .98rem;
+      font-family: inherit;
+      margin-bottom: 1.1rem;
+      transition: border-color .2s, box-shadow .2s;
     }
-  </script>
-  
-  <!-- Babel Standalone for JSX compilation in the browser -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    .join-input::placeholder { color: #3d4b5c; }
+    .join-input:focus {
+      outline: none;
+      border-color: var(--c-blue);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.18);
+    }
+
+    .join-btn {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, var(--c-blue), var(--c-violet));
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      letter-spacing: .02em;
+      transition: opacity .2s, transform .1s;
+    }
+    .join-btn:hover:not(:disabled) { opacity: .87; transform: translateY(-1px); }
+    .join-btn:active:not(:disabled) { transform: translateY(0); }
+    .join-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* ═══════════════════════════════════════════════
+       MEETING SCREEN
+       — Flex column, fixed height = 100vh
+       — Top-bar + video-area(flex:1) + toolbar(fixed-height)
+    ═══════════════════════════════════════════════ */
+    #pg-meeting {
+      display: none;            /* shown via JS */
+      flex-direction: column;
+      width: 100vw;
+      height: 100vh;            /* exact viewport — never overflows */
+      overflow: hidden;
+      background: var(--c-bg);
+    }
+
+    /* ── Top Bar ── */
+    #top-bar {
+      height: var(--topbar-h);
+      flex: 0 0 var(--topbar-h);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      background: var(--c-bar);
+      border-bottom: 1px solid var(--c-border);
+      z-index: 5;
+    }
+    .top-brand {
+      font-weight: 700;
+      font-size: .92rem;
+      background: linear-gradient(90deg, #60a5fa, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    #timer {
+      font-size: .8rem;
+      color: var(--c-muted);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: .04em;
+    }
+    #pcount {
+      font-size: .8rem;
+      color: var(--c-muted);
+    }
+
+    /* ── Video Area ── */
+    #video-area {
+      flex: 1 1 0;              /* takes ALL remaining height */
+      min-height: 0;            /* critical — prevents flex overflow */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      overflow: hidden;
+    }
+
+    #video-grid {
+      display: grid;
+      width: 100%;
+      height: 100%;
+      gap: 8px;
+    }
+
+    /* ── Participant Tile ── */
+    .ptile {
+      position: relative;
+      background: var(--c-tile);
+      border-radius: 12px;
+      overflow: hidden;
+      border: 2px solid transparent;
+      transition: border-color .2s;
+      min-width: 0;
+      min-height: 0;
+    }
+    .ptile.speaking {
+      border-color: var(--c-blue);
+      box-shadow: 0 0 0 2px rgba(37,99,235,.25);
+    }
+    .ptile video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .ptile.cam-off video { display: none; }
+
+    /* Avatar when camera off */
+    .ptile-avatar {
+      display: none;
+      position: absolute;
+      inset: 0;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .ptile.cam-off .ptile-avatar { display: flex; }
+
+    .av-circle {
+      width: 68px; height: 68px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--c-blue), var(--c-violet));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.7rem;
+      font-weight: 700;
+      color: #fff;
+      text-transform: uppercase;
+    }
+    .av-name { font-size: .78rem; color: var(--c-muted); }
+
+    /* Name badge */
+    .ptile-label {
+      position: absolute;
+      bottom: 9px;
+      left: 9px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(0,0,0,.62);
+      backdrop-filter: blur(5px);
+      border-radius: 6px;
+      padding: 3px 9px;
+      font-size: .75rem;
+      font-weight: 500;
+      max-width: calc(100% - 18px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .host-badge {
+      background: linear-gradient(90deg, var(--c-blue), var(--c-violet));
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-size: .58rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    /* ══════════════════════════════════════════════
+       TOOLBAR — always at bottom, never moves
+    ══════════════════════════════════════════════ */
+    #toolbar {
+      height: var(--toolbar-h);
+      flex: 0 0 var(--toolbar-h);   /* fixed — will NEVER shrink */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: var(--c-bar);
+      border-top: 1px solid var(--c-border);
+      padding: 0 12px;
+      z-index: 10;
+    }
+
+    .ctrl {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .ctrl-btn {
+      width: var(--btn-r);
+      height: var(--btn-r);
+      border-radius: 50%;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.15rem;
+      cursor: pointer;
+      transition: background .15s, transform .1s;
+      background: rgba(255,255,255,.08);
+      color: var(--c-txt);
+      outline: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .ctrl-btn:hover { background: rgba(255,255,255,.14); transform: scale(1.06); }
+    .ctrl-btn:active { transform: scale(.94); }
+    .ctrl-btn.off {
+      background: rgba(220,38,38,.16);
+      color: #fca5a5;
+    }
+    .ctrl-btn.off:hover { background: rgba(220,38,38,.26); }
+    .ctrl-btn.leave {
+      background: var(--c-red);
+      color: #fff;
+    }
+    .ctrl-btn.leave:hover {
+      background: var(--c-red-h);
+      box-shadow: 0 4px 14px rgba(220,38,38,.45);
+    }
+
+    .ctrl-lbl {
+      font-size: .6rem;
+      color: var(--c-muted);
+      font-weight: 500;
+      text-align: center;
+      letter-spacing: .02em;
+      white-space: nowrap;
+    }
+    .ctrl-lbl.red { color: #fca5a5; }
+
+    .bar-sep {
+      width: 1px;
+      height: 32px;
+      background: var(--c-border);
+      flex-shrink: 0;
+    }
+
+    /* ═══════════════════════════════════════════════
+       DISCONNECTED SCREEN
+    ═══════════════════════════════════════════════ */
+    #pg-disc {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 1.4rem;
+      text-align: center;
+      padding: 2rem;
+      background: radial-gradient(ellipse at 45% 55%, #172040 0%, #0d1117 65%);
+    }
+    #pg-disc .disc-ico { font-size: 3.5rem; }
+    #pg-disc h2 { font-size: 1.4rem; font-weight: 700; }
+    #pg-disc p  { color: var(--c-muted); font-size: .88rem; }
+    .back-btn {
+      padding: 11px 28px;
+      background: var(--c-blue);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: .95rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .back-btn:hover { background: #1d4ed8; }
+
+    /* ═══════════════════════════════════════════════
+       SETTINGS POPOVER
+    ═══════════════════════════════════════════════ */
+    #settings-pop {
+      position: fixed;
+      bottom: calc(var(--toolbar-h) + 10px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--c-card);
+      border: 1px solid var(--c-border);
+      border-radius: 14px;
+      padding: 1.2rem 1.4rem;
+      min-width: 290px;
+      max-width: 92vw;
+      box-shadow: 0 18px 48px rgba(0,0,0,.7);
+      z-index: 50;
+      display: none;
+    }
+    #settings-pop h3 { font-size: .9rem; font-weight: 600; margin-bottom: .9rem; }
+    .s-row { margin-bottom: .85rem; }
+    .s-row label { display: block; font-size: .75rem; color: var(--c-muted); margin-bottom: 5px; font-weight: 500; }
+    .s-sel {
+      width: 100%;
+      padding: 8px 11px;
+      background: var(--c-bg);
+      border: 1px solid var(--c-border);
+      border-radius: 8px;
+      color: var(--c-txt);
+      font-size: .83rem;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .s-sel:focus { outline: none; border-color: var(--c-blue); }
+
+    /* ═══════════════════════════════════════════════
+       TOAST
+    ═══════════════════════════════════════════════ */
+    #toast {
+      position: fixed;
+      top: calc(var(--topbar-h) + 10px);
+      left: 50%;
+      transform: translateX(-50%) translateY(-12px);
+      background: var(--c-card);
+      border: 1px solid var(--c-border);
+      border-radius: 8px;
+      padding: 9px 16px;
+      font-size: .82rem;
+      color: var(--c-txt);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 200;
+      white-space: nowrap;
+      transition: opacity .22s, transform .22s;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ═══════════════════════════════════════════════
+       RESPONSIVE
+    ═══════════════════════════════════════════════ */
+    @media (max-width: 560px) {
+      :root { --btn-r: 42px; --toolbar-h: 70px; }
+      .ctrl-btn { font-size: 1rem; }
+      .ctrl-lbl { font-size: .55rem; }
+      #toolbar { gap: 6px; padding: 0 6px; }
+      .bar-sep { display: none; }
+      .av-circle { width: 52px; height: 52px; font-size: 1.3rem; }
+    }
+  </style>
 </head>
 <body>
-  <div id="root">
-    <div class="join-container" id="joinUi">
-      <h2>Aiprep365 Consultation</h2>
-      <p>Enter your name to join the meeting</p>
-      <div id="errorMsg" class="error-msg"></div>
-      <input type="text" id="participantName" placeholder="Your Name" autocomplete="name" />
-      <button id="joinBtn" onclick="joinMeeting()">Join Meeting</button>
-    </div>
+
+<!-- ════════════════════════════ JOIN ════════════════════════════ -->
+<div id="pg-join">
+  <div class="join-box">
+    <div class="join-icon">🎓</div>
+    <h1>Aiprep365 Consultation</h1>
+    <p>Enter your name to join the session</p>
+    <div id="join-err" class="join-err"></div>
+    <input id="name-in" class="join-input" type="text"
+           placeholder="Your full name" autocomplete="name" maxlength="60" />
+    <button id="join-btn" class="join-btn" onclick="joinMeeting()">Join Meeting</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════ MEETING ════════════════════════════ -->
+<div id="pg-meeting">
+
+  <!-- Top bar -->
+  <div id="top-bar">
+    <span class="top-brand">Aiprep365</span>
+    <span id="timer">00:00</span>
+    <span id="pcount">👥 0</span>
   </div>
 
-  <script type="text/babel" data-type="module">
-    import React from 'react';
-    import { createRoot } from 'react-dom/client';
-    import { LiveKitRoom, VideoConference, RoomAudioRenderer } from '@livekit/components-react';
+  <!-- Video grid -->
+  <div id="video-area">
+    <div id="video-grid"></div>
+  </div>
 
-    const root = createRoot(document.getElementById('root'));
+  <!-- Sticky bottom toolbar -->
+  <div id="toolbar">
+    <div class="ctrl" onclick="toggleMic()">
+      <button id="btn-mic" class="ctrl-btn" title="Mute / Unmute">🎤</button>
+      <span  id="lbl-mic" class="ctrl-lbl">Mute</span>
+    </div>
 
-    window.joinMeeting = async () => {
-      const nameInput = document.getElementById('participantName');
-      const joinBtn = document.getElementById('joinBtn');
-      const errorMsg = document.getElementById('errorMsg');
-      
-      const name = nameInput.value.trim();
-      if (!name) {
-        errorMsg.textContent = 'Please enter your name.';
-        errorMsg.style.display = 'block';
-        return;
-      }
-      
-      errorMsg.style.display = 'none';
-      joinBtn.disabled = true;
-      joinBtn.textContent = 'Joining...';
-      
-      const roomName = window.location.pathname.split('/').pop();
-      const isHost = new URLSearchParams(window.location.search).get('host') === 'true';
+    <div class="ctrl" onclick="toggleCamera()">
+      <button id="btn-cam" class="ctrl-btn" title="Camera On / Off">📷</button>
+      <span  id="lbl-cam" class="ctrl-lbl">Camera</span>
+    </div>
 
-      try {
-        const res = await fetch('/api/meeting/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ roomName, participantName: name, isHost })
-        });
-        const data = await res.json();
-        
-        if (!res.ok) throw new Error(data.error || 'Failed to get token');
-        
-        // Hide the initial HTML UI and render the React App
-        document.getElementById('joinUi').style.display = 'none';
-        root.render(<MeetingApp token={data.token} url={data.url} />);
-      } catch (err) {
-        errorMsg.textContent = 'Failed to join meeting: ' + err.message;
-        errorMsg.style.display = 'block';
-        joinBtn.disabled = false;
-        joinBtn.textContent = 'Join Meeting';
-      }
-    };
+    <div class="ctrl" onclick="toggleScreen()">
+      <button id="btn-scr" class="ctrl-btn" title="Share Screen">🖥️</button>
+      <span  id="lbl-scr" class="ctrl-lbl">Share</span>
+    </div>
 
-    function MeetingApp({ token, url }) {
-      const [disconnected, setDisconnected] = React.useState(false);
+    <div class="bar-sep"></div>
 
-      if (disconnected) {
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#fff' }}>
-            <h2>You have left the meeting.</h2>
-            <button onClick={() => window.location.reload()} style={{ padding: '10px 20px', fontSize: '16px', marginTop: '20px', cursor: 'pointer', borderRadius: '8px', border: 'none', background: '#3b82f6', color: 'white' }}>Return to Join Screen</button>
-          </div>
-        );
-      }
+    <div class="ctrl" onclick="toggleSettings()">
+      <button id="btn-set" class="ctrl-btn" title="Settings">⚙️</button>
+      <span class="ctrl-lbl">Settings</span>
+    </div>
 
-      return (
-        <LiveKitRoom
-          video={true}
-          audio={true}
-          connect={true}
-          token={token}
-          serverUrl={url}
-          data-lk-theme="default"
-          style={{ height: '100vh', width: '100vw' }}
-          onDisconnected={() => {
-            console.log('LiveKit disconnected');
-            setDisconnected(true);
-          }}
-        >
-          <VideoConference />
-          <RoomAudioRenderer />
-        </LiveKitRoom>
-      );
-    }
-    
-    // Allow pressing Enter in the input field
-    document.getElementById('participantName').addEventListener('keypress', function (e) {
-      if (e.key === 'Enter') {
-        window.joinMeeting();
-      }
+    <div class="bar-sep"></div>
+
+    <div class="ctrl" onclick="leaveMeeting()">
+      <button class="ctrl-btn leave" title="Leave Meeting">📞</button>
+      <span class="ctrl-lbl red">Leave</span>
+    </div>
+  </div>
+</div>
+
+<!-- Settings popover -->
+<div id="settings-pop">
+  <h3>⚙️ Settings</h3>
+  <div class="s-row"><label>Microphone</label><select id="sel-mic" class="s-sel"></select></div>
+  <div class="s-row"><label>Camera</label>    <select id="sel-cam" class="s-sel"></select></div>
+  <div class="s-row"><label>Speaker</label>   <select id="sel-spk" class="s-sel"></select></div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- ════════════════════════════ DISCONNECTED ════════════════════════════ -->
+<div id="pg-disc">
+  <span class="disc-ico">👋</span>
+  <h2>You've left the meeting</h2>
+  <p>The session has ended. Thank you for joining Aiprep365!</p>
+  <button class="back-btn" onclick="window.location.reload()">Return to Join Screen</button>
+</div>
+
+<!-- LiveKit SDK — UMD build, exposes window.LivekitClient -->
+<script src="https://unpkg.com/livekit-client@2.5.0/dist/livekit-client.umd.min.js"></script>
+
+<!--
+  STEP 1 — Declare all onclick-referenced functions as global stubs FIRST.
+  These stubs delegate to the real implementations once the IIFE below runs.
+  This guarantees "joinMeeting is not defined" can NEVER happen.
+-->
+<script>
+  function joinMeeting()   { if(window.__LK) window.__LK.join();       }
+  function toggleMic()     { if(window.__LK) window.__LK.mic();        }
+  function toggleCamera()  { if(window.__LK) window.__LK.cam();        }
+  function toggleScreen()  { if(window.__LK) window.__LK.screen();     }
+  function leaveMeeting()  { if(window.__LK) window.__LK.leave();      }
+  function toggleSettings(){ if(window.__LK) window.__LK.settings();   }
+</script>
+
+<!--
+  STEP 2 — The real implementation, in a try/catch so any error is visible
+  in the console rather than silently swallowing the whole script.
+-->
+<script>
+try {
+(function() {
+
+  /* ── Shorthand ── */
+  var $ = function(id){ return document.getElementById(id); };
+
+  /* ── State ── */
+  var room        = null;
+  var micOn       = true;
+  var camOn       = true;
+  var scrSharing  = false;
+  var scrTrack    = null;
+  var settOpen    = false;
+  var timerTick   = null;
+  var t0          = null;
+  var toastTimer  = null;
+
+  /* Map: sid → {tile, video} */
+  var tiles = {};
+
+  /* ────────────────────────────────────────────
+     JOIN
+  ──────────────────────────────────────────── */
+  function doJoin() {
+    var nameEl  = $('name-in');
+    var btnEl   = $('join-btn');
+    var errEl   = $('join-err');
+    var name    = nameEl ? nameEl.value.trim() : '';
+
+    if (!name) { showErr('Please enter your name.'); return; }
+    errEl.style.display = 'none';
+    btnEl.disabled      = true;
+    btnEl.textContent   = 'Joining…';
+
+    var roomName = window.location.pathname.split('/').pop();
+    var isHost   = new URLSearchParams(window.location.search).get('host') === 'true';
+
+    fetch('/api/meeting/token', {
+      method:  'POST',
+      headers: {'Content-Type':'application/json'},
+      body:    JSON.stringify({ roomName: roomName, participantName: name, isHost: isHost })
+    })
+    .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, d:d}; }); })
+    .then(function(x){
+      if (!x.ok) throw new Error(x.d.error || 'Failed to get token');
+      return startMeeting(x.d.token, x.d.url, isHost);
+    })
+    .catch(function(e){
+      showErr('Failed to join: ' + e.message);
+      btnEl.disabled    = false;
+      btnEl.textContent = 'Join Meeting';
     });
-  </script>
+  }
+
+  function showErr(msg){
+    var el = $('join-err');
+    if (!el) return;
+    el.textContent  = msg;
+    el.style.display= 'block';
+  }
+
+  /* ────────────────────────────────────────────
+     START MEETING
+  ──────────────────────────────────────────── */
+  function startMeeting(token, serverUrl, isHost) {
+    var LK = window.LivekitClient;
+    if (!LK) throw new Error('LiveKit SDK not loaded — check network connection.');
+
+    /* Switch screens */
+    $('pg-join').style.display    = 'none';
+    $('pg-meeting').style.display = 'flex';
+
+    /* Pre-populate device lists */
+    populateDevices();
+
+    /* Create room */
+    room = new LK.Room({ adaptiveStream: true, dynacast: true });
+
+    room.on(LK.RoomEvent.ParticipantConnected,    onPJoin)
+        .on(LK.RoomEvent.ParticipantDisconnected, onPLeave)
+        .on(LK.RoomEvent.TrackSubscribed,         onTrackSub)
+        .on(LK.RoomEvent.TrackUnsubscribed,       onTrackUnsub)
+        .on(LK.RoomEvent.LocalTrackPublished,     onLocalPub)
+        .on(LK.RoomEvent.LocalTrackUnpublished,   onLocalUnpub)
+        .on(LK.RoomEvent.TrackMuted,              onTrackMute)
+        .on(LK.RoomEvent.TrackUnmuted,            onTrackUnmute)
+        .on(LK.RoomEvent.ActiveSpeakersChanged,   onSpeakers)
+        .on(LK.RoomEvent.Disconnected,            onDisc)
+        .on(LK.RoomEvent.Reconnecting,            function(){ toast('Reconnecting…'); })
+        .on(LK.RoomEvent.Reconnected,             function(){ toast('Reconnected ✓'); });
+
+    return room.connect(serverUrl, token, { autoSubscribe: true })
+      .then(function(){
+        return room.localParticipant.enableCameraAndMicrophone();
+      })
+      .then(function(){
+        /* Add local tile */
+        addTile(room.localParticipant, true, isHost);
+
+        /* Add already-present remote participants */
+        room.remoteParticipants.forEach(function(p){
+          addTile(p, false, false);
+          p.trackPublications.forEach(function(pub){
+            if (pub.isSubscribed && pub.track) attachMedia(p, pub.track);
+          });
+        });
+
+        reflow();
+        startClock();
+        updateCount();
+      });
+  }
+
+  /* ────────────────────────────────────────────
+     TILE MANAGEMENT
+  ──────────────────────────────────────────── */
+  function addTile(participant, isLocal, isHost) {
+    if (tiles[participant.sid]) return;
+    var grid = $('video-grid');
+    if (!grid) return;
+
+    var LK   = window.LivekitClient;
+    var name = participant.name || participant.identity || 'Participant';
+    var ini  = initials(name);
+
+    /* Tile wrapper */
+    var tile = document.createElement('div');
+    tile.className        = 'ptile cam-off';
+    tile.dataset.sid      = participant.sid;
+
+    /* Video element */
+    var vid = document.createElement('video');
+    vid.autoplay    = true;
+    vid.playsInline = true;
+    vid.muted       = isLocal;
+    tile.appendChild(vid);
+
+    /* Avatar */
+    var av  = document.createElement('div');  av.className  = 'ptile-avatar';
+    var avc = document.createElement('div');  avc.className = 'av-circle';   avc.textContent = ini;
+    var avn = document.createElement('span'); avn.className = 'av-name';     avn.textContent = name;
+    av.appendChild(avc); av.appendChild(avn);
+    tile.appendChild(av);
+
+    /* Name label */
+    var lbl = document.createElement('div'); lbl.className = 'ptile-label';
+    var micIco = document.createElement('span');
+    micIco.id = 'mic-ico-' + participant.sid;
+    var nameSpan = document.createElement('span');
+    nameSpan.textContent = name + (isLocal ? ' (You)' : '');
+    lbl.appendChild(micIco); lbl.appendChild(nameSpan);
+    if (isLocal && isHost) {
+      var b = document.createElement('span'); b.className = 'host-badge'; b.textContent = 'Host';
+      lbl.appendChild(b);
+    }
+    tile.appendChild(lbl);
+
+    grid.appendChild(tile);
+    tiles[participant.sid] = { tile: tile, video: vid };
+
+    /* Attach any already-published local video track */
+    if (isLocal && LK) {
+      room.localParticipant.trackPublications.forEach(function(pub){
+        if (pub.track && pub.track.kind === LK.Track.Kind.Video) {
+          pub.track.attach(vid);
+          tile.classList.remove('cam-off');
+        }
+      });
+    }
+  }
+
+  function removeTile(participant) {
+    var t = tiles[participant.sid];
+    if (t) { t.tile.remove(); delete tiles[participant.sid]; reflow(); updateCount(); }
+  }
+
+  /* ────────────────────────────────────────────
+     MEDIA ATTACH / DETACH
+  ──────────────────────────────────────────── */
+  function attachMedia(participant, track) {
+    var LK = window.LivekitClient;
+    var t  = tiles[participant.sid];
+    if (!t || !LK) return;
+    if (track.kind === LK.Track.Kind.Video) {
+      track.attach(t.video);
+      t.tile.classList.remove('cam-off');
+    } else if (track.kind === LK.Track.Kind.Audio) {
+      var aud = document.createElement('audio');
+      aud.autoplay = true; aud.playsInline = true;
+      track.attach(aud);
+      document.body.appendChild(aud);
+    }
+  }
+
+  function detachMedia(participant, track) {
+    var LK = window.LivekitClient;
+    var t  = tiles[participant.sid];
+    if (!t || !LK) return;
+    if (track.kind === LK.Track.Kind.Video) {
+      track.detach(t.video);
+      t.tile.classList.add('cam-off');
+    } else {
+      try { track.detach(); } catch(e){}
+    }
+  }
+
+  /* ────────────────────────────────────────────
+     ROOM EVENTS
+  ──────────────────────────────────────────── */
+  function onPJoin(p)  { addTile(p, false, false); reflow(); updateCount(); toast((p.name||p.identity) + ' joined'); }
+  function onPLeave(p) { removeTile(p); toast((p.name||p.identity) + ' left'); }
+  function onTrackSub(track, _pub, p)   { attachMedia(p, track); reflow(); }
+  function onTrackUnsub(track, _pub, p) { detachMedia(p, track); reflow(); }
+
+  function onLocalPub(pub) {
+    var LK = window.LivekitClient; if (!LK) return;
+    var track = pub.track; if (!track) return;
+    var t = tiles[room.localParticipant.sid]; if (!t) return;
+    if (track.kind === LK.Track.Kind.Video) {
+      track.attach(t.video);
+      if (!pub.isMuted) t.tile.classList.remove('cam-off');
+    }
+  }
+  function onLocalUnpub(pub) {
+    var LK = window.LivekitClient; if (!LK) return;
+    var track = pub.track; if (!track) return;
+    var t = tiles[room.localParticipant.sid]; if (!t) return;
+    if (track.kind === LK.Track.Kind.Video) {
+      track.detach(t.video);
+      t.tile.classList.add('cam-off');
+    }
+  }
+
+  function onTrackMute(pub, p) {
+    var LK = window.LivekitClient; if (!LK || !p) return;
+    var t = tiles[p.sid]; if (!t) return;
+    if (pub.kind === LK.Track.Kind.Video) {
+      t.tile.classList.add('cam-off');
+    } else {
+      var ic = document.getElementById('mic-ico-' + p.sid);
+      if (ic) ic.textContent = '🔇 ';
+    }
+  }
+  function onTrackUnmute(pub, p) {
+    var LK = window.LivekitClient; if (!LK || !p) return;
+    var t = tiles[p.sid]; if (!t) return;
+    if (pub.kind === LK.Track.Kind.Video) {
+      t.tile.classList.remove('cam-off');
+    } else {
+      var ic = document.getElementById('mic-ico-' + p.sid);
+      if (ic) ic.textContent = '';
+    }
+  }
+
+  function onSpeakers(speakers) {
+    Object.values(tiles).forEach(function(t){ t.tile.classList.remove('speaking'); });
+    speakers.forEach(function(p){
+      var t = tiles[p.sid]; if (t) t.tile.classList.add('speaking');
+    });
+  }
+
+  function onDisc() {
+    clearInterval(timerTick);
+    $('pg-meeting').style.display = 'none';
+    var pg = $('pg-disc');
+    if (pg) { pg.style.display = 'flex'; pg.style.flexDirection = 'column'; }
+  }
+
+  /* ────────────────────────────────────────────
+     GRID REFLOW  (Google-Meet-style)
+  ──────────────────────────────────────────── */
+  function reflow() {
+    var grid = $('video-grid'); if (!grid) return;
+    var n    = Object.keys(tiles).length;
+    if (n === 0) return;
+
+    var cols, rows;
+    if      (n === 1) { cols = 1; rows = 1; }
+    else if (n === 2) { cols = 2; rows = 1; }
+    else if (n <= 4)  { cols = 2; rows = 2; }
+    else if (n <= 6)  { cols = 3; rows = 2; }
+    else if (n <= 9)  { cols = 3; rows = 3; }
+    else              { cols = 4; rows = Math.ceil(n / 4); }
+
+    grid.style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
+    grid.style.gridTemplateRows    = 'repeat(' + rows + ', 1fr)';
+  }
+
+  /* ────────────────────────────────────────────
+     CONTROLS
+  ──────────────────────────────────────────── */
+  function doMic() {
+    if (!room) return;
+    micOn = !micOn;
+    room.localParticipant.setMicrophoneEnabled(micOn).catch(function(e){
+      toast('Mic error: ' + e.message); micOn = !micOn; syncMicUI();
+    });
+    syncMicUI();
+  }
+  function syncMicUI() {
+    var b = $('btn-mic'); var l = $('lbl-mic');
+    if (!b) return;
+    if (micOn) { b.classList.remove('off'); b.textContent = '🎤'; if(l) l.textContent = 'Mute';   }
+    else       { b.classList.add('off');    b.textContent = '🔇'; if(l) l.textContent = 'Unmute'; }
+  }
+
+  function doCam() {
+    if (!room) return;
+    camOn = !camOn;
+    room.localParticipant.setCameraEnabled(camOn).catch(function(e){
+      toast('Camera error: ' + e.message); camOn = !camOn; syncCamUI();
+    });
+    syncCamUI();
+    var t = tiles[room.localParticipant.sid];
+    if (t) t.tile.classList.toggle('cam-off', !camOn);
+  }
+  function syncCamUI() {
+    var b = $('btn-cam'); var l = $('lbl-cam');
+    if (!b) return;
+    if (camOn) { b.classList.remove('off'); b.textContent = '📷'; }
+    else       { b.classList.add('off');    b.textContent = '🚫'; }
+    if (l) l.textContent = 'Camera';
+  }
+
+  function doScreen() {
+    var LK = window.LivekitClient;
+    if (!room || !LK) return;
+    if (scrSharing) { stopScreen(); return; }
+    navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
+      .then(function(stream){
+        var mt = stream.getVideoTracks()[0];
+        return room.localParticipant.publishTrack(
+          new LK.LocalVideoTrack(mt),
+          { source: LK.Track.Source.ScreenShare }
+        ).then(function(pub){
+          scrTrack   = pub;
+          scrSharing = true;
+          mt.onended = stopScreen;
+          var b = $('btn-scr'); var l = $('lbl-scr');
+          if (b) { b.classList.add('off'); b.textContent = '🛑'; }
+          if (l)   l.textContent = 'Stop';
+          toast('Screen sharing started');
+        });
+      })
+      .catch(function(e){ if (e.name !== 'NotAllowedError') toast('Screen share error: ' + e.message); });
+  }
+
+  function stopScreen() {
+    if (scrTrack && room) {
+      try { room.localParticipant.unpublishTrack(scrTrack.track || scrTrack); } catch(e){}
+    }
+    scrTrack = null; scrSharing = false;
+    var b = $('btn-scr'); var l = $('lbl-scr');
+    if (b) { b.classList.remove('off'); b.textContent = '🖥️'; }
+    if (l)   l.textContent = 'Share';
+    toast('Screen sharing stopped');
+  }
+
+  function doLeave() {
+    if (room) room.disconnect();
+    else onDisc();
+  }
+
+  function doSettings() {
+    var pop = $('settings-pop'); if (!pop) return;
+    settOpen = !settOpen;
+    pop.style.display = settOpen ? 'block' : 'none';
+    if (settOpen) populateDevices();
+  }
+
+  /* Close settings on outside click */
+  document.addEventListener('click', function(e){
+    var pop = $('settings-pop'); var btn = $('btn-set');
+    if (settOpen && pop && btn && !pop.contains(e.target) && !btn.contains(e.target)) {
+      settOpen = false; pop.style.display = 'none';
+    }
+  });
+
+  /* ────────────────────────────────────────────
+     DEVICES
+  ──────────────────────────────────────────── */
+  function populateDevices() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    navigator.mediaDevices.enumerateDevices().then(function(devs){
+      fillSel('sel-mic', devs.filter(function(d){ return d.kind === 'audioinput';  }));
+      fillSel('sel-cam', devs.filter(function(d){ return d.kind === 'videoinput';  }));
+      fillSel('sel-spk', devs.filter(function(d){ return d.kind === 'audiooutput'; }));
+    }).catch(function(){});
+  }
+  function fillSel(id, devs) {
+    var sel = $(id); if (!sel) return;
+    sel.innerHTML = devs.length ? '' : '<option>No device found</option>';
+    devs.forEach(function(d, i){
+      var o = document.createElement('option');
+      o.value       = d.deviceId;
+      o.textContent = d.label || ('Device ' + (i + 1));
+      sel.appendChild(o);
+    });
+  }
+
+  /* ────────────────────────────────────────────
+     TIMER & COUNT
+  ──────────────────────────────────────────── */
+  function startClock() {
+    t0 = Date.now();
+    timerTick = setInterval(function(){
+      var s   = Math.floor((Date.now() - t0) / 1000);
+      var h   = Math.floor(s / 3600);
+      var m   = Math.floor((s % 3600) / 60);
+      var sec = s % 60;
+      var el  = $('timer'); if (!el) return;
+      el.textContent = (h > 0 ? pad(h) + ':' : '') + pad(m) + ':' + pad(sec);
+    }, 1000);
+  }
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+
+  function updateCount() {
+    var el = $('pcount'); if (!el) return;
+    el.textContent = '👥 ' + Object.keys(tiles).length;
+  }
+
+  /* ────────────────────────────────────────────
+     TOAST
+  ──────────────────────────────────────────── */
+  function toast(msg) {
+    var el = $('toast'); if (!el) return;
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ el.classList.remove('show'); }, 3000);
+  }
+
+  /* ────────────────────────────────────────────
+     HELPERS
+  ──────────────────────────────────────────── */
+  function initials(name) {
+    return name.split(/\s+/).map(function(w){ return w[0] || ''; })
+               .join('').slice(0,2).toUpperCase() || '?';
+  }
+
+  /* ────────────────────────────────────────────
+     WIRE UP GLOBAL STUBS
+  ──────────────────────────────────────────── */
+  window.__LK = {
+    join:     doJoin,
+    mic:      doMic,
+    cam:      doCam,
+    screen:   doScreen,
+    leave:    doLeave,
+    settings: doSettings
+  };
+
+  /* ────────────────────────────────────────────
+     ENTER KEY ON JOIN SCREEN
+  ──────────────────────────────────────────── */
+  var nameIn = $('name-in');
+  if (nameIn) {
+    nameIn.addEventListener('keypress', function(e){
+      if (e.key === 'Enter') doJoin();
+    });
+  }
+
+})(); /* end IIFE */
+} catch(err) {
+  console.error('[Aiprep365 Meeting] Init error:', err);
+}
+</script>
+
 </body>
 </html>
