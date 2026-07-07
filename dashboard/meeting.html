@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Aiprep365 Consultation</title>
+  <title>Consultation</title>
   <meta name="description" content="Aiprep365 – Join your counseling session" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -454,7 +454,7 @@
 <div id="pg-join">
   <div class="join-box">
     <div class="join-icon">🎓</div>
-    <h1>Aiprep365 Consultation</h1>
+    <h1>Consultation</h1>
     <p>Enter your name to join the session</p>
     <div id="join-err" class="join-err"></div>
     <input id="name-in" class="join-input" type="text"
@@ -468,7 +468,7 @@
 
   <!-- Top bar -->
   <div id="top-bar">
-    <span class="top-brand">Aiprep365</span>
+    <span class="top-brand">Consultation</span>
     <span id="timer">00:00</span>
     <span id="pcount">👥 0</span>
   </div>
@@ -526,12 +526,35 @@
 <div id="pg-disc">
   <span class="disc-ico">👋</span>
   <h2>You've left the meeting</h2>
-  <p>The session has ended. Thank you for joining Aiprep365!</p>
+  <p>The session has ended. Thank you for joining!</p>
   <button class="back-btn" onclick="window.location.reload()">Return to Join Screen</button>
 </div>
 
-<!-- LiveKit SDK — UMD build, exposes window.LivekitClient -->
-<script src="https://unpkg.com/livekit-client@2.5.0/dist/livekit-client.umd.min.js"></script>
+<!-- LiveKit SDK — loaded from jsDelivr with unpkg fallback -->
+<script>
+(function(){
+  var SRCS = [
+    'https://cdn.jsdelivr.net/npm/livekit-client@2.5.0/dist/livekit-client.umd.min.js',
+    'https://unpkg.com/livekit-client@2.5.0/dist/livekit-client.umd.min.js'
+  ];
+  var idx = 0;
+  function tryNext(){
+    if(idx >= SRCS.length){
+      var err = document.getElementById('join-err');
+      if(err){ err.textContent='Could not load video SDK. Please check your internet connection and reload the page.'; err.style.display='block'; }
+      var btn = document.getElementById('join-btn');
+      if(btn){ btn.disabled=true; btn.textContent='SDK Load Failed'; }
+      return;
+    }
+    var s = document.createElement('script');
+    s.src = SRCS[idx++];
+    s.onload  = function(){ console.log('[SDK] Loaded from', s.src); };
+    s.onerror = function(){ console.warn('[SDK] Failed:', s.src, '- trying next...'); tryNext(); };
+    document.head.appendChild(s);
+  }
+  tryNext();
+})();
+</script>
 
 <!--
   STEP 1 — Declare all onclick-referenced functions as global stubs FIRST.
