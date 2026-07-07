@@ -101,17 +101,31 @@ class EmailService {
       logger.error(err);
       return { ok: false, error: err };
     }
+
+    const campaignSvc = require('./campaignService');
+    const resolved = await campaignSvc.resolveForLead(lead);
+    const isBusiness = resolved.type === 'business-partner';
+
     const t = moment(lead.meeting.scheduledAt)
       .tz('America/New_York')
       .format('dddd, MMMM Do [at] h:mm A [ET]');
-    const html = await this._wrap(this._meetingConfBody(lead, t), lead);
+
+    const html = isBusiness
+      ? await this._wrap(this._businessMeetingConfBody(lead, t), lead)
+      : await this._wrap(this._meetingConfBody(lead, t), lead);
+
     const attachment = this._buildIcsAttachment(lead, t);
 
-    // Send email to student (and CC parent)
+    // Subject
+    const subject = isBusiness
+      ? `Business Partnership Consultation Confirmed – ${lead.fullName}`
+      : `✅ Consultation Confirmed – ${t}`;
+
+    // Send email to contact (and CC parent if not business)
     const resStudent = await this._send({
       to:      lead.email,
-      cc:      lead.parentEmail,
-      subject: `✅ Consultation Confirmed – ${t}`,
+      cc:      isBusiness ? undefined : lead.parentEmail,
+      subject,
       html,
       attachment,
     });
@@ -119,10 +133,29 @@ class EmailService {
     // Notify assigned counselor/admin
     const counselorEmail = cfg.company.counselorEmail || cfg.brevo.fromEmail;
     if (counselorEmail && counselorEmail !== lead.email) {
-      this._send({
-        to:      counselorEmail,
-        subject: `📅 Assigned Counselor Copy: Consultation Confirmed – ${lead.fullName} – ${t}`,
-        html: `
+      const adminSubject = isBusiness
+        ? `📅 Assigned Counselor Copy: Business Partnership Consultation Confirmed – ${lead.fullName} – ${t}`
+        : `📅 Assigned Counselor Copy: Consultation Confirmed – ${lead.fullName} – ${t}`;
+
+      const adminHtml = isBusiness
+        ? `
+          <div style="font-family:sans-serif;padding:20px;color:#333;">
+            <h2 style="color:#1a3c6e;">Business Partner Meeting Notification</h2>
+            <p>A Business Partnership meeting has been successfully booked with <strong>${lead.fullName}</strong>.</p>
+            <div style="background:#eff6ff;padding:15px;border-radius:8px;border-left:4px solid #2563eb;margin:15px 0;line-height:1.6;">
+              <strong>Business Contact Name:</strong> ${lead.fullName}<br>
+              <strong>Company Name:</strong> ${lead.companyName || lead.qualification?.companyName || 'Not specified'}<br>
+              <strong>Business Campaign:</strong> Business Partner Opportunity<br>
+              <strong>Email:</strong> ${lead.email}<br>
+              <strong>Phone:</strong> ${lead.phone}<br>
+              <strong>Date & Time:</strong> ${t}<br>
+              <strong>Meeting Link (LiveKit Guest):</strong> <a href="${lead.meeting?.meetLink}">${lead.meeting?.meetLink}</a><br>
+              <strong>Host Join Link:</strong> <a href="${lead.meeting?.hostMeetLink || lead.meeting?.meetLink}">${lead.meeting?.hostMeetLink || lead.meeting?.meetLink}</a>
+            </div>
+            <p style="font-size:12px;color:#888;">This is a notification copy sent directly to you as the counselor / admin.</p>
+          </div>
+        `
+        : `
           <div style="font-family:sans-serif;padding:20px;color:#333;">
             <h2 style="color:#1a3c6e;">Assigned Counselor Notification</h2>
             <p>A meeting has been successfully booked with <strong>${lead.fullName}</strong>.</p>
@@ -136,7 +169,12 @@ class EmailService {
             </div>
             <p style="font-size:12px;color:#888;">This is a notification copy sent directly to you as the counselor.</p>
           </div>
-        `,
+        `;
+
+      this._send({
+        to:      counselorEmail,
+        subject: adminSubject,
+        html:    adminHtml,
         attachment,
       }).catch(e => logger.error('Counselor notification copy failed', e));
     }
@@ -625,6 +663,40 @@ ${this._programCards(l.courseInterest)}
   <li><strong>College Admissions Counseling</strong> — Complete package from $2,999</li>
 </ul>
 <p>Students see an average of <strong>150–200 SAT point</strong> improvement or <strong>4–6 ACT composite points</strong> with our programs.</p>`;
+  }
+
+  _businessMeetingConfBody(l, t) {
+    const c = cfg.company;
+    const meetLink = l.meeting?.meetLink;
+    const companyName = l.companyName || l.qualification?.companyName || 'your company';
+    return `
+<h2>Business Partnership Consultation Confirmed! ✅</h2>
+<p>Hi ${l.fullName}! Great news — your Business Partnership consultation has been successfully scheduled. We look forward to exploring a mutual opportunity with ${companyName}.</p>
+
+<div class="box">
+  📅 <strong>${t}</strong><br>
+  🎥 Format: Video Meeting (no signup required)<br>
+  ⏱ Duration: 15 minutes<br>
+  💼 Host: Business Partnership Team<br>
+  🏢 Partner: ${companyName}<br><br>
+  ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" style="color:#2563eb;font-weight:700">🔗 Click to Join Video Meeting</a>` : 'A Video Meeting link will be sent shortly.'}
+</div>
+
+<p><strong>Discussion Agenda:</strong></p>
+<ul>
+  <li>How the business model and revenue share works</li>
+  <li>Income and growth opportunities in your region</li>
+  <li>Training, support, and resource provisions</li>
+  <li>Next steps for onboarding and launch</li>
+</ul>
+
+<p>Join instructions: Click the meeting link above at the scheduled time. Please join from a quiet environment with a working microphone and camera.</p>
+
+<div class="sig">
+  <strong>Business Partnership Team</strong><br>
+  Aiprep365 Business Development<br>
+  📧 partner@aiprep365.com &nbsp;|&nbsp; 📞 ${c.counselorPhone || ''}
+</div>`;
   }
 
   _meetingConfBody(l, t) {
