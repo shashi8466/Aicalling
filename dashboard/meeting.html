@@ -560,7 +560,7 @@ html, body { height: 100%; font-family: 'Inter', system-ui, sans-serif; backgrou
       <div class="panel-tab-bar">
         <div class="ptab active" data-tab="participants" onclick="switchTab('participants')">People</div>
         <div class="ptab" data-tab="chat" onclick="switchTab('chat')">Chat <span id="chat-dot" style="display:none;color:var(--red)">●</span></div>
-        <button class="panel-close-btn" onclick="doPanel(panelOpen)">✕</button>
+        <button class="panel-close-btn" onclick="closePanel()">✕</button>
       </div>
       <div class="panel-body">
         <!-- Participants pane -->
@@ -718,6 +718,7 @@ function toggleEmoji()    { window.__M && window.__M.emoji();     }
 function toggleHand()     { window.__M && window.__M.hand();      }
 function sendReaction(e)  { window.__M && window.__M.react(e);    }
 function openPanel(t)     { window.__M && window.__M.panel(t);    }
+function closePanel()     { window.__M && window.__M.panel('');   }
 function switchTab(t)     { window.__M && window.__M.tab(t);      }
 function prevToggleMic()  { window.__M && window.__M.prevMic();   }
 function prevToggleCam()  { window.__M && window.__M.prevCam();   }
@@ -1187,7 +1188,7 @@ function doSettings(open){
 /* ════ PANEL & TABS ════ */
 function doPanel(tab){
   var sp=$('side-panel'); if(!sp) return;
-  if(panelOpen===tab){ sp.classList.remove('open'); panelOpen=''; }
+  if(!tab || panelOpen===tab){ sp.classList.remove('open'); panelOpen=''; }
   else { sp.classList.add('open'); panelOpen=tab; doTab(tab); }
   /* clear chat dot when opening chat */
   if(tab==='chat'){ var d=$('chat-dot'); if(d) d.style.display='none'; }
