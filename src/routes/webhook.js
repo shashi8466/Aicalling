@@ -891,10 +891,12 @@ async function _finaliseCall(lead, session, callSid, reason) {
     const supabase = require('../db/supabase');
     const { data: sqlMeetings } = await supabase
       .from('meetings')
-      .select('id')
-      .eq('lead_id', lead._id)
-      .limit(1);
-    const meetingAlreadySaved = sqlMeetings && sqlMeetings.length > 0;
+      .select('id, scheduled_at')
+      .eq('lead_id', lead._id);
+
+    // A meeting is already saved ONLY if there is an upcoming scheduled meeting in the meetings table
+    const hasFutureSqlMeeting = sqlMeetings && sqlMeetings.some(m => new Date(m.scheduled_at) > new Date());
+    const meetingAlreadySaved = !!hasFutureSqlMeeting;
 
     const lowerTranscript = transcript.toLowerCase();
     const hasConfirmationPhrase = 
@@ -912,14 +914,19 @@ async function _finaliseCall(lead, session, callSid, reason) {
         if (detection.booked || hasConfirmationPhrase) {
           logger.info(`✅ Post-call meeting rescue triggered for ${lead.fullName} — time: ${detection.rawTime || 'pre-existing'}`);
 
-          // Parse the verbally confirmed time into a real Date
-          const scheduledAt = lead.meeting?.scheduledAt 
+          // Parse the verbally confirmed time into a real Date (only reuse if it is in the future)
+          const scheduledAt = (lead.meeting?.scheduledAt && new Date(lead.meeting.scheduledAt) > new Date())
             ? new Date(lead.meeting.scheduledAt) 
             : _parseMeetingTime(detection.scheduledTime, detection.scheduledDate);
 
           // Generate a unique LiveKit room name and meeting URL
-          const roomName = lead.meeting?.roomName || livekitSvc.generateRoomName(lead);
-          const jitsiUrl = lead.meeting?.meetLink || livekitSvc.generateMeetingUrl(roomName);
+          const roomName = (lead.meeting?.scheduledAt && new Date(lead.meeting.scheduledAt) > new Date())
+            ? (lead.meeting.roomName || livekitSvc.generateRoomName(lead))
+            : livekitSvc.generateRoomName(lead);
+
+          const jitsiUrl = (lead.meeting?.scheduledAt && new Date(lead.meeting.scheduledAt) > new Date())
+            ? (lead.meeting.meetLink || livekitSvc.generateMeetingUrl(roomName))
+            : livekitSvc.generateMeetingUrl(roomName);
 
           // Save meeting on the lead and schedule reminders
           const meetingService = require('../services/meetingService');
@@ -976,12 +983,9 @@ async function _finaliseCall(lead, session, callSid, reason) {
     // The /book endpoint might have run concurrently and saved the meeting.
     // We must fetch the latest DB state to ensure we don't erase the meeting.
     const freshLead = await Lead.findById(lead._id);
-    const hasMeeting = !!(lead.meeting?.scheduledAt) || 
-                       !!(freshLead?.meeting?.scheduledAt) || 
-                       lead.meetingStatus === 'Booked' || 
-                       freshLead?.meetingStatus === 'Booked' ||
-                       lead.status === 'meeting-scheduled' ||
-                       freshLead?.status === 'meeting-scheduled';
+    const nowTime = new Date();
+    const hasMeeting = (lead.meeting?.scheduledAt && new Date(lead.meeting.scheduledAt) > nowTime) || 
+                       (freshLead?.meeting?.scheduledAt && new Date(freshLead.meeting.scheduledAt) > nowTime);
 
     if (hasMeeting) {
       lead.status = 'meeting-scheduled';
