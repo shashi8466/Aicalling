@@ -423,7 +423,8 @@ router.post('/leads', async (req, res) => {
 router.patch('/leads/:id', async (req, res) => {
   try {
     const allowed = ['status','leadCategory','notes','fullName','email','phone',
-                     'grade','courseInterest','parentName','parentEmail','meeting.status','campaignId'];
+                     'grade','courseInterest','parentName','parentEmail','meeting.status','campaignId',
+                     'countryCode','country','state','timeZone','meetingStatus','lastMorningCall','lastEveningCall','nextScheduledCall'];
     const update = {};
     allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
     const lead = await Lead.findByIdAndUpdate(req.params.id, update, { new: true });

@@ -2020,6 +2020,29 @@ table td.cb-col input[type=checkbox], table th.cb-col input[type=checkbox] { wid
           <label>Parent Email</label>
           <input type="email" id="lf_parentEmail" placeholder="Parent email">
         </div>
+        <div class="form-row">
+          <label>State (USA)</label>
+          <input type="text" id="lf_state" placeholder="e.g. California, Texas">
+        </div>
+        <div class="form-row">
+          <label>Time Zone</label>
+          <select id="lf_timeZone">
+            <option value="">Auto-Detect</option>
+            <option value="America/New_York">Eastern Time (ET)</option>
+            <option value="America/Chicago">Central Time (CT)</option>
+            <option value="America/Phoenix">Mountain Time (Arizona)</option>
+            <option value="America/Denver">Mountain Time (MT)</option>
+            <option value="America/Los_Angeles">Pacific Time (PT)</option>
+            <option value="Asia/Kolkata">India Time (IST)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Meeting Status</label>
+          <select id="lf_meetingStatus">
+            <option value="Not Booked">Not Booked</option>
+            <option value="Booked">Booked</option>
+          </select>
+        </div>
       </div>
       <div class="form-row" style="margin-top:4px">
         <label>Notes</label>
@@ -3848,6 +3871,18 @@ async function openLead(id) {
         <div class="detail-cell"><div class="lbl">Parent Email</div><div class="val">${esc(l.parentEmail || '—')}</div></div>
       </div>
 
+      <div class="section-title">🌍 Time Zone & Calling Automation</div>
+      <div class="detail-grid">
+        <div class="detail-cell"><div class="lbl">Country Code</div><div class="val">${esc(l.countryCode || '—')}</div></div>
+        <div class="detail-cell"><div class="lbl">Country</div><div class="val">${esc(l.country || '—')}</div></div>
+        <div class="detail-cell"><div class="lbl">State (USA)</div><div class="val">${esc(l.state || '—')}</div></div>
+        <div class="detail-cell"><div class="lbl">Time Zone</div><div class="val">${esc(l.timeZone || '—')}</div></div>
+        <div class="detail-cell"><div class="lbl">Meeting Status</div><div class="val"><span class="status-badge ${l.meetingStatus==='Booked'?'meeting-scheduled':'lost'}">${esc(l.meetingStatus || 'Not Booked')}</span></div></div>
+        <div class="detail-cell"><div class="lbl">Last Morning Call</div><div class="val">${l.lastMorningCall ? new Date(l.lastMorningCall).toLocaleString() : '—'}</div></div>
+        <div class="detail-cell"><div class="lbl">Last Evening Call</div><div class="val">${l.lastEveningCall ? new Date(l.lastEveningCall).toLocaleString() : '—'}</div></div>
+        <div class="detail-cell"><div class="lbl">Next Scheduled Call</div><div class="val">${l.nextScheduledCall ? new Date(l.nextScheduledCall).toLocaleString() : '—'}</div></div>
+      </div>
+
       <div class="section-title">🎯 Status & Score</div>
       <div class="detail-grid">
         <div class="detail-cell"><div class="lbl">Status</div><div class="val"><span class="status-badge ${l.status}">${fmtStatus(l.status)}</span></div></div>
@@ -4808,6 +4843,9 @@ function openAddLead() {
   document.getElementById('lf_parentName').value  = '';
   document.getElementById('lf_parentEmail').value = '';
   document.getElementById('lf_notes').value     = '';
+  document.getElementById('lf_state').value     = '';
+  document.getElementById('lf_timeZone').value  = '';
+  document.getElementById('lf_meetingStatus').value = 'Not Booked';
   populateCampaignSelect('lf_campaign', '');
   document.getElementById('leadFormModal').classList.add('active');
 }
@@ -4827,6 +4865,9 @@ async function openEditLead(id) {
     document.getElementById('lf_parentName').value  = l.parentName || '';
     document.getElementById('lf_parentEmail').value = l.parentEmail || '';
     document.getElementById('lf_notes').value     = l.notes || '';
+    document.getElementById('lf_state').value     = l.state || '';
+    document.getElementById('lf_timeZone').value  = l.timeZone || '';
+    document.getElementById('lf_meetingStatus').value = l.meetingStatus || 'Not Booked';
     await populateCampaignSelect('lf_campaign', l.campaignId || '');
     document.getElementById('leadFormModal').classList.add('active');
   } catch(e) { toast('Failed to load lead: ' + e.message, 'error'); }
@@ -4848,12 +4889,15 @@ async function saveLeadForm() {
   const parentEmail = document.getElementById('lf_parentEmail').value.trim();
   const notes    = document.getElementById('lf_notes').value.trim();
   const campaignId = (document.getElementById('lf_campaign') || {}).value || '';
+  const state    = document.getElementById('lf_state').value.trim();
+  const timeZone = document.getElementById('lf_timeZone').value;
+  const meetingStatus = document.getElementById('lf_meetingStatus').value;
 
   if (!fullName) { toast('Full name is required', 'error'); return; }
   if (!email)    { toast('Email is required', 'error'); return; }
   if (!phone)    { toast('Phone is required', 'error'); return; }
 
-  const payload = { fullName, email, phone, grade, courseInterest, status, parentName, parentEmail, notes };
+  const payload = { fullName, email, phone, grade, courseInterest, status, parentName, parentEmail, notes, state, timeZone, meetingStatus };
   // Assign/clear campaign. On edit, send null to clear; on create, only send when chosen.
   if (id) payload.campaignId = campaignId || null;
   else if (campaignId) payload.campaignId = campaignId;

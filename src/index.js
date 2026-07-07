@@ -26,6 +26,7 @@ const campaignsRouter  = require('./routes/campaigns');
 const { requireAuth, requireAdmin } = require('./middleware/auth');
 const followUpEngine   = require('./jobs/followUpEngine');
 const livekitSvc       = require('./services/livekitService');
+const tzScheduler      = require('./jobs/tzScheduler');
 
 const app = express();
 
@@ -182,9 +183,10 @@ async function boot() {
       });
     }
 
-    // 5. Background jobs (sheets polling, reminders, follow-up engine)
+    // 5. Background jobs (sheets polling, reminders, follow-up engine, timezone scheduler)
     poller.start();
     followUpEngine.start();
+    tzScheduler.start();
 
     // 5b. Keep-alive self-ping for free hosting (Render)
     setInterval(() => {

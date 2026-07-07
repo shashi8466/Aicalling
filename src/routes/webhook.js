@@ -598,6 +598,7 @@ router.post('/call/book', async (req, res) => {
         status:        'scheduled',
       };
       lead.status      = 'meeting-scheduled';
+      lead.meetingStatus = 'Booked';
       lead.isQualified = true;
 
       const { score, category } = scoreLead(lead);
@@ -863,6 +864,7 @@ async function _finaliseCall(lead, session, callSid, reason) {
             bookedViaTranscript: true,
           };
           lead.status      = 'meeting-scheduled';
+          lead.meetingStatus = 'Booked';
           lead.isQualified = true;
 
           logger.info(`📅 Meeting rescue: scheduled at ${scheduledAt.toISOString()} | link: ${jitsiUrl}`);

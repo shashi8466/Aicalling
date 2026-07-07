@@ -56,6 +56,15 @@ class Document {
   async save() {
     const supabase = require('./supabase');
 
+    if (this.__table === 'leads') {
+      const tzHelper = require('../utils/timezoneHelper');
+      const tzInfo = tzHelper.detectTimeZone(this.phone || '', this.state || '');
+      this.countryCode = this.countryCode || tzInfo.countryCode;
+      this.country = this.country || tzInfo.country;
+      this.timeZone = this.timeZone || tzInfo.timeZone;
+      this.meetingStatus = this.meetingStatus || 'Not Booked';
+    }
+
     // Auto-assign _ids to any callAttempt items that don't have one
     if (Array.isArray(this.callAttempts)) {
       this.callAttempts = this.callAttempts.map(a =>

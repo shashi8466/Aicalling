@@ -181,6 +181,9 @@ const Lead = {
 
   async create(data) {
     const now = new Date().toISOString();
+    const tzHelper = require('../utils/timezoneHelper');
+    const tzInfo = tzHelper.detectTimeZone(data.phone || '', data.state || '');
+
     const row = {
       call_attempts:       [],
       qualification:       {},
@@ -196,6 +199,11 @@ const Lead = {
       notes:               '',
       created_at:          now,
       updated_at:          now,
+      country_code:        data.countryCode || tzInfo.countryCode,
+      country:             data.country || tzInfo.country,
+      state:               data.state || '',
+      time_zone:           data.timeZone || tzInfo.timeZone,
+      meeting_status:      data.meetingStatus || 'Not Booked',
     };
 
     // Merge caller's data (convert to snake_case)
@@ -211,6 +219,29 @@ const Lead = {
 
   async findByIdAndUpdate(id, update, _opts = {}) {
     if (!id) return null;
+    
+    // Auto-detect country/timezone if phone or state changes and time_zone is not explicitly set
+    if (update.phone !== undefined || update.state !== undefined) {
+      const tzHelper = require('../utils/timezoneHelper');
+      let currentPhone = update.phone;
+      let currentState = update.state;
+      if (currentPhone === undefined || currentState === undefined) {
+        const { data: existing } = await supabase.from(TABLE).select('phone, state').eq('id', id).single();
+        if (existing) {
+          if (currentPhone === undefined) currentPhone = existing.phone;
+          if (currentState === undefined) currentState = existing.state;
+        }
+      }
+      const tzInfo = tzHelper.detectTimeZone(currentPhone || '', currentState || '');
+      if (update.phone !== undefined) {
+        if (update.countryCode === undefined) update.countryCode = tzInfo.countryCode;
+        if (update.country === undefined) update.country = tzInfo.country;
+      }
+      if (update.timeZone === undefined) {
+        update.timeZone = tzInfo.timeZone;
+      }
+    }
+
     const row = { updated_at: new Date().toISOString() };
     for (const [k, v] of Object.entries(update)) {
       if (k === '_id' || k === 'aiStatus') continue;
