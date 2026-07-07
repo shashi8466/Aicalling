@@ -14,17 +14,45 @@ class EmailService {
 
   // ── Public senders ───────────────────────────────────────────────────
 
+  // ── Helper to resolve brand details based on campaign ────────────────
+  async _getBrand(lead) {
+    let companyName = 'Aiprep365';
+    let logoPath = 'logos/new/logo.png';
+    let website = 'https://aiprep365.com';
+    let companyDesc = 'AI Admissions Agent · Your Path to Academic Excellence';
+
+    if (lead) {
+      try {
+        const campaignSvc = require('./campaignService');
+        const { type } = await campaignSvc.resolveForLead(lead);
+        const pundits = ['sat-batch', 'act-batch', 'ap-course', 'business-partner'];
+        if (pundits.includes(type)) {
+          logoPath = 'logos/logo1.png';
+          companyName = type === 'business-partner' ? 'HGI' : 'Test Prep Pundits';
+          companyDesc = 'Your Path to Academic Excellence';
+          website = 'https://testpreppundits.com';
+        }
+      } catch (e) {
+        logger.warn('Failed to resolve brand for lead', e);
+      }
+    }
+    return { companyName, logoPath, website, companyDesc };
+  }
+
   async sendNewLeadWelcome(lead) {
     if (!lead.email) {
       const err = `Lead ${lead._id} missing email address`;
       logger.error(err);
       return { ok: false, error: err };
     }
+    const brand = await this._getBrand(lead);
+    const subject = `Welcome to ${brand.companyName} – We'll be in touch, ${lead.fullName}! 🎓`;
+    const html = await this._wrap(this._newLeadBody(lead), lead);
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
-      subject: `Welcome to Aiprep365 – We'll be in touch, ${lead.fullName}! 🎓`,
-      html:    this._wrap(this._newLeadBody(lead)),
+      subject,
+      html,
     });
   }
 
@@ -42,11 +70,12 @@ class EmailService {
     const t = moment(lead.meeting.scheduledAt)
       .tz('America/New_York')
       .format('dddd, MMMM Do [at] h:mm A [ET]');
+    const html = await this._wrap(this._meetingConfBody(lead, t), lead);
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
       subject: `✅ Consultation Confirmed – ${t}`,
-      html:    this._wrap(this._meetingConfBody(lead, t)),
+      html,
     });
   }
 
@@ -56,11 +85,13 @@ class EmailService {
       logger.error(err);
       return { ok: false, error: err };
     }
+    const brand = await this._getBrand(lead);
+    const html = await this._wrap(this._noAnswerBody(lead), lead);
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
-      subject: `We tried to reach you – ${lead.fullName} | Aiprep365`,
-      html:    this._wrap(this._noAnswerBody(lead)),
+      subject: `We tried to reach you – ${lead.fullName} | ${brand.companyName}`,
+      html,
     });
   }
 
@@ -78,11 +109,12 @@ class EmailService {
     const t = moment(lead.meeting.scheduledAt)
       .tz('America/New_York')
       .format('dddd, MMMM Do [at] h:mm A [ET]');
+    const html = await this._wrap(this._reminderBody(lead, t), lead);
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
       subject: `⏰ Reminder: Your Consultation Tomorrow – ${t}`,
-      html:    this._wrap(this._reminderBody(lead, t)),
+      html,
     });
   }
 
@@ -92,11 +124,12 @@ class EmailService {
       logger.error(err);
       return { ok: false, error: err };
     }
+    const html = await this._wrap(this._successStoriesBody(lead), lead);
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
       subject: `🌟 ${lead.fullName}, see how students like you achieved their goals`,
-      html:    this._wrap(this._successStoriesBody(lead)),
+      html,
     });
   }
 
@@ -106,61 +139,68 @@ class EmailService {
       logger.error(err);
       return { ok: false, error: err };
     }
+    const html = await this._wrap(this._enrollmentReminderBody(lead), lead);
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
       subject: `⏳ Last chance to secure ${lead.fullName}'s spot — enrollment closing soon`,
-      html:    this._wrap(this._enrollmentReminderBody(lead)),
+      html,
     });
   }
 
   async sendParentDiscussion(lead) {
     if (!lead.email) return { ok: false, error: `Lead ${lead._id} missing email` };
+    const html = await this._wrap(this._parentDiscussionBody(lead), lead);
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
       subject: `${lead.parentName || 'A note for parents'} — Let's discuss ${lead.fullName}'s academic future`,
-      html:    this._wrap(this._parentDiscussionBody(lead)),
+      html,
     });
   }
 
   async sendProgramBenefits(lead) {
     if (!lead.email) return { ok: false, error: `Lead ${lead._id} missing email` };
+    const brand = await this._getBrand(lead);
+    const html = await this._wrap(this._programBenefitsBody(lead), lead);
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
-      subject: `Why students choose Aiprep365 — ${lead.fullName}'s program breakdown`,
-      html:    this._wrap(this._programBenefitsBody(lead)),
+      subject: `Why students choose ${brand.companyName} — ${lead.fullName}'s program breakdown`,
+      html,
     });
   }
 
   async sendLimitedSeat(lead) {
     if (!lead.email) return { ok: false, error: `Lead ${lead._id} missing email` };
+    const html = await this._wrap(this._limitedSeatBody(lead), lead);
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
       subject: `⚠️ Limited seats remaining — secure ${lead.fullName}'s spot now`,
-      html:    this._wrap(this._limitedSeatBody(lead)),
+      html,
     });
   }
 
   async sendCounselorReachOut(lead) {
     if (!lead.email) return { ok: false, error: `Lead ${lead._id} missing email` };
+    const html = await this._wrap(this._counselorReachOutBody(lead), lead);
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
       subject: `${lead.fullName}, I wanted to personally check in 👋`,
-      html:    this._wrap(this._counselorReachOutBody(lead)),
+      html,
     });
   }
 
   async sendReEngagement(lead) {
     if (!lead.email) return { ok: false, error: `Lead ${lead._id} missing email` };
+    const html = await this._wrap(this._reEngagementBody(lead), lead);
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
       subject: `Still thinking about it? We're here for ${lead.fullName} whenever you're ready`,
-      html:    this._wrap(this._reEngagementBody(lead)),
+      html,
     });
   }
 
@@ -170,11 +210,12 @@ class EmailService {
       logger.error(err);
       return { ok: false, error: err };
     }
+    const html = await this._wrap(this._enrollmentBody(lead), lead);
     return this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
       subject: `Ready to get started? – ${lead.fullName}'s ${lead.courseInterest || 'Test Prep'} Program`,
-      html:    this._wrap(this._enrollmentBody(lead)),
+      html,
     });
   }
 
@@ -237,10 +278,19 @@ class EmailService {
 
   // ── HTML wrapper ─────────────────────────────────────────────────────
 
-  _wrap(inner) {
+  async _wrap(inner, lead) {
     const year    = new Date().getFullYear();
-    const website = cfg.company.website;
     const phone   = cfg.company.counselorPhone;
+
+    const brand = await this._getBrand(lead);
+
+    // Adapt the inner HTML content to match the resolved company brand
+    let adaptedInner = inner;
+    if (brand.companyName !== 'Aiprep365') {
+      adaptedInner = adaptedInner
+        .replace(/Aiprep365/g, brand.companyName)
+        .replace(/aiprep365\.com/gi, 'testpreppundits.com');
+    }
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -316,14 +366,14 @@ td{border-collapse:collapse}
 <body>
 <div class="wrap">
   <div class="hdr">
-    <img src="${cfg.server.baseUrl || cfg.company.website}/assets/logo.png" alt="Aiprep365" style="width:120px;height:auto;background:#fff;padding:10px;border-radius:12px;display:inline-block;margin-bottom:8px"/>
-    <h1>Aiprep365</h1>
-    <p>AI Admissions Agent · Your Path to Academic Excellence</p>
+    <img src="${cfg.server.baseUrl || cfg.company.website}/${brand.logoPath}" alt="${brand.companyName}" style="width:120px;height:auto;background:#fff;padding:10px;border-radius:12px;display:inline-block;margin-bottom:8px"/>
+    <h1>${brand.companyName}</h1>
+    <p>${brand.companyDesc}</p>
   </div>
-  <div class="body">${inner}</div>
+  <div class="body">${adaptedInner}</div>
   <div class="ftr">
-    © ${year} Aiprep365 &nbsp;|&nbsp;
-    <a href="${website}">${website}</a><br>
+    © ${year} ${brand.companyName} &nbsp;|&nbsp;
+    <a href="${brand.website}">${brand.website}</a><br>
     Questions? Call or text ${phone}
   </div>
 </div>
