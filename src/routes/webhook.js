@@ -629,13 +629,10 @@ router.post('/call/book', async (req, res) => {
 
       // ── MEETING_BOOKED state: send a hardcoded confirmation — do NOT route through AI ──
       // This ensures the AI never falls back to [OFFER_MEETING] on this turn.
-      const isBusiness = session.campaign?.type === 'business-partner';
-      const topic = isBusiness ? 'the business opportunity' : 'SAT, ACT, AP, College Admissions';
-      
       const confirmMsg =
-        `Perfect! Your free meeting has been successfully scheduled. ` +
-        `You'll receive a confirmation email with your meeting details and link shortly. ` +
-        `Before we finish, is there anything else you'd like to know about ${topic}, or your upcoming meeting?`;
+        `Your meeting has been successfully scheduled. ` +
+        `You'll receive the meeting details by email shortly. ` +
+        `Do you have any other questions I can help you with today?`;
       return res.send(twilioSvc.twimlRespond(
         confirmMsg,
         respondUrl(cfg.server.baseUrl, leadId)
