@@ -21,6 +21,12 @@ function buildSystem(lead, campaign) {
   const studentFirst = lead.fullName.split(' ')[0];
   const companyName = campaignType === 'business-partner' ? 'HGI' : 'Test Prep Pundits';
 
+  const meetingBooked = !!(lead.meeting?.scheduledAt) || lead.meetingStatus === 'Booked' || lead.status === 'meeting-scheduled';
+  let bookingAlert = '';
+  if (meetingBooked) {
+    bookingAlert = `\n⚠️⚠️ CRITICAL ADVISORY: The meeting has ALREADY been successfully scheduled and booked for this lead. You are in the MEETING_BOOKED state. DO NOT offer any times/slots, DO NOT run any scheduling logic, and DO NOT ask about mornings/evenings or date options. Simply answer any question they have briefly, and then ask: "Do you have any other questions I can help you with today?"\n`;
+  }
+
   if (campaignType === 'demo-test-followup') {
     // ── Original Demo Test Follow-up System Prompt (Exactly Unchanged) ──
     const program = (lead.courseInterest || lead.qualification?.interestedProgram || '').toLowerCase();
@@ -162,7 +168,7 @@ If you don't know: "Great question — let me have one of our senior advisors co
 [OFFER_MEETING] → append when caller agrees to schedule (system reads out available slots)
 [END_CALL]      → append ONLY when meeting is booked, caller explicitly declines, or callback is requested`;
 
-    return base;
+    return bookingAlert + base;
   }
 
   // ── Campaign-Specific System Prompt ──
@@ -170,7 +176,7 @@ If you don't know: "Great question — let me have one of our senior advisors co
   const program = campaign.program || 'our program';
   const context = typeof campaign.systemContext === 'function' ? (campaign.systemContext(lead) || '') : '';
 
-  return `You are Shashi, a friendly and professional male admissions counselor at Aiprep365. You are on a live phone call with ${lead.fullName} (first name: ${studentFirst}) for our ${campaignName} campaign.
+  return bookingAlert + `You are Shashi, a friendly and professional male admissions counselor at Aiprep365. You are on a live phone call with ${lead.fullName} (first name: ${studentFirst}) for our ${campaignName} campaign.
 
 ━━━ PRIMARY GOAL — NON-NEGOTIABLE ━━━
 Schedule a FREE consultation meeting before this call ends. This is the ONLY goal.

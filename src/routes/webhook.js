@@ -273,7 +273,7 @@ router.post('/call/respond', async (req, res) => {
       "i'm not interested",
       "i am not interested",
     ];
-    const meetingBooked = !!session.meetingBooked;
+    const meetingBooked = !!session.meetingBooked || lead.meetingStatus === 'Booked' || lead.status === 'meeting-scheduled' || !!(lead.meeting?.scheduledAt);
 
     // Allow call to end when meeting is booked AND caller signals they have no more questions.
     // This catches all natural "nothing else" phrases so the AI never falls back to [OFFER_MEETING].
@@ -282,12 +282,24 @@ router.post('/call/respond', async (req, res) => {
       "i'm good", "i'm all set", "no, that's it", "that's okay", "no questions",
       'everything is clear', 'all good', 'all set', 'goodbye', 'bye',
       'thanks bye', 'all done', 'that is all', 'no more questions',
-      'no more', 'i am good', 'i am all set',
+      'no more', 'i am good', 'i am all set', 'no thank you', 'no questions thank you',
+      'no other questions', 'i do not have any other questions', 'no that is correct'
     ];
-    if (meetingBooked && noMoreQuestions.some(p => lowSpeech.trim() === p || lowSpeech.trim().startsWith(p + ' ') || lowSpeech.trim().endsWith(' ' + p))) {
+    const cleanSpeech = lowSpeech.trim().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
+    const isNo = noMoreQuestions.some(p => {
+      const cleanP = p.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
+      return cleanSpeech === cleanP || 
+             cleanSpeech.startsWith(cleanP + ' ') || 
+             cleanSpeech.endsWith(' ' + cleanP) ||
+             cleanSpeech.includes('no other questions') ||
+             cleanSpeech === 'no' ||
+             cleanSpeech === 'nope';
+    });
+
+    if (meetingBooked && isNo) {
       await _finaliseCall(lead, session, req.body.CallSid, 'completed-after-booking');
       return res.send(twilioSvc.twimlHangup(
-        `Wonderful. Thank you for choosing Aiprep365. We look forward to speaking with you during your consultation. Have a wonderful day. Goodbye.`
+        `Thank you. Your meeting details and confirmation email have been sent. We look forward to speaking with you during your consultation. Have a wonderful day. Goodbye.`
       ));
     }
 
