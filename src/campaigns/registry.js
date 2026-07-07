@@ -198,36 +198,35 @@ Speak to the parent respectfully; focus on the student's goals, timelines, and r
 GOAL: book a FREE consultation with a counselor. Frame every meeting offer as a parent counseling session.`,
   },
 
-  // 9) Business Partner Opportunity
   'business-partner': {
     type: 'business-partner',
     name: 'Business Partner Opportunity',
     program: 'Business Partner',
     opener: (lead, isFollowUp) => 
-      `Hello, this is Ravi Gunishetty calling from HGI. Am I speaking with ${firstName(lead)}?`,
+      `Hello, may I speak with ${lead.fullName}? Hi, this is Ravi Gunishetty from HGI.`,
     turn0Line: (lead) =>
-      `I hope you're doing well. We are currently looking for a few motivated business partners to join our growing network. ` +
-      `The good news is that this opportunity does not require any financial investment. The only investment is your time and commitment. ` +
-      `Many of our partners have built successful businesses with us. Some of them are now earning over ₹100,000 per month after approximately three years of consistent effort and hard work. ` +
-      `We provide personal mentorship, step-by-step guidance, growth opportunities, and a supportive business community. ` +
+      `We're currently looking for Business Partners to join our growing network. ` +
+      `The best part is, there is no financial investment required. All you need to invest is your time and commitment. ` +
+      `Some of our business partners are already earning $10000+ per year after around three years of consistent hard work and dedication. Individual results vary and depend on each partner's effort and performance. ` +
       `Would you be interested in learning more about this business opportunity?`,
     systemContext: (lead) =>
 `━━━ CAMPAIGN: BUSINESS PARTNER OPPORTUNITY ━━━
-This is an OUTREACH call inviting ${firstName(lead)} to learn about the HGI business partnership opportunity.
+This is an OUTREACH call inviting ${lead.fullName} to learn about the HGI business partnership opportunity.
 
-OPENING INTENT (already delivered): Introduced the HGI business opportunity, mentioning no financial investment, earning potential (₹100,000/month after 3 years), and asked if they are interested.
+OPENING INTENT (already delivered): Introduced HGI business opportunity, mentioning no financial investment, earning potential ($10,000+ per year after 3 years), and asked if they are interested.
 
-If they say YES to learning more:
-Say: "That's wonderful! I'd be happy to schedule a FREE 15-minute introductory meeting where one of our business advisors will explain how the business works, the income opportunities, the growth plan, and the training process, and answer any questions you might have." then [OFFER_MEETING]
-
-After the meeting is booked, say:
-"Excellent! Your meeting has been successfully scheduled. You'll receive the meeting link and confirmation shortly."
-Then follow the global post-booking instructions to ask if they have any questions.
+If they say YES or express interest:
+- Briefly explain the HGI business model.
+- Schedule a Business Partnership consultation.
+- Confirm the meeting date and time. Then append [OFFER_MEETING].
 
 If they say NO or NOT INTERESTED at any point:
-Say EXACTLY: "No problem at all. Thank you for your time today. If you ever wish to learn more in the future, we'd be happy to help. Have a great day!" then [END_CALL]
+- Thank them for their time and politely end the call (say: "Thank you for your time. Have a great day!" then [END_CALL]).
 
-GOAL: book a FREE 15-minute introductory meeting with a business advisor.`
+After the meeting is booked:
+- Say EXACTLY: "Your Business Partnership consultation has been successfully scheduled. You'll receive a confirmation email shortly. Do you have any other questions for me today?"
+- If the caller says "No", "Nothing else", or any sign-off, thank them and end the call immediately (say: "Thank you for your time. Goodbye." then [END_CALL]).
+- CRITICAL: Do not ask for another meeting date or offer additional meeting slots after the meeting has already been confirmed.`
   },
 };
 
