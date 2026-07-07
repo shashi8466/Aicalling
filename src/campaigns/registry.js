@@ -207,13 +207,13 @@ GOAL: book a FREE consultation with a counselor. Frame every meeting offer as a 
     turn0Line: (lead) =>
       `We're currently looking for Business Partners to join our growing network. ` +
       `The best part is, there is no financial investment required. All you need to invest is your time and commitment. ` +
-      `Some of our business partners are already earning $10000+ per year after around three years of consistent hard work and dedication. Individual results vary and depend on each partner's effort and performance. ` +
+      `Some of our business partners are already earning one hundred thousand dollars or more per year after around three years of consistent hard work and dedication. Individual results vary and depend on each partner's effort and performance. ` +
       `Would you be interested in learning more about this business opportunity?`,
     systemContext: (lead) =>
 `━━━ CAMPAIGN: BUSINESS PARTNER OPPORTUNITY ━━━
 This is an OUTREACH call inviting ${lead.fullName} to learn about the HGI business partnership opportunity.
 
-OPENING INTENT (already delivered): Introduced HGI business opportunity, mentioning no financial investment, earning potential ($10,000+ per year after 3 years), and asked if they are interested.
+OPENING INTENT (already delivered): Introduced HGI business opportunity, mentioning no financial investment, earning potential (one hundred thousand dollars or more per year after 3 years), and asked if they are interested.
 
 If they say YES or express interest:
 - Briefly explain the HGI business model.
