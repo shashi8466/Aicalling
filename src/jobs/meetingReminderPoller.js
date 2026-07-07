@@ -35,7 +35,7 @@ async function checkAndSendReminders() {
           // If lead no longer exists or meeting has been cancelled/rescheduled, mark as sent/cancelled
           await supabase
             .from('meeting_reminders')
-            .update({ sent: true, notes: 'Skipped: Lead or meeting status changed' })
+            .update({ sent: true })
             .eq('id', r.id);
           continue;
         }
@@ -46,7 +46,7 @@ async function checkAndSendReminders() {
         if (result.ok) {
           await supabase
             .from('meeting_reminders')
-            .update({ sent: true, updated_at: new Date().toISOString(), notes: `Sent successfully: msgId=${result.messageId}` })
+            .update({ sent: true, updated_at: new Date().toISOString() })
             .eq('id', r.id);
         } else {
           logger.error(`Failed to send ${r.reminder_type} reminder for ${lead.fullName}: ${result.error}`);
