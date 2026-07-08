@@ -37,11 +37,22 @@ const sessions = new Map();
  * @returns {boolean}
  */
 function isIdentityConfirmed(lowSpeech, firstName) {
-  // Generic affirmations
-  const genericOk = /^(yes|yeah|yep|yup|correct|speaking|sure|absolutely|of course|that'?s? me|that is me)[\.!,]?$/.test(lowSpeech.trim());
-  if (genericOk) return true;
+  const s = lowSpeech.trim();
 
-  // Name-based confirmations
+  // 1. Pure generic affirmations (exact or with light punctuation)
+  if (/^(yes|yeah|yep|yup|correct|speaking|sure|absolutely|of course|that'?s? me|that is me|i am|it is|it'?s me)[\.!,]?$/.test(s)) return true;
+
+  // 2. Affirmation word at the start followed by anything
+  //    e.g. "yes, this is Kumar", "yes speaking", "yeah that's me"
+  if (/^(yes|yeah|yep|yup|sure|absolutely|of course)\b/.test(s)) return true;
+
+  // 3. Caller says ONLY their first name (very common: caller just says "Kumar")
+  if (s === firstName || s === firstName + '.') return true;
+
+  // 4. "I am" followed optionally by their name or nothing else significant
+  if (/^i am\b/.test(s)) return true;
+
+  // 5. "This is <name>" / "It's <name>" / "<name> speaking" patterns
   const namePatterns = [
     `yes i'?m ${firstName}`,
     `i am ${firstName}`,
@@ -53,9 +64,8 @@ function isIdentityConfirmed(lowSpeech, firstName) {
     `speaking with ${firstName}`,
     `it'?s ${firstName}`,
     `it is ${firstName}`,
-    `kumar speaking`,  // covers counselor-name variant from rules
   ];
-  return namePatterns.some(p => lowSpeech.includes(p));
+  return namePatterns.some(p => s.includes(p));
 }
 
 /**
