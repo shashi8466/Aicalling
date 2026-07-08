@@ -6672,7 +6672,7 @@
               ${c.sentiment ? `<span>${sentEmoji(c.sentiment)} ${esc(c.sentiment)}</span>` : ''}
             </div>
             ${c.aiSummary ? `<div class="summary"><strong>AI Summary:</strong>\n${esc(c.aiSummary)}</div>` : ''}
-            ${c.recordingUrl ? `<audio controls preload="none" data-rec="/api/leads/${l._id}/recording/${idx}"></audio>` : ''}
+            ${c.recordingUrl === 'FAILED' ? `<div style="color: #ef4444; font-size: 13px; font-weight: 500; margin-top: 8px;">⚠️ Recording Failed</div>` : (c.recordingUrl ? `<audio controls preload="none" data-rec="/api/leads/${l._id}/recording/${idx}"></audio>` : '')}
             ${c.transcript ? `
               <details style="margin-top:8px"><summary style="cursor:pointer;color:var(--brand);font-size:12px">📄 View Transcript</summary>
                 <div class="transcript">${esc(c.transcript)}</div>

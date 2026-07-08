@@ -404,6 +404,24 @@ router.post('/call/respond', async (req, res) => {
       }
     }
 
+    // ── Intercept affirmative responses immediately to schedule ─────────────
+    const isAffirmative = /\b(yes|yeah|sure|okay|absolutely|sounds good|i'd like to|let's do it|i do|yep|yup|please|ok)\b/i.test(speech);
+    if (!meetingBooked && isAffirmative) {
+      const askedToSchedule = lastAssistantMsg.includes('schedule') || 
+                              lastAssistantMsg.includes('consultation') ||
+                              lastAssistantMsg.includes('time') ||
+                              lastAssistantMsg.includes('learn more');
+      if (askedToSchedule) {
+        session.history.push({ role: 'user', content: speech });
+        session.history.push({ role: 'assistant', content: '[OFFER_MEETING]' });
+        session.turnCount++;
+        sessions.set(leadId, session);
+        const r = new (require('twilio').twiml.VoiceResponse)();
+        r.redirect({ method: 'POST' }, slotsUrl(cfg.server.baseUrl, leadId));
+        return res.send(r.toString());
+      }
+    }
+
     // Add user turn to history
     session.history.push({ role: 'user', content: speech });
     session.turnCount++;
@@ -874,7 +892,7 @@ router.post('/call/status', async (req, res) => {
 // ── Recording ready ────────────────────────────────────────────────────────────
 router.post('/call/recording', async (req, res) => {
   const { leadId } = req.query;
-  const { RecordingUrl, RecordingSid } = req.body;
+  const { RecordingUrl, RecordingSid, RecordingStatus, ErrorCode } = req.body;
   res.sendStatus(200);
 
   try {
@@ -882,10 +900,16 @@ router.post('/call/recording', async (req, res) => {
     if (!lead) return;
     const attempt = lead.callAttempts[lead.callAttempts.length - 1];
     if (attempt) {
-      attempt.recordingUrl = `${RecordingUrl}.mp3`;
+      if (RecordingStatus === 'failed' || RecordingStatus === 'absent') {
+        attempt.recordingUrl = 'FAILED';
+        attempt.recordingError = ErrorCode || 'Unknown Twilio Error';
+        logger.error(`Recording failed for ${lead.fullName} (Status: ${RecordingStatus}, Error: ${ErrorCode})`);
+      } else if (RecordingUrl) {
+        attempt.recordingUrl = `${RecordingUrl}.mp3`;
+        logger.info(`Recording saved for ${lead.fullName}: ${RecordingUrl}`);
+      }
     }
     await lead.save();
-    logger.info(`Recording saved for ${lead.fullName}: ${RecordingUrl}`);
   } catch (err) {
     logger.error('webhook/recording error', { msg: err.message });
   }
