@@ -119,7 +119,17 @@ router.post('/call/start', async (req, res) => {
     logger.info(`Campaign resolved from DB: ${campaignType} for lead ${lead.fullName}`);
     
 
-    sessions.set(leadId, { history: [], turnCount: 0, isFollowUp, campaignType: campaign.type, campaign });
+    const sessionObj = { history: [], turnCount: 0, isFollowUp, campaignType: campaign.type, campaign };
+    sessions.set(leadId, sessionObj);
+
+    // Asynchronously fetch available slots so the AI has them for scheduling.
+    calendarSvc.getAvailableSlots(4, 30, 10).then(slots => {
+      const activeSession = sessions.get(leadId);
+      if (activeSession) {
+        activeSession.slots = slots;
+        sessions.set(leadId, activeSession);
+      }
+    }).catch(err => logger.error('Failed to pre-fetch slots', err));
 
     const studentFirst = lead.fullName.split(' ')[0];
     
@@ -273,7 +283,12 @@ router.post('/call/respond', async (req, res) => {
       "i'm not interested",
       "i am not interested",
     ];
-    const meetingBooked = !!session.meetingBooked || lead.meetingStatus === 'Booked' || lead.status === 'meeting-scheduled' || !!(lead.meeting?.scheduledAt);
+    let meetingBooked = !!session.meetingBooked || lead.meetingStatus === 'Booked' || lead.status === 'meeting-scheduled' || !!(lead.meeting?.scheduledAt);
+    const lastAssistantMsg = [...(session.history || [])].reverse().find(m => m.role === 'assistant')?.content?.toLowerCase() || '';
+    const askedFinalQuestion = lastAssistantMsg.includes('any other questions') || lastAssistantMsg.includes('questions for me today') || lastAssistantMsg.includes('questions i can help you with');
+    if (askedFinalQuestion) {
+      meetingBooked = true;
+    }
 
     // Allow call to end when meeting is booked AND caller signals they have no more questions.
     // This catches all natural "nothing else" phrases so the AI never falls back to [OFFER_MEETING].
@@ -307,7 +322,7 @@ router.post('/call/respond', async (req, res) => {
         logger.error('Error finalising call in background:', err);
       });
       return res.send(twilioSvc.twimlHangup(
-        `Thank you for your time. Have a great day. Goodbye.`
+        `Thank you for your time. Have a wonderful day. Goodbye.`
       ));
     }
 
@@ -383,46 +398,21 @@ router.post('/call/respond', async (req, res) => {
     session.history.push({ role: 'user', content: speech });
     session.turnCount++;
 
-    // If meeting NOT booked AND we've had many turns, proactively offer slots
-    const hasTimeMention = /\b(morning|afternoon|evening|monday|tuesday|wednesday|thursday|friday|saturday|sunday|am|pm|o'clock|tomorrow|today|weekend|weekday|next week)\b/i.test(speech);
-    if (!session.meetingBooked && hasTimeMention && session.turnCount > 2) {
-      logger.info(`Caller mentioned time — proactively offering slots`);
-      return res.send(twilioSvc.twimlStart(
-        `Great, let me pull up some times that work.`,
-        slotsUrl(cfg.server.baseUrl, leadId)
-      ));
-    }
-
-    // Safety net: too many turns without booking — escalate to slot offering
-    if (!session.meetingBooked && session.turnCount >= 12) {
-      logger.warn(`Reached turn ${session.turnCount} without booking. Forcing slot offering.`);
-      return res.send(twilioSvc.twimlStart(
-        `Let me share some times that would work for a quick 10-minute chat — that way ${lead.fullName.split(' ')[0]} doesn't lose any momentum.`,
-        slotsUrl(cfg.server.baseUrl, leadId)
-      ));
-    }
-
     // Get AI response — stream response for low latency
     let stream;
-    if (session.isFollowUp) {
-      const { buildFollowUpSystem } = aiSvc;
-      const sysPrompt = buildFollowUpSystem(lead);
-      const msgs = [...session.history.slice(-12), { role: 'user', content: speech }];
-      
-      stream = aiSvc.streamChat({
-        lead,
-        history: session.history.slice(-12),
-        userMessage: speech,
-        systemOverride: sysPrompt
-      });
-    } else {
-      stream = aiSvc.streamChat({
-        lead,
-        history: session.history.slice(-12),
-        userMessage: speech,
-        campaign: session.campaign
-      });
+    let baseSys = session.isFollowUp ? aiSvc.buildFollowUpSystem(lead) : aiSvc.buildSystem(lead, session.campaign);
+    
+    if (!session.meetingBooked && session.slots && session.slots.length) {
+      const slotStrings = session.slots.map(s => `- ${s.displayTime}`).join('\n');
+      baseSys += `\n\n[AVAILABLE SCHEDULING SLOTS]\nThese are the ONLY available times for a consultation. Do NOT propose or accept any other times. If they suggest another time, politely correct them and offer these options instead:\n${slotStrings}\nOnce they agree to one of these exact times, confirm it clearly and then immediately append [END_CALL]. Do NOT use [OFFER_MEETING].`;
     }
+
+    stream = aiSvc.streamChat({
+      lead,
+      history: session.history.slice(-12),
+      userMessage: speech,
+      systemOverride: baseSys
+    });
 
     session.activeStream = stream;
     sessions.set(leadId, session);
@@ -700,7 +690,7 @@ router.post('/call/book', async (req, res) => {
             meetingTime: scheduledET.format('h:mm A z'),
             meetLink:    booking.meetLink || '',
           });
-          await emailSvc.sendMeetingConfirmation(lead);
+          await emailSvc.sendMeetingConfirmation(lead, session.campaignType);
         } catch (e) {
           logger.error('Post-booking tasks failed', { msg: e.message });
         }
@@ -743,7 +733,7 @@ router.post('/call/book', async (req, res) => {
           summary: `Caller agreed to ${chosen.displayTime} — booking pending manual confirmation. Reason: ${bookingError}`,
         });
         // Send manual-follow-up email
-        await emailSvc.sendMeetingConfirmation(lead).catch(() => {});
+        await emailSvc.sendMeetingConfirmation(lead, session.campaignType).catch(() => {});
       } catch (e) {
         logger.error('Manual-booking sheet update failed', { msg: e.message });
       }
@@ -921,9 +911,19 @@ function _parseMeetingTime(scheduledTime, scheduledDate) {
   }
 
   // Resolve the time part
-  if (scheduledTime && /^\d{1,2}:\d{2}$/.test(scheduledTime)) {
-    const [hh, mm] = scheduledTime.split(':').map(Number);
-    base.hour(hh).minute(mm).second(0).millisecond(0);
+  if (scheduledTime) {
+    const timeMatch = scheduledTime.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+    if (timeMatch) {
+      let hh = parseInt(timeMatch[1], 10);
+      const mm = parseInt(timeMatch[2] || '0', 10);
+      const ampm = (timeMatch[3] || '').toLowerCase();
+      if (ampm === 'pm' && hh < 12) hh += 12;
+      if (ampm === 'am' && hh === 12) hh = 0;
+      base.hour(hh).minute(mm).second(0).millisecond(0);
+    } else {
+      // Fallback if parsing fails
+      base.hour(11).minute(0).second(0).millisecond(0);
+    }
   } else {
     // No time extracted — default to 11:00 AM
     base.hour(11).minute(0).second(0).millisecond(0);
@@ -986,9 +986,31 @@ async function _finaliseCall(lead, session, callSid, reason) {
           logger.info(`✅ Post-call meeting rescue triggered for ${lead.fullName} — time: ${detection.rawTime || 'pre-existing'}`);
 
           // Parse the verbally confirmed time into a real Date (only reuse if it is in the future)
-          const scheduledAt = (lead.meeting?.scheduledAt && new Date(lead.meeting.scheduledAt) > new Date())
+          let scheduledAt = (lead.meeting?.scheduledAt && new Date(lead.meeting.scheduledAt) > new Date())
             ? new Date(lead.meeting.scheduledAt) 
             : _parseMeetingTime(detection.scheduledTime, detection.scheduledDate);
+
+          // Verify availability before booking (if busy, find next available)
+          try {
+            const calendarSvc = require('../services/calendarService');
+            const moment = require('moment-timezone');
+            const checkStart = moment(scheduledAt).tz('America/New_York');
+            const checkEnd = checkStart.clone().add(30, 'minutes');
+            
+            const busy = await calendarSvc._getBusy(checkStart, checkEnd);
+            const isBusy = busy.some(b => moment(b.start).isBefore(checkEnd) && moment(b.end).isAfter(checkStart));
+            
+            if (isBusy) {
+              logger.warn(`Slot ${scheduledAt.toISOString()} was busy! Automatically finding the next available slot.`);
+              const nextSlots = await calendarSvc.getAvailableSlots(1, 30, 10);
+              if (nextSlots && nextSlots.length) {
+                scheduledAt = new Date(nextSlots[0].start);
+                logger.info(`Next available slot found: ${scheduledAt.toISOString()}`);
+              }
+            }
+          } catch (e) {
+            logger.error('Error verifying slot availability in rescue', e);
+          }
 
           // Generate a unique LiveKit room name and meeting URL
           const roomName = (lead.meeting?.scheduledAt && new Date(lead.meeting.scheduledAt) > new Date())
@@ -1022,7 +1044,7 @@ async function _finaliseCall(lead, session, callSid, reason) {
                 meetingTime: scheduledET.format('h:mm A z'),
                 meetLink:    jitsiUrl,
               });
-              await emailSvc.sendMeetingConfirmation(lead);
+              await emailSvc.sendMeetingConfirmation(lead, campaign?.type);
               logger.info(`✅ Post-call rescue tasks complete for ${lead.fullName}`);
             } catch (e) {
               logger.error('Post-call meeting rescue tasks failed', { msg: e.message });

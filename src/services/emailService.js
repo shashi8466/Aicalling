@@ -90,7 +90,7 @@ class EmailService {
     }
   }
 
-  async sendMeetingConfirmation(lead) {
+  async sendMeetingConfirmation(lead, overrideCampaignType = null) {
     if (!lead.email) {
       const err = `Lead ${lead._id} missing email address`;
       logger.error(err);
@@ -104,7 +104,8 @@ class EmailService {
 
     const campaignSvc = require('./campaignService');
     const resolved = await campaignSvc.resolveForLead(lead);
-    const isBusiness = resolved.type === 'business-partner';
+    const campaignType = overrideCampaignType || resolved.type;
+    const isBusiness = campaignType === 'business-partner';
 
     const t = moment(lead.meeting.scheduledAt)
       .tz('America/New_York')
@@ -149,10 +150,11 @@ class EmailService {
               <strong>Email:</strong> ${lead.email}<br>
               <strong>Phone:</strong> ${lead.phone}<br>
               <strong>Date & Time:</strong> ${t}<br>
+              <strong>Time Zone:</strong> Eastern Time (ET)<br>
               <strong>Meeting Link (LiveKit Guest):</strong> <a href="${lead.meeting?.meetLink}">${lead.meeting?.meetLink}</a><br>
               <strong>Host Join Link:</strong> <a href="${lead.meeting?.hostMeetLink || lead.meeting?.meetLink}">${lead.meeting?.hostMeetLink || lead.meeting?.meetLink}</a>
             </div>
-            <p style="font-size:12px;color:#888;">This is a notification copy sent directly to you as the counselor / admin.</p>
+            <p style="font-size:12px;color:#888;">This is a notification copy sent directly to you as the Business Development Manager.</p>
           </div>
         `
         : `
@@ -668,18 +670,19 @@ ${this._programCards(l.courseInterest)}
   _businessMeetingConfBody(l, t) {
     const c = cfg.company;
     const meetLink = l.meeting?.meetLink;
-    const companyName = l.companyName || l.qualification?.companyName || 'your company';
+    const companyName = l.companyName || l.qualification?.companyName || 'Not specified';
     return `
-<h2>Business Partnership Consultation Confirmed! ✅</h2>
-<p>Hi ${l.fullName}! Great news — your Business Partnership consultation has been successfully scheduled. We look forward to exploring a mutual opportunity with ${companyName}.</p>
+<h2>Business Partnership Consultation Confirmed – ${l.fullName}</h2>
+<p>Your Business Partnership consultation has been successfully scheduled.</p>
 
 <div class="box">
-  📅 <strong>${t}</strong><br>
-  🎥 Format: Video Meeting (no signup required)<br>
-  ⏱ Duration: 15 minutes<br>
-  💼 Host: Business Partnership Team<br>
-  🏢 Partner: ${companyName}<br><br>
-  ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" style="color:#2563eb;font-weight:700">🔗 Click to Join Video Meeting</a>` : 'A Video Meeting link will be sent shortly.'}
+  <strong>Business Contact Name:</strong> ${l.fullName}<br>
+  <strong>Company Name:</strong> ${companyName}<br>
+  <strong>Meeting Date & Time:</strong> ${t}<br>
+  <strong>Time Zone:</strong> Eastern Time (ET)<br>
+  <strong>Meeting Link:</strong> <a href="${meetLink}">${meetLink}</a><br>
+  <strong>Business Development Manager:</strong> Business Partnership Team<br>
+  <strong>Support Contact:</strong> partner@aiprep365.com | ${c.counselorPhone}
 </div>
 
 <p><strong>Discussion Agenda:</strong></p>

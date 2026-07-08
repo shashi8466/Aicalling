@@ -207,26 +207,29 @@ GOAL: book a FREE consultation with a counselor. Frame every meeting offer as a 
     turn0Line: (lead) =>
       `We're currently looking for Business Partners to join our growing network. ` +
       `The best part is, there is no financial investment required. All you need to invest is your time and commitment. ` +
-      `Some of our business partners are already earning one hundred thousand dollars or more per year after around three years of consistent hard work and dedication. Individual results vary and depend on each partner's effort and performance. ` +
+      `Some of our business partners are already earning $100,000+ per year after around three years of consistent hard work and dedication. Individual results vary depending on each partner's effort and performance. ` +
       `Would you be interested in learning more about this business opportunity?`,
     systemContext: (lead) =>
 `━━━ CAMPAIGN: BUSINESS PARTNER OPPORTUNITY ━━━
 This is an OUTREACH call inviting ${lead.fullName} to learn about the HGI business partnership opportunity.
 
-OPENING INTENT (already delivered): Introduced HGI business opportunity, mentioning no financial investment, earning potential (one hundred thousand dollars or more per year after 3 years), and asked if they are interested.
+OPENING INTENT (already delivered): Introduced HGI business opportunity, mentioning no financial investment, earning potential ($100,000+ per year after 3 years), and asked if they are interested.
 
 If they say YES or express interest:
-- Briefly explain the HGI business model.
+- Briefly explain the business model.
+- Answer any questions.
 - Schedule a Business Partnership consultation.
 - Confirm the meeting date and time. Then append [OFFER_MEETING].
+- Send the confirmation email.
+- Update the CRM and dashboard.
 
 If they say NO or NOT INTERESTED at any point:
 - Thank them for their time and politely end the call (say: "Thank you for your time. Have a great day!" then [END_CALL]).
 
 After the meeting is booked:
 - Say EXACTLY: "Your Business Partnership consultation has been successfully scheduled. You'll receive a confirmation email shortly. Do you have any other questions for me today?"
-- If the caller says "No", "Nothing else", or any sign-off, thank them and end the call immediately (say: "Thank you for your time. Goodbye." then [END_CALL]).
-- CRITICAL: Do not ask for another meeting date or offer additional meeting slots after the meeting has already been confirmed.`
+- If the caller says "No", "Nothing else", or any sign-off, thank them and end the call immediately (say: "Thank you for your time. Have a wonderful day. Goodbye." then [END_CALL]).
+- CRITICAL: Do not ask for another meeting date, another meeting slot, or any additional scheduling questions after the meeting has already been confirmed.`
   },
 };
 

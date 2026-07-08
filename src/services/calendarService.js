@@ -41,7 +41,7 @@ class CalendarService {
    *   Option 3: Tomorrow at 10:00 AM
    *   Option 4: Tomorrow at 12:00 PM
    */
-  async getAvailableSlots(count = 4) {
+  async getAvailableSlots(count = 4, durationMins = 30, bufferMins = 10) {
     try {
       const now  = moment().tz(TZ);
       const end  = moment().tz(TZ).add(DAYS_AHEAD, 'days');
@@ -55,6 +55,8 @@ class CalendarService {
         max:      2,
         stepMins: 120,            // 2-hour gaps within today (12, 2, 4, etc.)
         formatToday: true,
+        durationMins,
+        bufferMins
       });
 
       // ── Step 2: TOMORROW slots to fill the rest ──────────────────────
@@ -66,6 +68,8 @@ class CalendarService {
         max:      count - todaySlots.length,
         stepMins: 120,
         formatToday: false,
+        durationMins,
+        bufferMins
       });
 
       return [...todaySlots, ...restSlots].slice(0, count);
@@ -76,7 +80,7 @@ class CalendarService {
   }
 
   /** Internal slot collector */
-  _collectSlots({ start, endDay, busy, max, stepMins, formatToday }) {
+  _collectSlots({ start, endDay, busy, max, stepMins, formatToday, durationMins, bufferMins }) {
     const slots = [];
     let cur = start.clone();
     const now = moment().tz(TZ);
@@ -86,9 +90,13 @@ class CalendarService {
       const dow  = cur.day();   // 0=Sun
       const hour = cur.hour();
       if (dow !== 0 && hour >= BIZ_START && hour < BIZ_END) {
-        const slotEnd = cur.clone().add(SLOT_MINS, 'minutes');
+        const slotEnd = cur.clone().add(durationMins, 'minutes');
+        
+        const checkStart = cur.clone().subtract(bufferMins, 'minutes');
+        const checkEnd = slotEnd.clone().add(bufferMins, 'minutes');
+
         const free    = !busy.some(b =>
-          moment(b.start).isBefore(slotEnd) && moment(b.end).isAfter(cur)
+          moment(b.start).isBefore(checkEnd) && moment(b.end).isAfter(checkStart)
         );
         if (free) {
           const isToday    = cur.clone().startOf('day').isSame(today);
@@ -142,6 +150,32 @@ class CalendarService {
     if (this.calendarId && this.calendarId !== 'primary') calendarIds.push(this.calendarId);
     calendarIds.push('primary');
 
+    let actualStart = slot.start;
+    let actualEnd = slot.end;
+
+    // Double check availability to avoid race conditions
+    try {
+      const moment = require('moment-timezone');
+      const startM = moment(slot.start).tz(TZ);
+      const endM = moment(slot.end).tz(TZ);
+      const busy = await this._getBusy(startM, endM);
+      const isBusy = busy.some(b => moment(b.start).isBefore(endM) && moment(b.end).isAfter(startM));
+      
+      if (isBusy) {
+        logger.warn(`Slot ${slot.start} was busy during final booking! Finding next available slot.`);
+        const nextSlots = await this.getAvailableSlots(1);
+        if (nextSlots && nextSlots.length) {
+          actualStart = nextSlots[0].start;
+          actualEnd = nextSlots[0].end;
+          baseBody.start.dateTime = actualStart;
+          baseBody.end.dateTime = actualEnd;
+          logger.info(`Next available slot found for booking: ${actualStart}`);
+        }
+      }
+    } catch (e) {
+      logger.error('Error double checking availability', e);
+    }
+
     let lastErr = null;
     for (const calId of calendarIds) {
       try {
@@ -169,15 +203,47 @@ class CalendarService {
   }
 
   async _getBusy(from, to) {
-    const res = await this.cal.freebusy.query({
-      requestBody: {
-        timeMin:  from.toISOString(),
-        timeMax:  to.toISOString(),
-        timeZone: TZ,
-        items:    [{ id: this.calendarId }],
-      },
-    });
-    return res.data.calendars[this.calendarId]?.busy || [];
+    const busyPeriods = [];
+    
+    // 1. Google Calendar busy slots
+    try {
+      const res = await this.cal.freebusy.query({
+        requestBody: {
+          timeMin:  from.toISOString(),
+          timeMax:  to.toISOString(),
+          timeZone: TZ,
+          items:    [{ id: this.calendarId }],
+        },
+      });
+      const googleBusy = res.data.calendars[this.calendarId]?.busy || [];
+      busyPeriods.push(...googleBusy);
+    } catch (err) {
+      logger.error('Failed to fetch Google Calendar freebusy', { msg: err.message });
+    }
+
+    // 2. Local DB busy slots
+    try {
+      const supabase = require('../db/supabase');
+      const { data: dbMeetings, error } = await supabase
+        .from('meetings')
+        .select('scheduled_at')
+        .gte('scheduled_at', from.toISOString())
+        .lte('scheduled_at', to.toISOString())
+        .in('status', ['Scheduled', 'Scheduled-Pending']);
+      
+      if (dbMeetings && dbMeetings.length) {
+        dbMeetings.forEach(m => {
+          const start = moment(m.scheduled_at);
+          // Assuming 60 mins duration for now
+          const end = start.clone().add(60, 'minutes');
+          busyPeriods.push({ start: start.toISOString(), end: end.toISOString() });
+        });
+      }
+    } catch (err) {
+      logger.error('Failed to fetch local DB meetings', { msg: err.message });
+    }
+    
+    return busyPeriods;
   }
 
   _description(lead, meetLink) {
