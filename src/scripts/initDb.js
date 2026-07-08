@@ -67,35 +67,34 @@ async function run() {
     await client.connect();
     console.log('✅ Connected successfully.\n');
 
-    // 2. Read schema.sql
-    const schemaPath = path.join(__dirname, 'schema.sql');
-    // Check in both ../../supabase/schema.sql and ../../supabase directory
-    let resolvedSchemaPath = path.join(__dirname, '../../supabase/schema.sql');
-    if (!fs.existsSync(resolvedSchemaPath)) {
-      resolvedSchemaPath = path.join(__dirname, '../supabase/schema.sql');
+    // Find all SQL files in the supabase directory
+    let supabaseDir = path.join(__dirname, '../../supabase');
+    if (!fs.existsSync(supabaseDir)) {
+      supabaseDir = path.join(__dirname, '../supabase');
     }
-    
-    if (!fs.existsSync(resolvedSchemaPath)) {
-      throw new Error(`schema.sql not found at ${resolvedSchemaPath}`);
-    }
-    console.log('🔄 Executing schema.sql...');
-    const schemaSql = fs.readFileSync(resolvedSchemaPath, 'utf8');
-    await client.query(schemaSql);
-    console.log('✅ schema.sql executed successfully.\n');
 
-    // 3. Read schema_auth.sql
-    let resolvedSchemaAuthPath = path.join(__dirname, '../../supabase/schema_auth.sql');
-    if (!fs.existsSync(resolvedSchemaAuthPath)) {
-      resolvedSchemaAuthPath = path.join(__dirname, '../supabase/schema_auth.sql');
+    if (!fs.existsSync(supabaseDir)) {
+      throw new Error(`supabase directory not found at ${supabaseDir}`);
     }
-    
-    if (!fs.existsSync(resolvedSchemaAuthPath)) {
-      throw new Error(`schema_auth.sql not found at ${resolvedSchemaAuthPath}`);
+
+    const sqlFiles = fs.readdirSync(supabaseDir)
+      .filter(file => file.endsWith('.sql'))
+      // Ensure schema.sql runs first, then schema_auth.sql, then others
+      .sort((a, b) => {
+        if (a === 'schema.sql') return -1;
+        if (b === 'schema.sql') return 1;
+        if (a === 'schema_auth.sql') return -1;
+        if (b === 'schema_auth.sql') return 1;
+        return a.localeCompare(b);
+      });
+
+    for (const file of sqlFiles) {
+      const filePath = path.join(supabaseDir, file);
+      console.log(`🔄 Executing ${file}...`);
+      const sqlContent = fs.readFileSync(filePath, 'utf8');
+      await client.query(sqlContent);
+      console.log(`✅ ${file} executed successfully.\n`);
     }
-    console.log('🔄 Executing schema_auth.sql...');
-    const schemaAuthSql = fs.readFileSync(resolvedSchemaAuthPath, 'utf8');
-    await client.query(schemaAuthSql);
-    console.log('✅ schema_auth.sql executed successfully.\n');
 
     console.log('🎉 Database initialization complete!');
   } catch (err) {
