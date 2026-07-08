@@ -568,20 +568,26 @@ async function scheduleFollowUps(leadId) {
     { type: 'nurture-lead-review',        at: days(60), cycle: 1 },
   ];
 
-  const docs = [];
+  const existingFollowups = await FollowUp.find({ leadId, completed: false });
+  const existingTypes = new Set(existingFollowups.map(f => f.followupType));
+
+  const toCreate = [];
   for (const p of plan) {
-    const existing = await FollowUp.findOne({ leadId, followupType: p.type, completed: false });
-    if (!existing) {
-      const doc = await FollowUp.create({
+    if (!existingTypes.has(p.type)) {
+      toCreate.push({
         leadId,
         followupType:  p.type,
         scheduledDate: p.at,
         cycle:         p.cycle || 0,
       });
-      docs.push(doc);
     }
   }
-  return docs;
+
+  if (toCreate.length > 0) {
+    const docs = await FollowUp.insertMany(toCreate);
+    return docs;
+  }
+  return [];
 }
 
 // ═══════════════════════════════════════════════════════════════════════

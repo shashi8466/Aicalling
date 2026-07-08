@@ -283,7 +283,11 @@ router.post('/call/respond', async (req, res) => {
       'everything is clear', 'all good', 'all set', 'goodbye', 'bye',
       'thanks bye', 'all done', 'that is all', 'no more questions',
       'no more', 'i am good', 'i am all set', 'no thank you', 'no questions thank you',
-      'no other questions', 'i do not have any other questions', 'no that is correct'
+      'no other questions', 'i do not have any other questions', 'no that is correct',
+      'no i do not', "no i don't", 'no i dont', 'i dont have any', 'i do not have any',
+      "that's it", 'thats it', 'none', 'no other', 'i don\'t have any other questions',
+      'i dont have any other questions', 'no i am good', 'no i am fine', 'no im fine',
+      'no im good', 'no i\'m fine', 'no i\'m good', 'no thanks goodbye', 'no thank you goodbye'
     ];
     const cleanSpeech = lowSpeech.trim().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
     const isNo = noMoreQuestions.some(p => {
@@ -292,14 +296,18 @@ router.post('/call/respond', async (req, res) => {
              cleanSpeech.startsWith(cleanP + ' ') || 
              cleanSpeech.endsWith(' ' + cleanP) ||
              cleanSpeech.includes('no other questions') ||
+             cleanSpeech.includes('dont have any') ||
+             cleanSpeech.includes('do not have any') ||
              cleanSpeech === 'no' ||
              cleanSpeech === 'nope';
     });
 
     if (meetingBooked && isNo) {
-      await _finaliseCall(lead, session, req.body.CallSid, 'completed-after-booking');
+      _finaliseCall(lead, session, req.body.CallSid, 'completed-after-booking').catch(err => {
+        logger.error('Error finalising call in background:', err);
+      });
       return res.send(twilioSvc.twimlHangup(
-        `Thank you. Your meeting details and confirmation email have been sent. We look forward to speaking with you during your consultation. Have a wonderful day. Goodbye.`
+        `Thank you for your time. Have a great day. Goodbye.`
       ));
     }
 
@@ -327,7 +335,9 @@ router.post('/call/respond', async (req, res) => {
       }
 
       // Third hard decline → accept and end gracefully
-      await _finaliseCall(lead, session, req.body.CallSid, 'ended-by-caller-decline');
+      _finaliseCall(lead, session, req.body.CallSid, 'ended-by-caller-decline').catch(err => {
+        logger.error('Error finalising call in background (decline):', err);
+      });
       return res.send(twilioSvc.twimlHangup(
         `Absolutely no problem. Thank you so much for your time and have a wonderful day!`
       ));
@@ -353,7 +363,9 @@ router.post('/call/respond', async (req, res) => {
       }
 
       // Second+ callback after a scheduling attempt → accept gracefully and end
-      await _finaliseCall(lead, session, req.body.CallSid, 'ended-callback-requested');
+      _finaliseCall(lead, session, req.body.CallSid, 'ended-callback-requested').catch(err => {
+        logger.error('Error finalising call in background (callback):', err);
+      });
       return res.send(twilioSvc.twimlHangup(
         `Absolutely, I'll make a note to call you back. Thank you so much for your time, and have a wonderful day!`
       ));
@@ -484,7 +496,9 @@ router.post('/call/continue', async (req, res) => {
         sessions.set(leadId, session);
 
         if (session.meetingBooked) {
-          await _finaliseCall(lead, session, req.body.CallSid, 'completed-after-booking');
+          _finaliseCall(lead, session, req.body.CallSid, 'completed-after-booking').catch(err => {
+            logger.error('Error finalising call in background (continue):', err);
+          });
           r.hangup();
         } else {
           // Suppress [END_CALL] if no meeting yet — override and force slot offer
