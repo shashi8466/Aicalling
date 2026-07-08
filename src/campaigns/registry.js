@@ -209,8 +209,8 @@ GOAL: book a FREE consultation with a counselor. Frame every meeting offer as a 
       return `Hi ${firstName}, this is Ravi Gunishetty from HGI. ` +
         `We're currently looking for Business Partners to join our growing network. ` +
         `The best part is, there is no financial investment required. All you need to invest is your time and commitment. ` +
-        `Some of our business partners are already earning $100,000 or more per year after around three years of consistent hard work and dedication. Individual results vary depending on each partner's effort and performance. ` +
-        `Would you be interested in learning more about this business opportunity?`;
+        `Some of our business partners are already earning $100,000+ per year after around three years of consistent hard work and dedication. Individual results vary depending on each partner's effort and performance. ` +
+        `Would you like to schedule a free consultation to learn more about this business opportunity?`;
     },
     systemContext: (lead) => {
       const firstName = lead.fullName.split(' ')[0];
@@ -230,10 +230,10 @@ SPEAKING RULES:
 • Never use bullet points, numbers, or markdown — spoken words only.
 
 If they say YES or express interest:
-- Briefly explain the business model (no financial investment, work with existing network, earn from referrals and sales).
-- Answer any questions they have.
-- Schedule a Business Partnership consultation — offer available time slots and let them pick. Then append [OFFER_MEETING].
+- Schedule the Business Partnership consultation — offer available time slots and let them pick. Then append [OFFER_MEETING].
 - Confirm the meeting date and time clearly.
+- Update the CRM and dashboard (handled automatically when you schedule).
+- Send the confirmation email (handled automatically when you schedule).
 
 If they say NO or NOT INTERESTED at any point:
 - Do NOT push more than once. Simply say: "I completely understand. Thank you so much for your time. Have a great day!" then [END_CALL].
