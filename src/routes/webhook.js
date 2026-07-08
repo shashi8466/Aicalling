@@ -339,6 +339,18 @@ router.post('/call/respond', async (req, res) => {
     // Explicit decline — try to rescue with meeting offer before accepting.
     // Only hang up after 2 hard declines WITH meeting already offered.
     if (explicitDecline.some(p => lowSpeech.includes(p))) {
+      // Business Partner campaign: per the approved script, do NOT push —
+      // thank the caller politely and end the call on the first clear decline.
+      const isBusinessCampaign = session.campaignType === 'business-partner' || session.campaign?.type === 'business-partner';
+      if (isBusinessCampaign && !meetingBooked) {
+        _finaliseCall(lead, session, req.body.CallSid, 'ended-by-caller-decline').catch(err => {
+          logger.error('Error finalising call in background (business decline):', err);
+        });
+        return res.send(twilioSvc.twimlHangup(
+          `I completely understand. Thank you so much for your time. Have a great day!`
+        ));
+      }
+
       session.declineCount = (session.declineCount || 0) + 1;
       sessions.set(leadId, session);
 
@@ -393,6 +405,35 @@ router.post('/call/respond', async (req, res) => {
       });
       return res.send(twilioSvc.twimlHangup(
         `Absolutely, I'll make a note to call you back. Thank you so much for your time, and have a wonderful day!`
+      ));
+    }
+
+    // ── Caller asked us to repeat / said they couldn't hear ──────────────────
+    // Without this, "can you say that again?" is sent to the LLM, which (per its
+    // unclear-response rules) often ALSO asks to repeat → agent↔caller deadlock.
+    // We instead re-speak our last real line, and after 2 such requests we stop
+    // re-explaining and move the call forward to slot selection.
+    const repeatRequest = /\b(repeat|say (that|it|this) again|again please|one more time|once more|come again|didn'?t (hear|catch|get)|couldn'?t hear|can you (say|repeat)|please (say|repeat)|pardon|what did you say|breath|broke up|cut(ting)? out|not clear)\b/i.test(lowSpeech);
+    if (repeatRequest) {
+      session.repeatCount = (session.repeatCount || 0) + 1;
+      sessions.set(leadId, session);
+
+      // After 2 repeat requests, stop parroting and push toward booking a slot.
+      if (session.repeatCount >= 2 && !meetingBooked) {
+        return res.send(twilioSvc.twimlStart(
+          `No problem at all. Let me just share a couple of available times for a quick free consultation, and you can pick whatever works best for you.`,
+          slotsUrl(cfg.server.baseUrl, leadId)
+        ));
+      }
+
+      // Re-speak the last substantive agent line (stripping special tokens).
+      const lastMeaningful = [...(session.history || [])].reverse()
+        .find(m => m.role === 'assistant' && m.content && m.content.replace(/\[.*?\]/g, '').trim().length > 0);
+      const repeatText = (lastMeaningful ? lastMeaningful.content.replace(/\[.*?\]/g, '').trim() : '') ||
+        `Of course, no problem. Would you like to schedule a free consultation to learn more?`;
+      return res.send(twilioSvc.twimlRespond(
+        `Sure, let me repeat that. ${repeatText}`,
+        respondUrl(cfg.server.baseUrl, leadId)
       ));
     }
 
@@ -451,6 +492,17 @@ router.post('/call/respond', async (req, res) => {
     return res.send(r.toString());
   } catch (err) {
     logger.error('webhook/respond error', { msg: err.message });
+    // Cap the error loop — repeated failures must never turn into an endless
+    // "could you say that one more time?" cycle. After 2 errors, move to slots.
+    const s = sessions.get(leadId) || {};
+    s.errorCount = (s.errorCount || 0) + 1;
+    sessions.set(leadId, s);
+    if (s.errorCount >= 2 && !s.meetingBooked) {
+      return res.send(twilioSvc.twimlStart(
+        `I'm so sorry for the trouble. Let me share a couple of available times for a quick free consultation so we don't keep you waiting.`,
+        slotsUrl(cfg.server.baseUrl, leadId)
+      ));
+    }
     res.send(twilioSvc.twimlRespond(
       "I'm sorry, I had a brief issue. Could you say that one more time?",
       respondUrl(cfg.server.baseUrl, leadId)
@@ -726,10 +778,15 @@ router.post('/call/book', async (req, res) => {
 
       // ── MEETING_BOOKED state: send a hardcoded confirmation — do NOT route through AI ──
       // This ensures the AI never falls back to [OFFER_MEETING] on this turn.
-      const confirmMsg =
-        `Your meeting has been successfully scheduled. ` +
-        `You'll receive the meeting details by email shortly. ` +
-        `Do you have any other questions I can help you with today?`;
+      // Wording is campaign-aware so it matches each campaign's approved script.
+      const isBusinessCampaign = session.campaignType === 'business-partner' || session.campaign?.type === 'business-partner';
+      const confirmMsg = isBusinessCampaign
+        ? `Your Business Partnership consultation has been successfully scheduled. ` +
+          `You'll receive a confirmation email shortly. ` +
+          `Do you have any other questions for me today?`
+        : `Your meeting has been successfully scheduled. ` +
+          `You'll receive the meeting details by email shortly. ` +
+          `Do you have any other questions I can help you with today?`;
       return res.send(twilioSvc.twimlRespond(
         confirmMsg,
         respondUrl(cfg.server.baseUrl, leadId)
