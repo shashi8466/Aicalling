@@ -648,4 +648,4 @@ ${transcript}`;
   }
 }
 
-module.exports = { chat, streamChat, extractQualification, summariseCall, buildFollowUpSystem, detectMeetingFromTranscript };
+module.exports = { chat, streamChat, buildSystem, extractQualification, summariseCall, buildFollowUpSystem, detectMeetingFromTranscript };

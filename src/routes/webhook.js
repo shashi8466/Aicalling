@@ -250,7 +250,12 @@ router.post('/call/respond', async (req, res) => {
         session.history.push({ role: 'assistant', content: followUp });
         session.turnCount++;
         sessions.set(leadId, session);
-        return res.send(twilioSvc.twimlRespond(followUp, respondUrl(cfg.server.baseUrl, leadId)));
+        // The business pitch is long (~30s). Enable barge-in so a "yes" spoken
+        // during the pitch is captured instead of lost (which caused the
+        // "I had a breath issue / say one more time" loop). Other campaigns
+        // keep the original non-interruptible behavior.
+        const bargeOpts = campaign?.type === 'business-partner' ? { bargeIn: true } : {};
+        return res.send(twilioSvc.twimlRespond(followUp, respondUrl(cfg.server.baseUrl, leadId), bargeOpts));
       } else {
         // Identity not confirmed on first turn — ask them to clarify who they are
         session.identityConfirmAttempt = (session.identityConfirmAttempt || 0) + 1;

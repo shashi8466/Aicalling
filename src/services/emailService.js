@@ -15,16 +15,23 @@ class EmailService {
   // ── Public senders ───────────────────────────────────────────────────
 
   // ── Helper to resolve brand details based on campaign ────────────────
-  async _getBrand(lead) {
+  // `overrideType` (optional) forces the campaign type — used by callers that
+  // already know it (e.g. the live call passes session.campaignType). This
+  // avoids depending on resolveForLead(lead), which can fall back to the
+  // default brand when the lead's campaignId isn't persisted in the DB.
+  async _getBrand(lead, overrideType = null) {
     let companyName = 'Aiprep365';
     let logoPath = 'logos/new/logo.png';
     let website = 'https://aiprep365.com';
     let companyDesc = 'AI Admissions Agent · Your Path to Academic Excellence';
 
-    if (lead) {
+    if (lead || overrideType) {
       try {
-        const campaignSvc = require('./campaignService');
-        const { type } = await campaignSvc.resolveForLead(lead);
+        let type = overrideType;
+        if (!type) {
+          const campaignSvc = require('./campaignService');
+          ({ type } = await campaignSvc.resolveForLead(lead));
+        }
         const pundits = ['sat-batch', 'act-batch', 'ap-course', 'business-partner'];
         if (pundits.includes(type)) {
           logoPath = 'logos/logo1.png';
@@ -112,8 +119,8 @@ class EmailService {
       .format('dddd, MMMM Do [at] h:mm A [ET]');
 
     const html = isBusiness
-      ? await this._wrap(this._businessMeetingConfBody(lead, t), lead)
-      : await this._wrap(this._meetingConfBody(lead, t), lead);
+      ? await this._wrap(this._businessMeetingConfBody(lead, t), lead, campaignType)
+      : await this._wrap(this._meetingConfBody(lead, t), lead, campaignType);
 
     const attachment = this._buildIcsAttachment(lead, t);
 
@@ -145,7 +152,7 @@ class EmailService {
             <p>A Business Partnership meeting has been successfully booked with <strong>${lead.fullName}</strong>.</p>
             <div style="background:#eff6ff;padding:15px;border-radius:8px;border-left:4px solid #2563eb;margin:15px 0;line-height:1.6;">
               <strong>Business Contact Name:</strong> ${lead.fullName}<br>
-              <strong>Company Name:</strong> ${lead.companyName || lead.qualification?.companyName || 'Not specified'}<br>
+              <strong>Company Name:</strong> ${lead.companyName || lead.qualification?.companyName || 'HGI'}<br>
               <strong>Business Campaign:</strong> Business Partner Opportunity<br>
               <strong>Email:</strong> ${lead.email}<br>
               <strong>Phone:</strong> ${lead.phone}<br>
@@ -420,11 +427,11 @@ class EmailService {
 
   // ── HTML wrapper ─────────────────────────────────────────────────────
 
-  async _wrap(inner, lead) {
+  async _wrap(inner, lead, overrideType = null) {
     const year    = new Date().getFullYear();
     const phone   = cfg.company.counselorPhone;
 
-    const brand = await this._getBrand(lead);
+    const brand = await this._getBrand(lead, overrideType);
 
     // Adapt the inner HTML content to match the resolved company brand
     let adaptedInner = inner;
@@ -670,7 +677,7 @@ ${this._programCards(l.courseInterest)}
   _businessMeetingConfBody(l, t) {
     const c = cfg.company;
     const meetLink = l.meeting?.meetLink;
-    const companyName = l.companyName || l.qualification?.companyName || 'Not specified';
+    const companyName = l.companyName || l.qualification?.companyName || 'HGI';
     return `
 <h2>Business Partnership Consultation Confirmed – ${l.fullName}</h2>
 <p>Your Business Partnership consultation has been successfully scheduled.</p>
