@@ -24,63 +24,67 @@ function groupBy(arr, key) {
   return Object.entries(m).map(([_id, count]) => ({ _id, count }));
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//   STATS
-// ═══════════════════════════════════════════════════════════════════════
+// Stats cache — avoid re-querying on every dashboard refresh
+let _statsCache = null;
+let _statsCacheAt = 0;
+const STATS_TTL_MS = 15000; // 15 seconds
+
 router.get('/stats', async (req, res) => {
   try {
-    // Parallel count queries via Supabase
-    const statuses = [
-      'new','queued','calling','contacted','qualified',
-      'meeting-scheduled','meeting-completed','enrolled','lost',
-    ];
+    // Serve from cache if fresh
+    if (_statsCache && Date.now() - _statsCacheAt < STATS_TTL_MS) {
+      return res.json(_statsCache);
+    }
 
-    const countQ = async (filter) => Lead.countDocuments(filter);
-
-    const [
-      total,
-      newLeads, queued, calling, contacted, qualified,
-      meetingsScheduled, meetingsCompleted, enrolled, lost,
-      hot, warm, cold,
-    ] = await Promise.all([
-      countQ({}),
-      countQ({ status: 'new' }),
-      countQ({ status: 'queued' }),
-      countQ({ status: 'calling' }),
-      countQ({ status: 'contacted' }),
-      countQ({ status: 'qualified' }),
-      countQ({ status: 'meeting-scheduled' }),
-      countQ({ status: 'meeting-completed' }),
-      countQ({ status: 'enrolled' }),
-      countQ({ status: 'lost' }),
-      countQ({ leadCategory: 'hot' }),
-      countQ({ leadCategory: 'warm' }),
-      countQ({ leadCategory: 'cold' }),
-    ]);
-
-    // Fetch call_attempts + lead_score columns only for aggregation
-    const { data: leadsForAgg } = await supabase
+    // Single query — only the columns we need for aggregation
+    const { data: rows, error } = await supabase
       .from('leads')
-      .select('call_attempts, lead_score');
+      .select('status, lead_category, lead_score, call_attempts');
 
-    const rows = leadsForAgg || [];
-    const callsCompleted = rows.reduce((sum, r) =>
-      sum + (r.call_attempts || []).filter(a => a.status === 'completed').length, 0);
-    const avgScore = rows.length
-      ? Math.round(rows.reduce((s, r) => s + (r.lead_score || 0), 0) / rows.length)
-      : 0;
+    if (error) throw new Error(error.message);
+    const all = rows || [];
 
+    // Compute all counts in JS — zero extra round-trips
+    let newLeads=0, queued=0, calling=0, contacted=0, qualified=0,
+        meetingsScheduled=0, meetingsCompleted=0, enrolled=0, lost=0,
+        hot=0, warm=0, cold=0, callsCompleted=0, totalScore=0;
+
+    for (const r of all) {
+      switch (r.status) {
+        case 'new':                 newLeads++;          break;
+        case 'queued':              queued++;            break;
+        case 'calling':             calling++;           break;
+        case 'contacted':           contacted++;         break;
+        case 'qualified':           qualified++;         break;
+        case 'meeting-scheduled':   meetingsScheduled++; break;
+        case 'meeting-completed':   meetingsCompleted++; break;
+        case 'enrolled':            enrolled++;          break;
+        case 'lost':                lost++;              break;
+      }
+      switch (r.lead_category) {
+        case 'hot':  hot++;  break;
+        case 'warm': warm++; break;
+        case 'cold': cold++; break;
+      }
+      totalScore += r.lead_score || 0;
+      callsCompleted += (r.call_attempts || []).filter(a => a.status === 'completed').length;
+    }
+
+    const total = all.length;
+    const avgScore = total ? Math.round(totalScore / total) : 0;
     const conversionRate = total ? ((enrolled / total) * 100).toFixed(1) : '0.0';
-    const meetingRate    = contacted
+    const meetingRate = contacted
       ? ((meetingsScheduled / (contacted + meetingsScheduled)) * 100).toFixed(1)
       : '0.0';
 
-    res.json({
+    _statsCache = {
       total, new: newLeads, queued, calling, contacted, qualified,
       meetingsScheduled, meetingsCompleted, enrolled, lost,
       hot, warm, cold, callsCompleted, avgScore,
       conversionRate, meetingRate,
-    });
+    };
+    _statsCacheAt = Date.now();
+    res.json(_statsCache);
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
@@ -143,33 +147,45 @@ router.get('/analytics', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════
 router.get('/leads', async (req, res) => {
   try {
-    const { status, category, search, campaignId, limit = 500 } = req.query;
-    const filter = {};
-    if (status)   filter.status       = status;
-    if (category) filter.leadCategory = category;
+    const { status, category, search, campaignId, limit = 200 } = req.query;
+
+    // Build Supabase query directly — skip heavy JS-model layer for the list view
+    // Only fetch columns needed for the table. Omit call_attempts.transcript (huge).
+    let q = supabase
+      .from('leads')
+      .select('id, full_name, email, phone, parent_name, parent_email, grade, course_interest, status, lead_score, lead_category, total_call_attempts, last_call_at, next_retry_at, campaign_id, meeting, meeting_status, created_at, call_attempts, qualification, is_qualified, sheet_row_index, notes, country_code, country, time_zone')
+      .order('lead_score', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(parseInt(limit));
+
+    if (status)   q = q.eq('status', status);
+    if (category) q = q.eq('lead_category', category);
+    if (campaignId === '__none__') q = q.is('campaign_id', null);
+    else if (campaignId) q = q.eq('campaign_id', campaignId);
     if (search) {
-      filter.$or = [
-        { fullName: new RegExp(search, 'i') },
-        { email:    new RegExp(search, 'i') },
-        { phone:    new RegExp(search, 'i') },
-      ];
+      q = q.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
     }
-    // Campaign filter: '__none__' = leads with no campaign, uuid = specific campaign
-    if (campaignId === '__none__') {
-      filter.campaignId = null;
-    } else if (campaignId) {
-      filter.campaignId = campaignId;
-    }
-    const leads = await Lead.find(filter, {
-      sort:   { leadScore: -1, createdAt: -1 },
-      limit:  parseInt(limit),
-      select: '-callAttempts.transcript',
+
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+
+    // Convert to camelCase for the dashboard, strip transcript from call_attempts
+    const { rowToAPI } = require('../db/document');
+    const leads = (data || []).map(row => {
+      const doc = rowToAPI(row);
+      // Strip large transcript field to keep payload small
+      if (doc.callAttempts) {
+        doc.callAttempts = doc.callAttempts.map(({ transcript, ...rest }) => rest);
+      }
+      return doc;
     });
+
     res.json(leads);
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
 });
+
 
 
 router.get('/leads/export', async (req, res) => {

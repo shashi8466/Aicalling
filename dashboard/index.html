@@ -8350,26 +8350,54 @@
     // Boot — auth required
     (async function boot() {
       await initAuth();
-      loadLeads();
-      loadMeetings();
-      loadCallbacks().catch(() => { });
 
-      // Real-time EventSource Updates
-      try {
-        const sse = new EventSource('/api/crm/updates/stream');
-        sse.onmessage = (e) => {
-          console.log('Real-time update received:', e.data);
-          loadLeads();
-          loadMeetings();
-          loadCallbacks().catch(() => { });
-        };
-      } catch (err) {
-        console.error('Real-time EventSource failed; falling back to 30s polling', err);
+      // Show skeleton UI immediately so user sees the page structure
+      const leadsTable = document.getElementById('leadsTable');
+      if (leadsTable) {
+        leadsTable.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--muted);font-size:14px">
+          <div style="display:flex;align-items:center;justify-content:center;gap:10px">
+            <div style="width:18px;height:18px;border:2px solid var(--brand);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite"></div>
+            Loading leads...
+          </div>
+        </td></tr>`;
       }
 
+      // Load all primary data in parallel — do not await one before starting the next
+      Promise.all([
+        loadLeads(),
+        loadMeetings(),
+        loadCallbacks().catch(() => {}),
+      ]);
+
+      // Real-time EventSource Updates
+      let _sseRetry = 1000;
+      function connectSSE() {
+        try {
+          const sse = new EventSource('/api/crm/updates/stream');
+          sse.onopen = () => { _sseRetry = 1000; };
+          sse.onmessage = (e) => {
+            console.log('Real-time update received:', e.data);
+            // Targeted refresh — avoid reloading everything on every heartbeat
+            loadLeads();
+            loadMeetings();
+          };
+          sse.onerror = () => {
+            sse.close();
+            // Exponential backoff before reconnecting (max 30s)
+            setTimeout(connectSSE, Math.min(_sseRetry *= 2, 30000));
+          };
+        } catch (err) {
+          console.error('Real-time EventSource failed; falling back to 30s polling', err);
+        }
+      }
+      connectSSE();
+
+      // Background polling — only refresh if tab is visible to avoid unnecessary DB load
       setInterval(() => {
-        loadLeads();
-        loadCallbacks().catch(() => { });
+        if (!document.hidden) {
+          loadLeads();
+          loadCallbacks().catch(() => {});
+        }
       }, 30000);
     })();
   </script>

@@ -32,6 +32,14 @@ const meetingReminderPoller = require('./jobs/meetingReminderPoller');
 
 const app = express();
 
+// ── Gzip Compression — reduces API/HTML payload by 60-80% ──────────────────
+try {
+  const compression = require('compression');
+  app.use(compression({ level: 6, threshold: 1024 }));
+} catch (_) {
+  // compression not installed — skip silently
+}
+
 // ── Middleware ──────────────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
@@ -113,10 +121,16 @@ app.get('/meeting/:roomName', (req, res) => {
 
 if (fs.existsSync(dashDir)) {
   app.use('/', express.static(dashDir, {
-    setHeaders: (res, path) => {
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
+    setHeaders: (res, filePath) => {
+      // HTML files: always fresh (no caching) so changes are instant
+      if (filePath.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+      } else {
+        // Static assets (images, favicon, fonts): cache for 7 days
+        res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+      }
     }
   }));
 }
