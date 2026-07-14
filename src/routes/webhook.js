@@ -40,11 +40,10 @@ function isIdentityConfirmed(lowSpeech, firstName) {
   const s = lowSpeech.trim();
 
   // 1. Pure generic affirmations (exact or with light punctuation)
-  if (/^(yes|yeah|yep|yup|correct|speaking|sure|absolutely|of course|that'?s? me|that is me|i am|it is|it'?s me)[\.!,]?$/.test(s)) return true;
+  if (/^(yes|yeah|yep|yup|correct|speaking|sure|absolutely|of course|that'?s? me|that is me|i am|it is|it'?s me|hello|hi|hey)[\.!,]?$/.test(s)) return true;
 
   // 2. Affirmation word at the start followed by anything
-  //    e.g. "yes, this is Kumar", "yes speaking", "yeah that's me"
-  if (/^(yes|yeah|yep|yup|sure|absolutely|of course)\b/.test(s)) return true;
+  if (/^(yes|yeah|yep|yup|sure|absolutely|of course|hello|hi|hey)\b/.test(s)) return true;
 
   // 3. Caller says ONLY their first name (very common: caller just says "Kumar")
   if (s === firstName || s === firstName + '.') return true;
@@ -284,7 +283,64 @@ router.post('/call/respond', async (req, res) => {
       }
     }
 
-    // Detect ONLY explicit decline — never end the call on weak signals.
+    // ── PARENT NOTIFICATION CAMPAIGNS — dedicated handler (no meeting/slot logic) ──
+    // parent-absent, parent-homework, parent-flt are pure notification calls.
+    // They must NEVER enter the meeting booking / decline / slot machinery below.
+    const PARENT_CAMPAIGN_TYPES = ['parent-absent', 'parent-homework', 'parent-flt'];
+    const isParentCampaign = PARENT_CAMPAIGN_TYPES.includes(session.campaignType) ||
+                             PARENT_CAMPAIGN_TYPES.includes(session.campaign?.type);
+
+    if (isParentCampaign) {
+      const parentNoSignals = [
+        'no', 'nope', 'no thank you', 'no thanks', 'nothing', 'nothing else',
+        "that's all", "that's fine", "okay", "ok", "alright", "got it",
+        "understood", "okay thank you", "okay thanks", "thank you", "thanks",
+        "goodbye", "bye", "that is all", "no questions", "no more questions",
+        "i'm fine", "i am fine", "i'm good", "i am good", "no other questions",
+        "all good", "all set", "no i dont", "no i don't", "no i do not",
+        "i'll take care of it", "i will take care of it", "i got it", "got it",
+        "okay got it", "i understand", "ok thanks", "ok thank you", "sure", "okay sure"
+      ];
+      const cleanParentSpeech = lowSpeech.trim().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '');
+      const parentSaidNo = parentNoSignals.some(p => {
+        const cleanP = p.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '');
+        return cleanParentSpeech === cleanP ||
+               cleanParentSpeech.startsWith(cleanP + ' ') ||
+               cleanParentSpeech.endsWith(' ' + cleanP) ||
+               cleanParentSpeech === 'no';
+      });
+
+      if (parentSaidNo) {
+        // Parent has no questions — end call immediately with exact script
+        _finaliseCall(lead, session, req.body.CallSid, 'completed-parent-notification').catch(err => {
+          logger.error('Error finalising parent campaign call:', err);
+        });
+        return res.send(twilioSvc.twimlHangup(
+          `Thank you for your time. Have a wonderful day. Goodbye.`
+        ));
+      }
+
+      // Parent asked a question or said something else — route to AI with parent-only context
+      session.history.push({ role: 'user', content: speech });
+      session.turnCount++;
+      sessions.set(leadId, session);
+
+      const parentStream = aiSvc.streamChat({
+        lead,
+        history: session.history.slice(-10),
+        userMessage: speech,
+        systemOverride: aiSvc.buildSystem(lead, session.campaign)
+      });
+
+      session.activeStream = parentStream;
+      sessions.set(leadId, session);
+
+      const rParent = new (require('twilio').twiml.VoiceResponse)();
+      rParent.redirect({ method: 'POST' }, `/webhook/call/continue?leadId=${leadId}&sentenceIndex=0`);
+      return res.send(rParent.toString());
+    }
+
+
     // The caller must clearly and unambiguously refuse.
     // Soft signals ("maybe", "let me think") are intentionally NOT here — we keep trying.
     const explicitDecline = [
@@ -570,8 +626,13 @@ router.post('/call/continue', async (req, res) => {
         delete session.activeStream;
         sessions.set(leadId, session);
 
-        if (session.meetingBooked) {
-          _finaliseCall(lead, session, req.body.CallSid, 'completed-after-booking').catch(err => {
+        // Parent notification campaigns are allowed to end without a meeting booked
+        const PARENT_TYPES_CONT = ['parent-absent', 'parent-homework', 'parent-flt'];
+        const isParentCont = PARENT_TYPES_CONT.includes(session.campaignType) ||
+                             PARENT_TYPES_CONT.includes(session.campaign?.type);
+
+        if (session.meetingBooked || isParentCont) {
+          _finaliseCall(lead, session, req.body.CallSid, isParentCont ? 'completed-parent-notification' : 'completed-after-booking').catch(err => {
             logger.error('Error finalising call in background (continue):', err);
           });
           r.hangup();
@@ -582,6 +643,7 @@ router.post('/call/continue', async (req, res) => {
         }
         return res.send(r.toString());
       }
+
 
       // Otherwise, redirect to the next sentence
       r.redirect({ method: 'POST' }, `/webhook/call/continue?leadId=${leadId}&sentenceIndex=${idx + 1}`);
