@@ -3319,6 +3319,7 @@
         <a data-view="callbacks"><span class="icon">🤙</span> Callback Requests <span class="nav-badge"
             id="navCallbackCount">0</span></a>
         <a data-view="campaigns"><span class="icon">📣</span> Campaigns</a>
+        <a data-view="parents"><span class="icon">👨‍👩‍👧</span> Parents</a>
         <a data-view="counselors"><span class="icon">👤</span> Counselors</a>
         <a data-view="settings"><span class="icon">⚙️</span> Settings</a>
         <a onclick="doLogout()"><span class="icon">🚪</span> Logout</a>
@@ -3931,6 +3932,80 @@
                 <button class="bulk-clear" onclick="clearClpBulkSelect()">✕ Clear</button>
               </div>
               <div id="clpLeadsTable"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- ─── PARENTS CAMPAIGNS ─── -->
+        <section class="view" id="view-parents">
+
+          <!-- Level 1: Parent Campaign Overview (shown by default) -->
+          <div id="parentCampaignOverview">
+            <div class="kpi-strip" id="parentCampaignKpis"></div>
+            <div class="card">
+              <div class="card-header">
+                <h3>👨‍👩‍👧 Parent Outreach Campaigns</h3>
+                <div class="filters">
+                  <button class="btn btn-secondary btn-sm" onclick="loadParentCampaigns()">↻ Refresh</button>
+                </div>
+              </div>
+              <div id="parentCampaignsTable"></div>
+            </div>
+          </div>
+
+          <!-- Level 2: Per-Campaign Leads Page -->
+          <div class="camp-leads-panel" id="parentCampaignLeadsPanel">
+            <!-- Back bar -->
+            <div class="camp-back-bar">
+              <button class="camp-back-btn" onclick="closeParentCampaignLeads()">← Back to Parent Campaigns</button>
+              <div>
+                <span class="camp-back-title" id="pclpTitle">Campaign Leads</span>
+                <span class="camp-back-badge" id="pclpBadge">Loading…</span>
+              </div>
+              <div style="margin-left:auto;display:flex;gap:8px">
+                <button class="btn btn-secondary btn-sm" onclick="refreshParentCampaignLeads()">↻ Refresh</button>
+                <button class="btn btn-primary btn-sm" onclick="openAddLeadForParentCampaign()">➕ Add Parent</button>
+              </div>
+            </div>
+
+            <!-- KPI strip -->
+            <div class="camp-leads-kpis" id="pclpKpis"></div>
+
+            <!-- Leads table card -->
+            <div class="card">
+              <div class="card-header">
+                <h3 id="pclpTableTitle">All Parents</h3>
+                <div class="filters">
+                  <input type="text" id="pclpSearch" placeholder="Search parents…" oninput="filterParentCampaignLeads()">
+                  <select id="pclpStatusFilter" onchange="filterParentCampaignLeads()">
+                    <option value="">All Statuses</option>
+                    <option value="new">New</option>
+                    <option value="queued">Queued</option>
+                    <option value="calling">Calling</option>
+                    <option value="contacted">Contacted</option>
+                    <option value="qualified">Qualified</option>
+                    <option value="lost">Lost</option>
+                  </select>
+                  <select id="pclpCategoryFilter" onchange="filterParentCampaignLeads()">
+                    <option value="">All Categories</option>
+                    <option value="hot">🔥 Hot</option>
+                    <option value="warm">⚡ Warm</option>
+                    <option value="cold">❄️ Cold</option>
+                  </select>
+                </div>
+              </div>
+              <!-- Bulk bar for parent campaign leads -->
+              <div class="bulk-bar" id="pclpBulkBar">
+                <span><span class="bulk-count" id="pclpBulkCount">0</span> parents selected</span>
+                <select id="pclpBulkCampaignSel">
+                  <option value="">— Assign to Campaign —</option>
+                  <option value="__none__">❌ Remove Campaign</option>
+                </select>
+                <button class="btn btn-primary btn-sm" onclick="bulkAssignCampaignPclp()">📣 Assign</button>
+                <button class="bulk-clear" onclick="clearPclpBulkSelect()">✕ Clear</button>
+              </div>
+              <div id="pclpLeadsTable"></div>
             </div>
           </div>
 
@@ -5420,7 +5495,8 @@
         overview: 'Overview', leads: 'All Leads', calls: 'Call Activity',
         meetings: 'Scheduled Meetings', analytics: 'Reports & Analytics',
         counselor: 'Counselor Dashboard', pipeline: 'Enrollment Pipeline',
-        enrollments: 'Enrollments', campaigns: 'Campaign Management', counselors: 'Counselor Management', settings: 'Settings',
+        enrollments: 'Enrollments', campaigns: 'Campaign Management',
+        parents: 'Parent Campaigns', counselors: 'Counselor Management', settings: 'Settings',
         callbacks: 'Callback Requests',
       };
       document.getElementById('pageTitle').textContent = titles[name] || name;
@@ -5433,6 +5509,7 @@
       if (name === 'pipeline') loadPipeline();
       if (name === 'enrollments') loadEnrollments();
       if (name === 'campaigns') loadCampaigns();
+      if (name === 'parents') loadParentCampaigns();
       if (name === 'counselors') loadCounselors();
       if (name === 'settings') showSettingsPanel('profile');
       if (name === 'callbacks') loadCallbacks();
@@ -5953,6 +6030,9 @@
       'scholarship-webinar': '🏆',
       'free-mock-test': '🧪',
       'parent-counseling': '👨‍👩‍👧',
+      'parent-absent': '📅',
+      'parent-homework': '📚',
+      'parent-flt': '📝',
       'custom': '⚙️',
     };
 
@@ -6025,6 +6105,288 @@
         toast('✅ Campaign created', 'success');
         loadCampaigns();
       }).catch(e => toast('❌ ' + e.message, 'error'));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //   PARENT CAMPAIGNS MODULE
+    // ═══════════════════════════════════════════════════════════════════════
+    // Parent campaign types (filtered from CAMPAIGNS cache)
+    const PARENT_CAMPAIGN_TYPES = ['parent-absent', 'parent-homework', 'parent-flt'];
+
+    let PCLP_CAMPAIGN_ID = null;
+    let PCLP_CAMPAIGN_NAME = '';
+    let PCLP_ALL_LEADS = [];
+
+    async function loadParentCampaigns() {
+      const el = document.getElementById('parentCampaignsTable');
+      el.innerHTML = '<div style="text-align:center;color:var(--muted);padding:24px">Loading parent campaigns…</div>';
+      try {
+        const data = await api('/campaigns');
+        // Filter to parent campaign types only
+        const allCamps = data.campaigns || [];
+        CAMPAIGNS = allCamps; // keep global cache updated
+        const parentCamps = allCamps.filter(c => PARENT_CAMPAIGN_TYPES.includes(c.type));
+        const parentData = { campaigns: parentCamps, unassignedLeads: 0 };
+        renderParentCampaignKpis(parentData);
+        renderParentCampaignsTable(parentData);
+      } catch (e) {
+        const setup = /set up|schema_campaigns/i.test(e.message);
+        el.innerHTML = `<div class="empty"><div class="icon">👨‍👩‍👧</div>${esc(e.message)}${setup ? '<br><br><span style="color:var(--muted);font-size:12px">Run <code>supabase/schema_campaigns.sql</code> in the Supabase SQL editor, then refresh.</span>' : ''}</div>`;
+        document.getElementById('parentCampaignKpis').innerHTML = '';
+      }
+    }
+
+    function renderParentCampaignKpis(data) {
+      const cs = data.campaigns || [];
+      const sum = (k) => cs.reduce((s, c) => s + (c.stats[k] || 0), 0);
+      const totalLeads = sum('totalLeads');
+      const active = cs.filter(c => c.status === 'active').length;
+      document.getElementById('parentCampaignKpis').innerHTML =
+        kpiChip('👨‍👩‍👧', cs.length, 'Parent Campaigns', '#8b5cf6') +
+        kpiChip('🟢', active, 'Active', '#10b981') +
+        kpiChip('👥', totalLeads, 'Total Parents', '#3b82f6') +
+        kpiChip('📞', sum('callsCompleted'), 'Calls Completed', '#f59e0b') +
+        kpiChip('✅', sum('meetingsBooked'), 'Completed Calls', '#06b6d4');
+    }
+
+    function renderParentCampaignsTable(data) {
+      const cs = data.campaigns || [];
+      const el = document.getElementById('parentCampaignsTable');
+      if (!cs.length) {
+        el.innerHTML = `<div class="empty"><div class="icon">👨‍👩‍👧</div>No parent campaigns found.<br><br><span style="color:var(--muted);font-size:13px">The three parent campaigns (Absent, Homework, Full Length Test) are seeded automatically when the campaigns schema is applied. If you do not see them, open the Campaigns view and they will be created on first load.</span></div>`;
+        return;
+      }
+      el.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Campaign</th><th>Program</th><th>Parents</th><th>Calls</th>
+        <th>Status</th><th>Action</th>
+      </tr></thead>
+      <tbody>${cs.map(c => {
+        const s = c.stats;
+        const icon = CAMP_ICONS[c.type] || '👨‍👩‍👧';
+        return `
+        <tr>
+          <td data-label="Campaign">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:22px">${icon}</span>
+              <div>
+                <strong>${esc(c.name)}</strong>${c.isDefault ? ' <span style="font-size:10px;color:var(--muted)">(built-in)</span>' : ''}<br>
+                <span style="color:var(--muted);font-size:12px">${esc(c.goal || c.description || 'Parent outreach campaign')}</span>
+              </div>
+            </div>
+          </td>
+          <td data-label="Program">${esc(c.program || '—')}</td>
+          <td data-label="Parents"><strong>${s.totalLeads}</strong></td>
+          <td data-label="Calls">${s.callsCompleted}</td>
+          <td data-label="Status" onclick="event.stopPropagation()">
+            <select onchange="setParentCampaignStatus('${c.id}', this.value)" style="padding:4px 6px;border-radius:6px;font-size:12px;font-weight:600;background:var(--panel2,#273449);color:${(CAMPAIGN_STATUS_BADGE[c.status] || {}).color || 'inherit'};border:1px solid var(--border,#334155)">
+              <option value="active"    ${c.status === 'active' ? 'selected' : ''}>🟢 Active</option>
+              <option value="paused"    ${c.status === 'paused' ? 'selected' : ''}>⏸ Paused</option>
+              <option value="completed" ${c.status === 'completed' ? 'selected' : ''}>✅ Completed</option>
+            </select>
+          </td>
+          <td data-label="Action" onclick="event.stopPropagation()">
+            <button class="btn-manage-leads" onclick="openParentCampaignLeads('${c.id}','${esc(c.name)}','${c.type}')">
+              📋 Manage Parents
+            </button>
+          </td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+  `;
+    }
+
+    async function setParentCampaignStatus(id, status) {
+      try {
+        await api('/campaigns/' + id, { method: 'PATCH', body: JSON.stringify({ status }) });
+        toast('✅ Campaign status updated', 'success');
+        loadParentCampaigns();
+      } catch (e) { toast('❌ ' + e.message, 'error'); loadParentCampaigns(); }
+    }
+
+    async function openParentCampaignLeads(campaignId, campaignName, campaignType) {
+      PCLP_CAMPAIGN_ID = campaignId;
+      PCLP_CAMPAIGN_NAME = campaignName;
+      PCLP_ALL_LEADS = [];
+
+      document.getElementById('parentCampaignOverview').style.display = 'none';
+      const panel = document.getElementById('parentCampaignLeadsPanel');
+      panel.classList.add('visible');
+
+      document.getElementById('pclpTitle').textContent = campaignName;
+      document.getElementById('pclpBadge').textContent = 'Loading…';
+      document.getElementById('pclpTableTitle').textContent = campaignName + ' — Parents';
+
+      document.getElementById('pclpSearch').value = '';
+      document.getElementById('pclpStatusFilter').value = '';
+      document.getElementById('pclpCategoryFilter').value = '';
+      document.getElementById('pclpLeadsTable').innerHTML = '<div style="text-align:center;color:var(--muted);padding:24px">Loading parents…</div>';
+
+      // Populate bulk campaign selector
+      const bulkSel = document.getElementById('pclpBulkCampaignSel');
+      if (bulkSel && bulkSel.options.length <= 2 && CAMPAIGNS.length) {
+        CAMPAIGNS.filter(c => PARENT_CAMPAIGN_TYPES.includes(c.type)).forEach(c => {
+          const o = document.createElement('option');
+          o.value = c.id;
+          o.textContent = c.name + (c.status !== 'active' ? ' (' + c.status + ')' : '');
+          bulkSel.appendChild(o);
+        });
+      }
+
+      await refreshParentCampaignLeads();
+    }
+
+    async function refreshParentCampaignLeads() {
+      if (!PCLP_CAMPAIGN_ID) return;
+      try {
+        const leads = await api('/leads?campaignId=' + PCLP_CAMPAIGN_ID);
+        PCLP_ALL_LEADS = leads;
+        document.getElementById('pclpBadge').textContent = leads.length + ' parent' + (leads.length !== 1 ? 's' : '');
+        renderParentCampaignLeadsKpis(leads);
+        renderPclpTable(leads);
+      } catch (e) {
+        document.getElementById('pclpLeadsTable').innerHTML =
+          '<div class="empty"><div class="icon">⚠️</div>' + esc(e.message) + '</div>';
+      }
+    }
+
+    function closeParentCampaignLeads() {
+      PCLP_CAMPAIGN_ID = null;
+      PCLP_CAMPAIGN_NAME = '';
+      PCLP_ALL_LEADS = [];
+      clearPclpBulkSelect();
+      document.getElementById('parentCampaignLeadsPanel').classList.remove('visible');
+      document.getElementById('parentCampaignOverview').style.display = '';
+    }
+
+    function renderParentCampaignLeadsKpis(leads) {
+      const el = document.getElementById('pclpKpis');
+      if (!el) return;
+      const total = leads.length;
+      const contacted = leads.filter(l => l.totalCallAttempts > 0).length;
+      const calling = leads.filter(l => l.status === 'calling').length;
+      const avgScore = total ? Math.round(leads.reduce((s, l) => s + (l.leadScore || 0), 0) / total) : 0;
+      el.innerHTML =
+        kpiChip('👨‍👩‍👧', total, 'Total Parents', '#8b5cf6') +
+        kpiChip('📞', contacted, 'Called', '#f59e0b') +
+        kpiChip('📲', calling, 'In Call', '#ef4444') +
+        kpiChip('⭐', avgScore, 'Avg Score', '#3b82f6');
+    }
+
+    function filterParentCampaignLeads() {
+      const search = document.getElementById('pclpSearch').value.toLowerCase();
+      const status = document.getElementById('pclpStatusFilter').value;
+      const category = document.getElementById('pclpCategoryFilter').value;
+      let filtered = PCLP_ALL_LEADS;
+      if (search) filtered = filtered.filter(l => (l.fullName + l.email + l.phone).toLowerCase().includes(search));
+      if (status) filtered = filtered.filter(l => l.status === status);
+      if (category) filtered = filtered.filter(l => l.leadCategory === category);
+      clearPclpBulkSelect();
+      renderPclpTable(filtered);
+    }
+
+    function renderPclpTable(leads) {
+      const el = document.getElementById('pclpLeadsTable');
+      if (!leads || !leads.length) {
+        el.innerHTML = '<div class="empty"><div class="icon">📭</div>No parents in this campaign yet.<br><br><button class="btn btn-primary btn-sm" onclick="openAddLeadForParentCampaign()">➕ Add Parent to Campaign</button></div>';
+        return;
+      }
+      el.innerHTML = `
+    <table>
+      <thead><tr>
+        <th class="cb-col"><input type="checkbox" id="pclpChkAll" title="Select all" onchange="pclpSelectAll(this.checked)"></th>
+        <th>Name</th><th>Phone</th><th>Child Name</th><th>Score</th><th>Status</th><th>Calls</th><th>Actions</th>
+      </tr></thead>
+      <tbody>${leads.map(l => {
+        const phoneValid = isValidPhone(l.phone);
+        const childName = l.parentName || l.fullName;
+        return `
+        <tr onclick="openLead('${l._id}')" style="cursor:pointer" data-lead-id="${l._id}">
+          <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="pclp-chk" data-id="${l._id}" onchange="togglePclpSelect()"></td>
+          <td data-label="Name"><strong>${esc(l.fullName)}</strong><br><span style="color:var(--muted);font-size:12px">${esc(l.email)}</span></td>
+          <td data-label="Phone" style="font-family:monospace;font-size:12px;color:${phoneValid ? 'inherit' : 'var(--hot)'}">${phoneValid ? '' : '⚠️ '}${esc(l.phone)}</td>
+          <td data-label="Child">${esc(l.grade ? 'Grade ' + l.grade : '—')}</td>
+          <td data-label="Score"><span class="score-badge ${l.leadCategory}">${l.leadScore} ${catEmoji(l.leadCategory)}</span></td>
+          <td data-label="Status"><span class="status-badge ${l.status}">${fmtStatus(l.status)}</span></td>
+          <td data-label="Calls">${l.totalCallAttempts || 0}</td>
+          <td data-label="Actions" style="white-space:nowrap" onclick="event.stopPropagation()">
+            <div style="display:flex;gap:4px;flex-wrap:wrap">
+              ${l.status === 'calling'
+            ? `<button class="btn btn-sm" style="background:var(--hot);color:#fff" onclick="stopCall('${l._id}')">🛑 Stop</button>`
+            : phoneValid
+              ? `<button class="btn btn-primary btn-sm" onclick="callLead('${l._id}')">📞 Call</button>`
+              : `<button class="btn btn-secondary btn-sm" style="opacity:.6" title="Invalid phone">⚠️ Bad #</button>`
+          }
+              <button class="btn btn-secondary btn-sm" onclick="openEditLead('${l._id}')">✏️ Edit</button>
+              <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="confirmDeleteLead('${l._id}','${esc(l.fullName)}')">🗑️</button>
+            </div>
+          </td>
+        </tr>
+      `}).join('')}</tbody>
+    </table>`;
+    }
+
+    function openAddLeadForParentCampaign() {
+      openAddLead();
+      if (PCLP_CAMPAIGN_ID) {
+        setTimeout(() => {
+          const sel = document.getElementById('lf_campaign');
+          if (sel) sel.value = PCLP_CAMPAIGN_ID;
+        }, 300);
+      }
+    }
+
+    // ─── PCLP bulk-select helpers ────────────────────────
+    let _pclpSelected = new Set();
+
+    function togglePclpSelect() {
+      _pclpSelected.clear();
+      document.querySelectorAll('.pclp-chk:checked').forEach(el => _pclpSelected.add(el.dataset.id));
+      updatePclpBulkBar();
+    }
+
+    function pclpSelectAll(checked) {
+      _pclpSelected.clear();
+      document.querySelectorAll('.pclp-chk').forEach(el => {
+        el.checked = checked;
+        if (checked) _pclpSelected.add(el.dataset.id);
+      });
+      updatePclpBulkBar();
+    }
+
+    function updatePclpBulkBar() {
+      const bar = document.getElementById('pclpBulkBar');
+      if (!bar) return;
+      const n = _pclpSelected.size;
+      document.getElementById('pclpBulkCount').textContent = n;
+      bar.classList.toggle('visible', n > 0);
+    }
+
+    function clearPclpBulkSelect() {
+      _pclpSelected.clear();
+      document.querySelectorAll('.pclp-chk').forEach(el => el.checked = false);
+      const chk = document.getElementById('pclpChkAll');
+      if (chk) chk.checked = false;
+      const bar = document.getElementById('pclpBulkBar');
+      if (bar) bar.classList.remove('visible');
+    }
+
+    async function bulkAssignCampaignPclp() {
+      const sel = document.getElementById('pclpBulkCampaignSel');
+      const val = sel ? sel.value : '';
+      if (!val) { toast('Choose a campaign first', 'error'); return; }
+      if (!_pclpSelected.size) { toast('Select at least one parent', 'error'); return; }
+      const leadIds = [..._pclpSelected];
+      const campaignId = val === '__none__' ? null : val;
+      const label = val === '__none__' ? 'removed from campaign' : 'assigned to campaign';
+      try {
+        await api('/campaigns/assign', { method: 'POST', body: JSON.stringify({ campaignId, leadIds }) });
+        toast('✅ ' + leadIds.length + ' parent(s) ' + label, 'success');
+        clearPclpBulkSelect();
+        await refreshParentCampaignLeads();
+        LEADS = await api('/leads').catch(() => LEADS);
+      } catch (e) { toast('❌ ' + e.message, 'error'); }
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -6857,6 +7219,8 @@
       let lead = LEADS.find(l => l._id === id);
       // Also check campaign leads cache if we're in a campaign sub-view
       if (!lead && CLP_ALL_LEADS.length) lead = CLP_ALL_LEADS.find(l => l._id === id);
+      // Also check parent campaign leads cache
+      if (!lead && PCLP_ALL_LEADS.length) lead = PCLP_ALL_LEADS.find(l => l._id === id);
       if (!lead) {
         try { lead = await api('/leads/' + id); }
         catch (e) { toast('❌ Lead not found', 'error'); return; }
@@ -6882,6 +7246,10 @@
         // We're inside a campaign leads page — find the type from the CAMPAIGNS global
         const camp = CAMPAIGNS.find(c => c.id === CLP_CAMPAIGN_ID);
         if (camp && camp.type) campaignType = camp.type;
+      } else if (PCLP_CAMPAIGN_ID) {
+        // We're inside a parent campaign leads page
+        const camp = CAMPAIGNS.find(c => c.id === PCLP_CAMPAIGN_ID);
+        if (camp && camp.type) campaignType = camp.type;
       } else if (lead.campaignId) {
         // Lead has a campaign assigned — look it up from the CAMPAIGNS cache
         const camp = CAMPAIGNS.find(c => c.id === lead.campaignId);
@@ -6899,7 +7267,11 @@
         const r = await api('/leads/' + id + '/call', { method: 'POST', body: JSON.stringify(body) });
         toast(`📞 ${r.message || 'Call placed'}`, 'success');
         closeModal();
-        setTimeout(() => { loadLeads(); if (CLP_CAMPAIGN_ID) refreshCampaignLeads(); }, 2000);
+        setTimeout(() => {
+          loadLeads();
+          if (CLP_CAMPAIGN_ID) refreshCampaignLeads();
+          if (PCLP_CAMPAIGN_ID) refreshParentCampaignLeads();
+        }, 2000);
       } catch (e) {
         toast('❌ ' + e.message, 'error');
         console.error('Call failed:', e);
