@@ -7034,10 +7034,31 @@
               ${c.sentiment ? `<span>${sentEmoji(c.sentiment)} ${esc(c.sentiment)}</span>` : ''}
             </div>
             ${c.aiSummary ? `<div class="summary"><strong>AI Summary:</strong>\n${esc(c.aiSummary)}</div>` : ''}
-            ${c.recordingUrl === 'FAILED' ? `<div style="color: #ef4444; font-size: 13px; font-weight: 500; margin-top: 8px;">⚠️ Recording Failed</div>` : (c.recordingUrl ? `<audio controls preload="none" data-rec="/api/leads/${l._id}/recording/${idx}"></audio>` : '')}
+            ${c.recordingUrl === 'FAILED'
+              ? `<div style="color:#ef4444;font-size:13px;font-weight:500;margin-top:8px;">⚠️ Recording Failed — Twilio could not capture audio for this call.</div>`
+              : (c.recordingUrl
+                ? `<div style="margin-top:10px">
+                    <div style="font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600">🎙️ Call Recording</div>
+                    <audio controls preload="none" data-rec="/api/leads/${l._id}/recording/${idx}" style="width:100%;border-radius:8px"></audio>
+                  </div>`
+                : `<div style="font-size:12px;color:var(--muted);margin-top:8px">🎙️ Recording pending or unavailable</div>`)}
             ${c.transcript ? `
-              <details style="margin-top:8px"><summary style="cursor:pointer;color:var(--brand);font-size:12px">📄 View Transcript</summary>
-                <div class="transcript">${esc(c.transcript)}</div>
+              <details style="margin-top:10px" open>
+                <summary style="cursor:pointer;color:var(--brand);font-size:12px;font-weight:600;margin-bottom:6px">📄 View Transcript</summary>
+                <div class="transcript" style="padding:12px;border-radius:8px;background:var(--bg);line-height:1.7;font-size:13px">${
+                  c.transcript.split('\n').map(line => {
+                    if (line.startsWith('AI:')) {
+                      return `<div style="margin-bottom:4px"><span style="color:#60a5fa;font-weight:600">AI:</span> ${esc(line.slice(3).trim())}</div>`;
+                    } else if (line.startsWith('AGENT:')) {
+                      return `<div style="margin-bottom:4px"><span style="color:#60a5fa;font-weight:600">AI:</span> ${esc(line.slice(6).trim())}</div>`;
+                    } else if (line.startsWith('Caller:')) {
+                      return `<div style="margin-bottom:4px"><span style="color:#34d399;font-weight:600">Caller:</span> ${esc(line.slice(7).trim())}</div>`;
+                    } else if (line.trim()) {
+                      return `<div style="margin-bottom:4px;color:var(--muted)">${esc(line)}</div>`;
+                    }
+                    return '';
+                  }).join('')
+                }</div>
               </details>
             ` : ''}
           </div>`;

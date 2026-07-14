@@ -152,6 +152,10 @@ router.post('/call/start', async (req, res) => {
         : `Hello, this is Shashi calling from Test Prep Pundits. Am I speaking with ${studentFirst}?`;
     }
 
+    // ── Record opener in history so it appears in transcript ──────────────────
+    sessionObj.history.push({ role: 'assistant', content: opener });
+    sessions.set(leadId, sessionObj);
+
     res.send(twilioSvc.twimlStart(opener, respondUrl(cfg.server.baseUrl, leadId)));
   } catch (err) {
     logger.error('webhook/start error', { msg: err.message });
@@ -1022,7 +1026,16 @@ router.post('/call/recording', async (req, res) => {
   try {
     const lead = await Lead.findById(leadId);
     if (!lead) return;
-    const attempt = lead.callAttempts[lead.callAttempts.length - 1];
+
+    // Match by CallSid for accuracy; fall back to the last attempt
+    const { CallSid: recCallSid } = req.body;
+    let attempt = recCallSid
+      ? lead.callAttempts.find(a => a.callSid === recCallSid)
+      : null;
+    if (!attempt && lead.callAttempts.length) {
+      attempt = lead.callAttempts[lead.callAttempts.length - 1];
+    }
+
     if (attempt) {
       if (RecordingStatus === 'failed' || RecordingStatus === 'absent') {
         attempt.recordingUrl = 'FAILED';
@@ -1099,7 +1112,7 @@ function _parseMeetingTime(scheduledTime, scheduledDate) {
 async function _finaliseCall(lead, session, callSid, reason) {
   try {
     const transcript = (session.history || [])
-      .map(m => `${m.role === 'user' ? 'Caller' : 'AGENT'}: ${m.content}`)
+      .map(m => `${m.role === 'user' ? 'Caller' : 'AI'}: ${m.content}`)
       .join('\n');
 
     const sentiment  = detectSentiment(transcript);
