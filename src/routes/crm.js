@@ -58,6 +58,14 @@ router.post('/meeting-outcomes', async (req, res) => {
     if (newStatus) await Lead.findByIdAndUpdate(leadId, { status: newStatus });
     if (outcome !== 'not-interested') await scheduleFollowUps(leadId);
 
+    // Automatically resolve pending counselor reminders or meeting-related follow-ups
+    const pendingFUs = await FollowUp.find({ leadId, completed: false });
+    for (const fu of pendingFUs) {
+      if (fu.followupType.includes('counselor') || fu.followupType.includes('meeting') || fu.followupType.includes('parent')) {
+        await FollowUp.findByIdAndUpdate(fu._id, { completed: true, completedAt: new Date(), result: 'completed-from-meeting' });
+      }
+    }
+
     res.status(201).json(doc);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -140,6 +148,18 @@ router.patch('/follow-ups/:id/complete', async (req, res) => {
     );
     if (!doc) return res.status(404).json({ error: 'Not found' });
     res.json(doc);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/follow-ups/:id/retry', async (req, res) => {
+  try {
+    const doc = await FollowUp.findByIdAndUpdate(
+      req.params.id,
+      { result: null },
+      { new: true }
+    );
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true, doc });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -501,7 +521,13 @@ router.get('/counselor-dashboard', async (req, res) => {
         meeting: r.meeting, courseInterest: r.course_interest, grade: r.grade,
       }));
 
-    res.json({ meetingsInRange, hotLeads, enrollmentPending, pendingFollowUps, revenuePipeline, todayMeetings });
+    // Recently completed follow-ups for Activity Feed
+    const completedFollowUps = await FollowUp.find(
+      { completed: true, completedAt: { $gte: since } },
+      { sort: { completedAt: -1 }, limit: 20 }
+    );
+
+    res.json({ meetingsInRange, hotLeads, enrollmentPending, pendingFollowUps, completedFollowUps, revenuePipeline, todayMeetings });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

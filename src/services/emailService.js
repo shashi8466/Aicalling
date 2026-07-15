@@ -847,9 +847,8 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
         rows.push(`<tr>${chunk.map(s => `
           <td class="scorer-td" style="text-align:center;padding:6px 4px;vertical-align:top;width:20%">
             ${avatar(s.name, 52, '#1a3c6e')}
-            <div style="font-size:10px;font-weight:700;color:#1a3c6e;line-height:1.3;margin-bottom:2px">${s.name.split(' ').slice(0,2).join(' ')}</div>
+            <div style="font-size:10px;font-weight:700;color:#1a3c6e;line-height:1.3;margin-bottom:2px">${s.name}</div>
             <div style="font-size:14px;font-weight:900;color:#ea580c">${s.score}</div>
-            ${s.school ? `<div style="font-size:9px;color:#6b7280;line-height:1.2;margin-top:1px">${s.school.split(',')[0]}</div>` : ''}
           </td>`).join('')}</tr>`);
       }
       return rows.join('');
@@ -869,8 +868,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
       <td class="m-stack" style="text-align:center;padding:0 8px 12px;width:50%;vertical-align:top">
         <div style="background:rgba(255,255,255,.15);border-radius:12px;padding:14px 10px">
           ${avatar(s.name, 64, 'rgba(255,255,255,.9)', '#1a3c6e', '3px solid #fff')}
-          <p style="color:#fbbf24;font-size:13px;font-weight:800;margin:0 0 2px">${s.name}</p>
-          <p style="color:rgba(255,255,255,.8);font-size:11px;margin:0 0 10px;line-height:1.4">${s.school}</p>
+          <p style="color:#fbbf24;font-size:13px;font-weight:800;margin:0 0 10px">${s.name}</p>
           <div style="background:#0d9488;color:#fff;font-size:13px;font-weight:900;padding:7px 14px;border-radius:8px;letter-spacing:.5px">SAT SCORE ${s.score}</div>
         </div>
       </td>`).join('')}

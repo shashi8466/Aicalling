@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -3530,6 +3531,7 @@
                   <option value="">All Campaigns</option>
                 </select>
                 <button class="btn btn-primary btn-sm" onclick="openAddLead()">➕ Add Lead</button>
+                <button class="btn btn-secondary btn-sm" onclick="openImportLeadsModal()">⬆ Import Leads</button>
               </div>
             </div>
             <!-- Bulk action bar -->
@@ -3885,6 +3887,7 @@
               <div style="margin-left:auto;display:flex;gap:8px">
                 <button class="btn btn-secondary btn-sm" onclick="refreshCampaignLeads()">↻ Refresh</button>
                 <button class="btn btn-primary btn-sm" onclick="openAddLeadForCampaign()">➕ Add Lead</button>
+                <button class="btn btn-secondary btn-sm" onclick="openImportLeadsModal(true)">⬆ Import Leads</button>
               </div>
             </div>
 
@@ -4746,6 +4749,46 @@
           <button class="btn btn-primary" onclick="saveLeadForm()" style="flex:1" id="leadFormSaveBtn">💾 Save
             Lead</button>
           <button class="btn btn-secondary" onclick="closeLeadForm()">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Import Leads Modal ─── -->
+  <div class="modal-bg" id="importLeadsModal" onclick="if(event.target===this)closeImportLeadsModal()">
+    <div class="modal" style="max-width:800px; max-height:90vh; display:flex; flex-direction:column">
+      <div class="modal-header">
+        <div>
+          <h2>⬆ Bulk Import Leads</h2>
+          <div class="sub">Upload an Excel or CSV file to import multiple leads</div>
+        </div>
+        <button class="modal-close" onclick="closeImportLeadsModal()">✕</button>
+      </div>
+      <div class="modal-body" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:16px;">
+        <input type="hidden" id="il_campaignId">
+        <div style="padding:20px; border:2px dashed var(--border); border-radius:8px; text-align:center; background:var(--panel2)">
+          <input type="file" id="il_fileInput" accept=".csv, .xls, .xlsx" style="display:none" onchange="handleImportFileSelect(event)">
+          <button class="btn btn-secondary" onclick="document.getElementById('il_fileInput').click()">📁 Select Excel/CSV File</button>
+          <div style="margin-top:12px; font-size:12px; color:var(--muted)">Supported formats: .xlsx, .xls, .csv<br>Required columns: Full Name, Email, Phone</div>
+        </div>
+        
+        <div id="il_previewArea" style="display:none; flex-direction:column; gap:12px">
+          <div style="display:flex; justify-content:space-between; align-items:center">
+            <h3 style="font-size:14px">Data Preview</h3>
+            <div id="il_stats" style="font-size:13px; font-weight:600"></div>
+          </div>
+          <div style="overflow-x:auto; border:1px solid var(--border); border-radius:8px; max-height:300px">
+            <table class="data-table" style="margin:0; width:100%; font-size:12px">
+              <thead id="il_previewThead"></thead>
+              <tbody id="il_previewTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="modal-header" style="border-top:1px solid var(--border); border-bottom:none">
+        <div style="display:flex; gap:10px; width:100%">
+          <button class="btn btn-secondary" onclick="closeImportLeadsModal()" style="flex:1">Cancel</button>
+          <button class="btn btn-primary" id="il_importBtn" onclick="submitImportLeads()" style="flex:1" disabled>🚀 Import Valid Leads</button>
         </div>
       </div>
     </div>
@@ -5778,9 +5821,42 @@
             time: l.updatedAt
           });
         return evts;
-      })
+      });
+
+      const completedFUs = (window.COMPLETED_FOLLOWUPS || []).map(f => {
+        let title = '';
+        let icon = '🔔';
+        let bg = 'rgba(139,92,246,.15)';
+        let color = '#8b5cf6';
+
+        if (f.followupType.includes('email')) {
+          title = `${f.followupType.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} completed automatically`;
+          if (f.followupType.includes('success-stories')) title = `Success Story Email sent successfully`;
+          icon = '✉️'; bg = 'rgba(16,185,129,.15)'; color = '#10b981';
+        } else if (f.followupType.includes('ai-call')) {
+          title = `AI Call Follow-up completed`;
+          icon = '🤖'; bg = 'rgba(59,130,246,.15)'; color = '#3b82f6';
+        } else if (f.followupType.includes('meeting') || f.result === 'completed-from-meeting') {
+          title = `Meeting Follow-up completed automatically`;
+          icon = '🤝'; bg = 'rgba(245,158,11,.15)'; color = '#f59e0b';
+        } else if (f.followupType.includes('whatsapp')) {
+          title = `WhatsApp Follow-up completed automatically`;
+          icon = '💬'; bg = 'rgba(34,197,94,.15)'; color = '#22c55e';
+        } else {
+          title = `${f.followupType} completed`;
+        }
+
+        return {
+          icon, bg, color,
+          title,
+          sub: '',
+          time: f.completedAt
+        };
+      });
+
+      const allItems = [...items, ...completedFUs]
         .sort((a, b) => new Date(b.time) - new Date(a.time))
-        .slice(0, 7);
+        .slice(0, 15);
 
       function ago(d) {
         const m = Math.round((Date.now() - new Date(d)) / 60000);
@@ -5789,7 +5865,7 @@
         return Math.round(m / 1440) + 'd ago';
       }
 
-      el.innerHTML = items.length ? items.map(it => `
+      el.innerHTML = allItems.length ? allItems.map(it => `
     <div class="act-item">
       <div class="act-icon" style="background:${it.bg};color:${it.color}">${it.icon}</div>
       <div style="flex:1;min-width:0">
@@ -5938,7 +6014,7 @@
 
     function renderTable(elId, leads, full) {
       const el = document.getElementById(elId);
-      if (!leads.length) { el.innerHTML = '<div class="empty"><div class="icon">📭</div>No leads yet. Click <strong>➕ Add Lead</strong> to get started.</div>'; return; }
+      if (!leads.length) { el.innerHTML = '<div class="empty"><div class="icon">📭</div>No leads yet. Click <strong>➕ Add Lead</strong> or <strong>⬆ Import Leads</strong> to get started.</div>'; return; }
       const isLeadsView = elId === 'leadsTable';
       el.innerHTML = `
     <table>
@@ -6487,7 +6563,7 @@
     function renderClpTable(leads) {
       const el = document.getElementById('clpLeadsTable');
       if (!leads || !leads.length) {
-        el.innerHTML = '<div class="empty"><div class="icon">📭</div>No leads in this campaign yet.<br><br><button class="btn btn-primary btn-sm" onclick="openAddLeadForCampaign()">➕ Add Lead to Campaign</button></div>';
+        el.innerHTML = '<div class="empty"><div class="icon">📭</div>No leads in this campaign yet.<br><br><div style="display:flex;gap:8px;justify-content:center"><button class="btn btn-primary btn-sm" onclick="openAddLeadForCampaign()">➕ Add Lead</button> <button class="btn btn-secondary btn-sm" onclick="openImportLeadsModal(true)">⬆ Import Leads</button></div></div>';
         return;
       }
       el.innerHTML = `
@@ -7359,6 +7435,8 @@
     async function loadCounselor(range = 'today') {
       try {
         const d = await fetch('/api/crm/counselor-dashboard?range=' + range).then(r => r.json());
+        
+        window.COMPLETED_FOLLOWUPS = d.completedFollowUps || [];
 
         // KPI values
         const mtg = d.meetingsInRange || 0;
@@ -7415,6 +7493,15 @@
             const bg = FU_COLORS[k] || 'rgba(139,92,246,.15)';
             const clr = FU_TEXT[k] || '#8b5cf6';
             const isOverdue = new Date(f.scheduledDate) <= new Date();
+            const isFailed = f.result && (f.result.startsWith('failed:') || f.result.startsWith('email-failed:'));
+            let actionHtml = '';
+            if (isFailed) {
+              const reason = f.result.replace(/^(email-)?failed:/, '').trim();
+              actionHtml = `<span class="cd-due-badge" style="background:rgba(239,68,68,0.15);color:#ef4444">Status: Failed (${reason})</span>
+                            <button class="btn btn-secondary btn-sm" style="font-size:11px" onclick="retryFollowUp('${f._id}')">↻ Retry</button>`;
+            } else if (isOverdue) {
+              actionHtml = `<span class="cd-due-badge">Due Today</span>`;
+            }
             return `
         <div class="cd-fu-item">
           <div class="cd-fu-icon" style="background:${bg};color:${clr}">${icon}</div>
@@ -7423,8 +7510,7 @@
             <div class="cd-fu-date">📅 ${fmtDate(f.scheduledDate)}</div>
           </div>
           <div class="cd-fu-actions">
-            ${isOverdue ? '<span class="cd-due-badge">Due Today</span>' : ''}
-            <button class="btn btn-secondary btn-sm" style="font-size:11px" onclick="markFollowUpDone('${f._id}')">✓ Done</button>
+            ${actionHtml}
           </div>
         </div>`;
           }).join('');
@@ -7484,10 +7570,10 @@
       } catch (e) { toast(e.message, 'error'); }
     }
 
-    async function markFollowUpDone(fuId) {
+    async function retryFollowUp(fuId) {
       try {
-        await fetch('/api/crm/follow-ups/' + fuId + '/complete', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ result: 'completed-from-dashboard' }) });
-        toast('Follow-up marked done ✓', 'success');
+        await fetch('/api/crm/follow-ups/' + fuId + '/retry', { method: 'POST' });
+        toast('Follow-up queued for retry', 'success');
         loadCounselor('today');
       } catch (e) { toast(e.message, 'error'); }
     }
@@ -8346,6 +8432,183 @@
 
     // Improve touch handling
     document.addEventListener('touchstart', () => { }, { passive: true });
+
+    // ─── Bulk Import Logic ─────────────────────────────
+    let _parsedLeads = [];
+
+    function openImportLeadsModal(isCampaign = false) {
+      document.getElementById('importLeadsModal').style.display = 'flex';
+      document.getElementById('il_campaignId').value = (isCampaign && typeof CLP_CAMPAIGN_ID !== 'undefined' && CLP_CAMPAIGN_ID) ? CLP_CAMPAIGN_ID : '';
+      
+      // Reset UI
+      document.getElementById('il_fileInput').value = '';
+      document.getElementById('il_previewArea').style.display = 'none';
+      document.getElementById('il_previewThead').innerHTML = '';
+      document.getElementById('il_previewTbody').innerHTML = '';
+      document.getElementById('il_stats').innerHTML = '';
+      document.getElementById('il_importBtn').disabled = true;
+      _parsedLeads = [];
+    }
+
+    function closeImportLeadsModal() {
+      document.getElementById('importLeadsModal').style.display = 'none';
+    }
+
+    function handleImportFileSelect(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const data = evt.target.result;
+        try {
+          const workbook = XLSX.read(data, { type: 'binary' });
+          const firstSheet = workbook.SheetNames[0];
+          const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], { defval: "" });
+          
+          if (!rows || rows.length === 0) {
+            toast('File is empty or could not be parsed.', 'error');
+            return;
+          }
+          
+          processImportRows(rows);
+        } catch(err) {
+          toast('Error reading file. Make sure it is a valid Excel or CSV file.', 'error');
+          console.error(err);
+        }
+      };
+      reader.readAsBinaryString(file);
+    }
+
+    function processImportRows(rows) {
+      _parsedLeads = [];
+      let validCount = 0;
+      let invalidCount = 0;
+      
+      // Auto-detect columns (fuzzy match)
+      const firstRow = rows[0] || {};
+      const keys = Object.keys(firstRow);
+      
+      const findKey = (search) => {
+        search = search.toLowerCase();
+        return keys.find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '').includes(search)) || null;
+      };
+
+      const map = {
+        fullName: findKey('name') || findKey('full'),
+        email: findKey('email'),
+        phone: findKey('phone') || findKey('mobile'),
+        grade: findKey('grade') || findKey('class'),
+        courseInterest: findKey('program') || findKey('course') || findKey('interest'),
+        parentName: findKey('parentname') || findKey('guardian'),
+        parentEmail: findKey('parentemail'),
+      };
+
+      if (!map.fullName && !map.email) {
+        toast('Could not identify Name or Email columns. Please check your headers.', 'error');
+        return;
+      }
+
+      let tbodyHtml = '';
+      
+      rows.forEach((row, i) => {
+        const lead = {
+          fullName: row[map.fullName] ? String(row[map.fullName]).trim() : '',
+          email: row[map.email] ? String(row[map.email]).trim() : '',
+          phone: row[map.phone] ? String(row[map.phone]).trim() : '',
+          grade: row[map.grade] ? String(row[map.grade]).trim() : '',
+          courseInterest: row[map.courseInterest] ? String(row[map.courseInterest]).trim() : '',
+          parentName: row[map.parentName] ? String(row[map.parentName]).trim() : '',
+          parentEmail: row[map.parentEmail] ? String(row[map.parentEmail]).trim() : '',
+          status: 'new'
+        };
+
+        const errors = [];
+        if (!lead.fullName) errors.push('Missing Name');
+        if (!lead.email) errors.push('Missing Email');
+        if (!lead.phone) errors.push('Missing Phone');
+
+        const isValid = errors.length === 0;
+        if (isValid) {
+          validCount++;
+          _parsedLeads.push(lead);
+        } else {
+          invalidCount++;
+        }
+        
+        // Show up to 50 rows in preview for performance
+        if (i < 50) {
+          tbodyHtml += `<tr style="${isValid ? '' : 'background:rgba(239,68,68,0.05)'}">
+            <td>${isValid ? '✅' : '❌'}</td>
+            <td>${esc(lead.fullName) || '—'}</td>
+            <td>${esc(lead.email) || '—'}</td>
+            <td>${esc(lead.phone) || '—'}</td>
+            <td>${isValid ? '' : `<span style="color:var(--hot);font-size:11px">${errors.join(', ')}</span>`}</td>
+          </tr>`;
+        }
+      });
+
+      if (rows.length > 50) {
+        tbodyHtml += `<tr><td colspan="5" style="text-align:center;color:var(--muted);font-style:italic">...and ${rows.length - 50} more rows not shown in preview</td></tr>`;
+      }
+
+      document.getElementById('il_previewThead').innerHTML = `<tr><th>Status</th><th>Name</th><th>Email</th><th>Phone</th><th>Errors</th></tr>`;
+      document.getElementById('il_previewTbody').innerHTML = tbodyHtml;
+      document.getElementById('il_previewArea').style.display = 'flex';
+      
+      document.getElementById('il_stats').innerHTML = `<span style="color:var(--brand)">${validCount} Valid</span> / <span style="color:var(--hot)">${invalidCount} Invalid</span>`;
+      
+      const btn = document.getElementById('il_importBtn');
+      if (validCount > 0) {
+        btn.disabled = false;
+        btn.textContent = `🚀 Import ${validCount} Valid Leads`;
+      } else {
+        btn.disabled = true;
+        btn.textContent = '🚀 Import Valid Leads';
+      }
+    }
+
+    async function submitImportLeads() {
+      const btn = document.getElementById('il_importBtn');
+      if (!btn || btn.disabled) return;
+      
+      const campaignId = document.getElementById('il_campaignId').value;
+      const payload = {
+        leads: _parsedLeads,
+        campaignId: campaignId || null
+      };
+
+      btn.disabled = true;
+      btn.textContent = 'Importing...';
+      
+      try {
+        const data = await api('/leads/bulk', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        
+        if (data.error) throw new Error(data.error);
+        
+        let msg = `✅ Successfully imported ${data.successCount} leads.`;
+        if (data.failedCount > 0) {
+          msg += `\n❌ ${data.failedCount} failed to import (usually duplicates).`;
+        }
+        
+        toast(msg, data.failedCount === 0 ? 'success' : 'warn');
+        closeImportLeadsModal();
+        
+        // Refresh grids
+        if (campaignId && typeof refreshCampaignLeads === 'function') {
+          refreshCampaignLeads();
+        } else {
+          loadLeads();
+        }
+      } catch(err) {
+        toast('❌ Import error: ' + err.message, 'error');
+        btn.disabled = false;
+        btn.textContent = `🚀 Import ${_parsedLeads.length} Valid Leads`;
+      }
+    }
 
     // Boot — auth required
     (async function boot() {

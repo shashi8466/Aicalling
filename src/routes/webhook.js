@@ -1002,6 +1002,14 @@ router.post('/call/status', async (req, res) => {
 
       await lead.save();
 
+      // Mark pending ai-call follow-up as failed
+      const FollowUp = require('../models/FollowUp');
+      const fu = await FollowUp.findOne({ leadId: lead._id, completed: false, result: 'ai-call-initiated' });
+      if (fu) {
+        fu.result = `ai-call-failed:${CallStatus}`;
+        await fu.save();
+      }
+
       // Send no-answer email
       setImmediate(() => emailSvc.sendNoAnswer(lead).catch(() => {}));
 
@@ -1279,6 +1287,16 @@ async function _finaliseCall(lead, session, callSid, reason) {
       score,
       summary: aiSummary.slice(0, 500),
     });
+
+    // Mark pending ai-call follow-up as completed
+    const FollowUp = require('../models/FollowUp');
+    const fu = await FollowUp.findOne({ leadId: lead._id, completed: false, result: 'ai-call-initiated' });
+    if (fu) {
+      fu.completed = true;
+      fu.completedAt = new Date();
+      fu.result = 'ai-call-completed';
+      await fu.save();
+    }
 
     logger.info(`Call finalised for ${lead.fullName} | score=${score} | sentiment=${sentiment}`);
   } catch (err) {

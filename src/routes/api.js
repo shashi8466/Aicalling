@@ -439,6 +439,66 @@ router.post('/leads', async (req, res) => {
   }
 });
 
+// Bulk create leads
+router.post('/leads/bulk', async (req, res) => {
+  try {
+    const { leads, campaignId } = req.body;
+    if (!Array.isArray(leads) || leads.length === 0) {
+      return res.status(400).json({ error: 'An array of leads is required' });
+    }
+
+    const results = {
+      total: leads.length,
+      successCount: 0,
+      failedCount: 0,
+      errors: []
+    };
+
+    for (const data of leads) {
+      try {
+        const email = data.email?.trim().toLowerCase();
+        if (!email) throw new Error('Email is required');
+        
+        const query = { email };
+        if (campaignId) query.campaignId = campaignId;
+        else query.campaignId = null;
+
+        const existing = await Lead.findOne(query);
+        if (existing) {
+          throw new Error(`A lead with email "${email}" already exists`);
+        }
+
+        await Lead.create({
+          fullName: data.fullName?.trim() || '',
+          email:    email,
+          phone:    data.phone?.trim() || '',
+          grade:    data.grade?.trim() || '',
+          courseInterest: data.courseInterest?.trim() || '',
+          parentName:     data.parentName?.trim() || '',
+          parentEmail:    data.parentEmail?.trim() || '',
+          status:  data.status || 'new',
+          notes:   data.notes?.trim() || '',
+          source:  'bulk_import',
+          state:   data.state || '',
+          timeZone: data.timeZone || '',
+          meetingStatus: data.meetingStatus || 'Not Booked',
+          nextScheduledCall: data.nextScheduledCall || null,
+          ...(campaignId ? { campaignId } : {}),
+        });
+        results.successCount++;
+      } catch (e) {
+        results.failedCount++;
+        results.errors.push({ email: data.email, error: e.message });
+      }
+    }
+
+    res.status(200).json(results);
+  } catch (e) {
+    logger.error('Bulk leads import error', { msg: e.message });
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Update lead
 router.patch('/leads/:id', async (req, res) => {
   try {

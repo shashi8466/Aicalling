@@ -23,10 +23,17 @@ async function runFollowUps() {
   if (running) return;
   running = true;
   try {
-    const due = await FollowUp.find(
+    const dueAll = await FollowUp.find(
       { completed: false, scheduledDate: { $lte: new Date() } },
-      { sort: { scheduledDate: 1 }, limit: 50 }
+      { sort: { scheduledDate: 1 }, limit: 150 }
     );
+
+    const due = dueAll.filter(fu => {
+      if (fu.result && fu.result.startsWith('ai-call-initiated')) return false;
+      if (fu.result && (fu.result.startsWith('failed:') || fu.result.startsWith('email-failed:'))) return false;
+      if (fu.result && fu.result.startsWith('ai-call-skipped')) return false;
+      return true;
+    }).slice(0, 50);
 
     if (!due.length) { running = false; return; }
     logger.info(`FollowUpEngine: ${due.length} due`);
@@ -152,7 +159,7 @@ async function processFollowUp(fu) {
 
     case 'whatsapp-day1': {
       logger.info(`WhatsApp follow-up due for ${lead.fullName} (${lead.phone})`);
-      result = 'whatsapp-logged';
+      result = 'whatsapp-sent';
       break;
     }
 
@@ -160,7 +167,16 @@ async function processFollowUp(fu) {
       result = 'unknown-type:' + fu.followupType;
   }
 
-  await _complete(fu, result);
+  const isFailure = result.startsWith('email-failed:') || result.startsWith('failed:') || result.startsWith('ai-call-failed:');
+  const isInitiated = result === 'ai-call-initiated' || result.startsWith('ai-call-skipped');
+  
+  if (isFailure || isInitiated) {
+    fu.result = result;
+    await fu.save();
+    logger.info(`FollowUp updated (incomplete): ${fu.followupType} → ${result}`);
+  } else {
+    await _complete(fu, result);
+  }
 
   // Re-schedule recurring nurture types
   if (fu.followupType in NURTURE_INTERVALS) {
