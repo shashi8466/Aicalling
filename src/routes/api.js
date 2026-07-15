@@ -312,6 +312,65 @@ router.post('/leads/:id/call', async (req, res) => {
   }
 });
 
+router.post('/leads/bulk-call', async (req, res) => {
+  try {
+    const { leadIds, campaignId } = req.body;
+    if (!Array.isArray(leadIds) || !leadIds.length) {
+      return res.status(400).json({ error: 'leadIds array is required' });
+    }
+
+    res.json({ ok: true, message: `Queued ${leadIds.length} leads for AI calling.` });
+    
+    // Background execution: Sequential dialing
+    setTimeout(async () => {
+      const { getCurrentUrl } = require('../utils/tunnel');
+      const baseUrl = getCurrentUrl() || cfg.server.baseUrl;
+      if (!baseUrl || baseUrl.includes('localhost')) return;
+      
+      const twilioSvc = require('../services/twilioService');
+      
+      for (const id of leadIds) {
+        try {
+          const lead = await Lead.findById(id);
+          if (lead && lead.phone && /^\+[1-9]\d{6,14}$/.test(lead.phone)) {
+            lead.status = 'calling';
+            lead.totalCallAttempts = (lead.totalCallAttempts || 0) + 1;
+            lead.lastCallAt = new Date().toISOString();
+            lead.callAttempts = lead.callAttempts || [];
+            lead.callAttempts.push({ attemptNumber: lead.totalCallAttempts, startTime: new Date().toISOString(), status: 'initiated' });
+            await lead.save();
+            const result = await twilioSvc.call(lead, baseUrl, campaignId || lead.campaignId);
+            lead.callAttempts[lead.callAttempts.length - 1].callSid = result.callSid;
+            await lead.save();
+
+            // Wait for this call to finish before moving to the next lead
+            let callActive = true;
+            let checks = 0;
+            while (callActive && checks < 120) { // Max 10 minutes (120 * 5s)
+              await new Promise(resolve => setTimeout(resolve, 5000));
+              checks++;
+              const updatedLead = await Lead.findById(id);
+              if (!updatedLead) break;
+              
+              const lastAttempt = updatedLead.callAttempts[updatedLead.callAttempts.length - 1];
+              // If attempt is missing, or status is completed/failed/etc., the call is over
+              if (!lastAttempt || lastAttempt.status === 'completed' || updatedLead.status !== 'calling') {
+                callActive = false;
+              }
+            }
+          }
+        } catch(err) {
+          logger.error(`Bulk call failed for lead ${id}: ${err.message}`);
+        }
+        await new Promise(r => setTimeout(r, 2000)); // 2 seconds delay before next call
+      }
+    }, 100);
+
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 
 router.post('/leads/:id/stop-call', async (req, res) => {
   try {
