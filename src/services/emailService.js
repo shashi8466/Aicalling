@@ -10,6 +10,35 @@ const logger = require('../logger');
 
 const BREVO_URL = 'https://api.brevo.com/v3/smtp/email';
 
+// Parent-notification campaigns → email content. Used by sendParentCampaignEmail
+// so a summary email is always sent after a parent AI call, whether answered or not.
+const PARENT_TEMPLATES = {
+  'parent-homework': {
+    name: 'Homework Campaign',
+    subject: s => `Homework Reminder for ${s}`,
+    intro:  s => `This is an automated follow-up from Test Prep Pundits. Today our AI assistant contacted you regarding your child ${s}.`,
+    reason: `Your child has not completed today's homework assignment.`,
+    action: `Please ask your child to complete the homework as soon as possible.`,
+    help:   `If you need any assistance, please contact our support team or post your question in the WhatsApp group.`,
+  },
+  'parent-absent': {
+    name: 'Absent Campaign',
+    subject: s => `Attendance Reminder for ${s}`,
+    intro:  s => `Today our AI assistant contacted you regarding your child ${s}.`,
+    reason: `Your child was absent today.`,
+    action: `If you have already informed Test Prep Pundits, please ignore this reminder. Otherwise, kindly post your child's absence in the WhatsApp group so our support team can update the attendance.`,
+    help:   ``,
+  },
+  'parent-flt': {
+    name: 'Full Length Test Campaign',
+    subject: s => `Full Length Test Reminder for ${s}`,
+    intro:  s => `Our AI assistant recently contacted you regarding your child ${s}.`,
+    reason: `Your child has not completed today's Full Length Test.`,
+    action: `Please encourage your child to complete the test at the earliest convenience.`,
+    help:   `If you need any assistance, our support team is always happy to help.`,
+  },
+};
+
 class EmailService {
 
   // ── Public senders ───────────────────────────────────────────────────
@@ -32,7 +61,8 @@ class EmailService {
           const campaignSvc = require('./campaignService');
           ({ type } = await campaignSvc.resolveForLead(lead));
         }
-        const pundits = ['sat-batch', 'act-batch', 'ap-course', 'business-partner'];
+        const pundits = ['sat-batch', 'act-batch', 'ap-course', 'business-partner',
+                         'parent-absent', 'parent-homework', 'parent-flt'];
         if (pundits.includes(type)) {
           logoPath = 'logos/logo1.png';
           companyName = type === 'business-partner' ? 'HGI' : 'Test Prep Pundits';
@@ -205,6 +235,77 @@ class EmailService {
       subject: `We tried to reach you – ${lead.fullName} | ${brand.companyName}`,
       html,
     });
+  }
+
+  /**
+   * Parent Campaign summary email — sent after EVERY parent AI call, regardless
+   * of outcome. `answered` picks the campaign-specific template (call connected)
+   * vs the generic "we were unable to reach you" template.
+   * @returns {ok, messageId?, error?, to}
+   */
+  async sendParentCampaignEmail(lead, { campaignType, answered = false } = {}) {
+    const t = PARENT_TEMPLATES[campaignType];
+    if (!t) return { ok: false, error: `Not a parent notification campaign: ${campaignType}` };
+
+    // The Parent Email stored in the CRM (fall back to the lead's own email).
+    const to = (lead.parentEmail && lead.parentEmail.includes('@'))
+      ? lead.parentEmail
+      : (lead.email || '');
+    if (!to || !to.includes('@')) {
+      return { ok: false, error: `No parent email on file for lead ${lead._id}` };
+    }
+
+    const parentName  = lead.parentName || 'Parent';
+    const studentName = lead.fullName || 'your child';
+
+    const subject = answered
+      ? t.subject(studentName)
+      : `Important Reminder Regarding ${studentName}`;
+
+    const body = answered
+      ? this._parentAnsweredBody(t, parentName, studentName)
+      : this._parentMissedBody(t, parentName, studentName);
+
+    const html = await this._wrap(body, lead, campaignType);
+    const res = await this._send({ to, subject, html });
+    return { ...res, to };
+  }
+
+  _parentAnsweredBody(t, parentName, studentName) {
+    const c = cfg.company;
+    return `
+<h2>Hello ${parentName},</h2>
+<p>${t.intro(studentName)}</p>
+<div class="box">
+  <strong>Reason for the call:</strong><br>
+  ${t.reason}
+</div>
+<p>${t.action}</p>
+${t.help ? `<p>${t.help}</p>` : ''}
+<p>Thank you.</p>
+<div class="sig">
+  <strong>Test Prep Pundits</strong>
+  ${c.counselorPhone ? `📞 ${c.counselorPhone}` : ''}
+</div>`;
+  }
+
+  _parentMissedBody(t, parentName, studentName) {
+    const c = cfg.company;
+    return `
+<h2>Hello ${parentName},</h2>
+<p>We recently attempted to contact you regarding your child <strong>${studentName}</strong>, but we were unable to reach you.</p>
+<div class="box">
+  <strong>Reason:</strong><br>
+  ${t.reason}
+</div>
+<p>${t.action}</p>
+${t.help ? `<p>${t.help}</p>` : ''}
+<p>Please review the above reminder and contact us if you have any questions.</p>
+<p>Thank you.</p>
+<div class="sig">
+  <strong>Test Prep Pundits</strong>
+  ${c.counselorPhone ? `📞 ${c.counselorPhone}` : ''}
+</div>`;
   }
 
   async sendMeetingReminder(lead, reminderType = '24h') {

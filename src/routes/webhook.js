@@ -30,6 +30,93 @@ const cfg            = require('../config');
 // In-memory conversation store  { leadId → { history, slots } }
 const sessions = new Map();
 
+// ── Parent Campaign Email Automation ──────────────────────────────────────────
+// The 3 parent-notification campaigns always send a summary email to the parent
+// after the call, whatever the outcome (answered / no-answer / busy / voicemail /
+// failed / canceled).
+const PARENT_CAMPAIGN_TYPES = ['parent-absent', 'parent-homework', 'parent-flt'];
+// Dedup guard so exactly one parent email is sent per call (keyed by CallSid).
+const _parentEmailSent = new Set();
+// messageId → { leadId, at } — correlates Brevo open/click events back to a lead.
+const _emailMsgIndex = new Map();
+function _recordEmailMessage(messageId, leadId) {
+  if (!messageId) return;
+  _emailMsgIndex.set(String(messageId), { leadId, at: Date.now() });
+  if (_emailMsgIndex.size > 5000) {
+    const oldest = [..._emailMsgIndex.entries()].sort((a, b) => a[1].at - b[1].at).slice(0, 1000);
+    for (const [k] of oldest) _emailMsgIndex.delete(k);
+  }
+}
+
+// Resolve a campaign TYPE from the call's campaignId (query param) or the lead.
+async function _resolveCampaignType(campaignId, lead) {
+  try {
+    const cid = campaignId || (lead && lead.campaignId) || null;
+    if (!cid) return null;
+    const row = await campaignSvc.getById(cid);
+    return row ? row.type : null;
+  } catch (_) { return null; }
+}
+
+/**
+ * Send the parent summary email exactly once per call and log the result to the
+ * CRM (lead.emailsSent + the matching call attempt). Safe to call from every
+ * terminal outcome — dedups on CallSid.
+ */
+async function _sendParentCampaignEmailOnce(lead, campaignType, outcome, callSid) {
+  try {
+    if (!lead || !PARENT_CAMPAIGN_TYPES.includes(campaignType)) return;
+    const key = callSid || String(lead._id);
+    if (_parentEmailSent.has(key)) return;
+    _parentEmailSent.add(key); // reserve synchronously to prevent a double send
+
+    const answered = outcome === 'completed';
+    const result = await emailSvc.sendParentCampaignEmail(lead, { campaignType, answered });
+
+    // Persist delivery status to the CRM (reload fresh to avoid stale overwrite).
+    const fresh = (await Lead.findById(lead._id)) || lead;
+    const campaignName = campaignReg.getCampaign(campaignType)?.name || campaignType;
+    const sentAt = new Date().toISOString();
+    fresh.emailsSent = fresh.emailsSent || [];
+    fresh.emailsSent.push({
+      type:        'parent-campaign',
+      campaign:    campaignName,
+      campaignType,
+      outcome,
+      callSid:     callSid || null,
+      to:          result.to || fresh.parentEmail || fresh.email || '',
+      sentAt,
+      status:      result.ok ? 'sent' : 'failed',
+      messageId:   result.messageId || null,
+      openStatus:  false,
+      clickStatus: false,
+      ...(result.ok ? {} : { error: result.error }),
+    });
+    const attempt = (fresh.callAttempts || []).find(a => a.callSid === callSid);
+    if (attempt) {
+      attempt.campaign       = campaignName;
+      attempt.emailStatus    = result.ok ? 'sent' : 'failed';
+      attempt.emailSentAt    = sentAt;
+      attempt.emailMessageId = result.messageId || null;
+    }
+    await fresh.save();
+
+    if (result.ok && result.messageId) _recordEmailMessage(result.messageId, fresh._id);
+
+    // Activity feed / live dashboards
+    try {
+      const crm = require('./crm');
+      if (crm.broadcastUpdate) crm.broadcastUpdate('parent-email-sent',
+        { leadId: fresh._id, campaign: campaignName, outcome, status: result.ok ? 'sent' : 'failed' });
+    } catch (_) {}
+
+    logger.info(`Parent email [${campaignType}/${outcome}] → ${result.to || 'n/a'}: ` +
+      (result.ok ? `sent (${result.messageId})` : `FAILED ${result.error}`));
+  } catch (e) {
+    logger.error('_sendParentCampaignEmailOnce error', { msg: e.message });
+  }
+}
+
 /**
  * Deterministically checks whether the caller's first reply confirms their identity.
  * Matches all accepted confirmation phrases regardless of case or minor punctuation.
@@ -187,7 +274,15 @@ router.post('/call/amd', async (req, res) => {
       .catch(() => {});
 
     await _markAttempt(lead, CallSid, 'voicemail');
-    await emailSvc.sendNoAnswer(lead).catch(() => {});
+
+    // Email: parent campaigns get the parent summary email; everyone else gets
+    // the standard no-answer email.
+    const campaignType = await _resolveCampaignType(req.query.campaignId, lead);
+    if (PARENT_CAMPAIGN_TYPES.includes(campaignType)) {
+      await _sendParentCampaignEmailOnce(lead, campaignType, 'voicemail', CallSid);
+    } else {
+      await emailSvc.sendNoAnswer(lead).catch(() => {});
+    }
 
     // Capture Twilio billing for this (machine-answered) call.
     billingSvc.captureFromCall(CallSid, { lead, callStatus: 'voicemail' }).catch(() => {});
@@ -994,12 +1089,24 @@ router.post('/call/status', async (req, res) => {
         await lead.save();
         logger.info(`Call completed for ${lead.fullName} with no active session — status reset to contacted`);
       }
+
+      // Parent campaign: always send the parent summary email (answered variant).
+      // Deduped on CallSid so an AMD-voicemail email already sent isn't overwritten.
+      const _ct = await _resolveCampaignType(req.query.campaignId, lead);
+      if (PARENT_CAMPAIGN_TYPES.includes(_ct)) {
+        await _sendParentCampaignEmailOnce(lead, _ct, 'completed', CallSid);
+      }
     }
 
     if (CallStatus === 'canceled') {
       if (lead.status === 'calling') lead.status = 'contacted';
       sessions.delete(leadId);
       await lead.save();
+
+      const _ct = await _resolveCampaignType(req.query.campaignId, lead);
+      if (PARENT_CAMPAIGN_TYPES.includes(_ct)) {
+        await _sendParentCampaignEmailOnce(lead, _ct, 'canceled', CallSid);
+      }
     }
 
     if (['no-answer','busy','failed'].includes(CallStatus)) {
@@ -1024,8 +1131,14 @@ router.post('/call/status', async (req, res) => {
         await fu.save();
       }
 
-      // Send no-answer email
-      setImmediate(() => emailSvc.sendNoAnswer(lead).catch(() => {}));
+      // Email: parent campaigns always get the parent summary email (unable to
+      // reach); other campaigns get the standard no-answer email.
+      const _ct = await _resolveCampaignType(req.query.campaignId, lead);
+      if (PARENT_CAMPAIGN_TYPES.includes(_ct)) {
+        _sendParentCampaignEmailOnce(lead, _ct, CallStatus, CallSid).catch(() => {});
+      } else {
+        setImmediate(() => emailSvc.sendNoAnswer(lead).catch(() => {}));
+      }
 
       // Update sheet
       setImmediate(() => sheetsSvc.updateRow(lead.sheetRowIndex, {
@@ -1071,6 +1184,43 @@ router.post('/call/recording', async (req, res) => {
     await lead.save();
   } catch (err) {
     logger.error('webhook/recording error', { msg: err.message });
+  }
+});
+
+// ── Brevo email event webhook (delivered / opened / click) ────────────────────
+// OPTIONAL: point Brevo → Transactional → Settings → Webhook at this URL to
+// record open/click status on parent-campaign emails. Correlates via the
+// in-memory messageId → lead index (best-effort; survives until restart).
+router.post('/email/brevo', async (req, res) => {
+  res.sendStatus(200);
+  try {
+    const events = Array.isArray(req.body?.items) ? req.body.items
+                 : Array.isArray(req.body) ? req.body : [req.body];
+    for (const ev of events) {
+      if (!ev) continue;
+      const msgId = ev['message-id'] || ev.messageId || ev.message_id;
+      const type  = String(ev.event || ev.type || '').toLowerCase();
+      if (!msgId) continue;
+      const ref = _emailMsgIndex.get(String(msgId));
+      if (!ref) continue;
+
+      const lead = await Lead.findById(ref.leadId);
+      if (!lead || !Array.isArray(lead.emailsSent)) continue;
+      const entry = lead.emailsSent.find(e => e.messageId === msgId);
+      if (!entry) continue;
+
+      if (['opened', 'unique_opened', 'open'].includes(type))        entry.openStatus = true;
+      if (['click', 'clicked'].includes(type))                       entry.clickStatus = true;
+      if (['delivered'].includes(type))                              entry.deliveredStatus = true;
+      if (['hard_bounce', 'soft_bounce', 'blocked', 'spam', 'invalid_email', 'error', 'deferred'].includes(type)) {
+        entry.status = 'failed';
+        entry.deliveryError = type;
+      }
+      await lead.save();
+      try { require('./crm').broadcastUpdate('parent-email-event', { leadId: ref.leadId, event: type }); } catch (_) {}
+    }
+  } catch (err) {
+    logger.error('webhook/email/brevo error', { msg: err.message });
   }
 });
 
