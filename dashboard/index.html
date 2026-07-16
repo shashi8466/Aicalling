@@ -3320,10 +3320,39 @@
     .bl-pill-btn { background:var(--panel2, #1e293b); border:1px solid var(--border, rgba(148,163,184,.2)); color:var(--text, #e2e8f0); border-radius:7px; padding:4px 10px; font-size:12px; cursor:pointer; }
     .bl-pill-btn:hover { border-color:var(--brand); color:var(--brand); }
     .bl-pill-btn:disabled { opacity:.4; cursor:not-allowed; }
+  
+    /* GLOBAL LOADER */
+    .global-loader {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(15, 23, 42, 0.5);
+      z-index: 99999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      backdrop-filter: blur(2px);
+    }
+    .global-loader.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .global-loader .spinner {
+      width: 50px; height: 50px;
+      border: 5px solid var(--brand);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
   </style>
 </head>
 
 <body>
+  <div id="globalLoader" class="global-loader"><div class="spinner"></div></div>
+
   <div class="app">
     <!-- ─── SIDEBAR ─── -->
     <aside class="sidebar">
@@ -9322,11 +9351,17 @@
       }
 
       // Load all primary data in parallel — do not await one before starting the next
-      Promise.all([
-        loadLeads(),
-        loadMeetings(),
-        loadCallbacks().catch(() => {}),
-      ]);
+      const loader = document.getElementById('globalLoader');
+      if (loader) loader.classList.add('active');
+      try {
+        await Promise.all([
+          loadLeads(),
+          loadMeetings(),
+          loadCallbacks().catch(() => {}),
+        ]);
+      } finally {
+        if (loader) loader.classList.remove('active');
+      }
 
       // Real-time EventSource Updates
       let _sseRetry = 1000;
