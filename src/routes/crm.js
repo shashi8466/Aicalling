@@ -648,18 +648,28 @@ router.post('/callbacks/mock-receive', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════
 let updateClients = [];
 
-router.get('/updates/stream', (req, res) => {
+// SSE stream handler. Registered in index.js at GET /api/crm/updates/stream
+// with requireAuthQuery (so the header-less EventSource can authenticate via
+// ?token=). Sends an initial comment + periodic heartbeat to keep the
+// connection alive through proxies.
+function streamHandler(req, res) {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
+  res.write(': connected\n\n');
+  const heartbeat = setInterval(() => {
+    try { res.write(': ping\n\n'); } catch (_) { /* client gone */ }
+  }, 25000);
+
   updateClients.push(res);
 
   req.on('close', () => {
+    clearInterval(heartbeat);
     updateClients = updateClients.filter(c => c !== res);
   });
-});
+}
 
 function broadcastUpdate(type, data = {}) {
   updateClients.forEach(c => {
@@ -673,3 +683,4 @@ function broadcastUpdate(type, data = {}) {
 
 module.exports = router;
 module.exports.broadcastUpdate = broadcastUpdate;
+module.exports.streamHandler = streamHandler;

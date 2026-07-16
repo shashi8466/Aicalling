@@ -23,6 +23,7 @@ const sheetsSvc      = require('../services/sheetsService');
 const { scoreLead, detectSentiment } = require('../services/leadScoring');
 const campaignSvc    = require('../services/campaignService');
 const campaignReg    = require('../campaigns/registry');
+const billingSvc     = require('../services/billingService');
 const logger         = require('../logger');
 const cfg            = require('../config');
 
@@ -187,6 +188,9 @@ router.post('/call/amd', async (req, res) => {
 
     await _markAttempt(lead, CallSid, 'voicemail');
     await emailSvc.sendNoAnswer(lead).catch(() => {});
+
+    // Capture Twilio billing for this (machine-answered) call.
+    billingSvc.captureFromCall(CallSid, { lead, callStatus: 'voicemail' }).catch(() => {});
   } catch (err) {
     logger.error('AMD callback error', { msg: err.message });
   }
@@ -924,6 +928,16 @@ router.post('/call/status', async (req, res) => {
       attempt.status   = CallStatus;
       attempt.duration = parseInt(CallDuration) || 0;
       attempt.endTime  = new Date();
+    }
+
+    // ── Billing capture ──────────────────────────────────────────────────────
+    // On any terminal call status, record the ACTUAL Twilio cost. Twilio's price
+    // is usually not ready yet at this moment, so this creates/refreshes a
+    // 'pending' row; billingPoller finalizes it once Twilio populates the price.
+    // Fire-and-forget + idempotent (keyed on call_sid) — never blocks the webhook.
+    const TERMINAL_STATUSES = ['completed', 'canceled', 'no-answer', 'busy', 'failed'];
+    if (CallSid && TERMINAL_STATUSES.includes(CallStatus)) {
+      billingSvc.captureFromCall(CallSid, { lead, callStatus: CallStatus }).catch(() => {});
     }
 
     // Callback Request specific status management

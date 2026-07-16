@@ -23,12 +23,14 @@ const crmRouter        = require('./routes/crm');
 const authRouter       = require('./routes/auth');
 const counselorsRouter = require('./routes/counselors');
 const campaignsRouter  = require('./routes/campaigns');
-const { requireAuth, requireAdmin } = require('./middleware/auth');
+const { requireAuth, requireAdmin, requireAuthQuery } = require('./middleware/auth');
+const billingRouter    = require('./routes/billing');
 const followUpEngine   = require('./jobs/followUpEngine');
 const livekitSvc       = require('./services/livekitService');
 const tzScheduler      = require('./jobs/tzScheduler');
 const emailCallbackPoller = require('./jobs/emailCallbackPoller');
 const meetingReminderPoller = require('./jobs/meetingReminderPoller');
+const billingPoller    = require('./jobs/billingPoller');
 
 const app = express();
 
@@ -73,11 +75,17 @@ app.post('/api/meeting/token', async (req, res) => {
   }
 });
 
+// Real-time SSE stream — authenticated via ?token= query param because the
+// browser EventSource API cannot send Authorization headers. Registered BEFORE
+// the blanket requireAuth below (which would 401 the header-less EventSource).
+app.get('/api/crm/updates/stream', requireAuthQuery, crmRouter.streamHandler);
+
 // Protected dashboard API — all /api/* (except public routes above) require a valid Supabase JWT
 app.use('/api', requireAuth);
 app.use('/api', apiRouter);
 app.use('/api/crm', crmRouter);
 app.use('/api/campaigns', campaignsRouter);
+app.use('/api/billing', billingRouter);
 app.use('/api/counselors', requireAdmin, counselorsRouter);
 
 app.get('/health', (_req, res) =>
@@ -178,10 +186,21 @@ async function boot() {
     await sheetsSvc.ensureHeaders().catch(() => {});
 
     // 3. HTTP server
-    await new Promise((resolve) => {
-      app.listen(cfg.server.port, () => {
+    await new Promise((resolve, reject) => {
+      const server = app.listen(cfg.server.port, () => {
         logger.info(`🚀 Agent listening on http://localhost:${cfg.server.port}`);
         resolve();
+      });
+      // Handle listen errors (e.g. port already in use) gracefully instead of
+      // letting the 'error' event go unhandled and crash with a raw stack trace.
+      server.on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+          logger.error(`Port ${cfg.server.port} is already in use — another instance is probably ` +
+            `still running. Stop it first, or set PORT to a free port, then retry.`);
+        } else {
+          logger.error('HTTP server error', { msg: err.message });
+        }
+        reject(err);
       });
     });
 
@@ -205,6 +224,12 @@ async function boot() {
     tzScheduler.start();
     emailCallbackPoller.start();
     meetingReminderPoller.start();
+    billingPoller.start();
+
+    // One-time historical billing import — scans every existing call and
+    // creates billing rows with the actual Twilio price. Guarded so it runs
+    // once; no-ops if the billing table isn't set up yet. Non-blocking.
+    require('./services/billingService').autoBackfillOnce().catch(() => {});
 
     // 5b. Keep-alive self-ping for free hosting (Render)
     setInterval(() => {

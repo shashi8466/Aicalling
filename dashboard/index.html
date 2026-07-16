@@ -12,6 +12,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Billing analytics: interactive charts + PDF export -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -3291,6 +3295,31 @@
       background: var(--brand);
       color: #fff;
     }
+
+    /* ── Billing view ── */
+    .data-table { width:100%; border-collapse:collapse; font-size:13px; }
+    .data-table th { text-align:left; padding:10px 12px; color:var(--muted); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; background:var(--panel2); border-bottom:1px solid var(--border); white-space:nowrap; }
+    .data-table td { padding:10px 12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+    .data-table tr:hover td { background:rgba(255,255,255,.025); }
+    .bl-flabel { display:block; font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+    .bl-input { background:var(--panel2, #1e293b); color:var(--text, #e2e8f0); border:1px solid var(--border, rgba(148,163,184,.2)); border-radius:8px; padding:7px 10px; font-size:13px; font-family:inherit; }
+    .bl-input:focus { outline:none; border-color:var(--brand); }
+    .bl-sort { cursor:pointer; user-select:none; white-space:nowrap; }
+    .bl-sort:hover { color:var(--brand); }
+    .bl-cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:12px; }
+    .bl-card { background:var(--panel, #111827); border:1px solid var(--border, rgba(148,163,184,.15)); border-radius:12px; padding:14px 16px; }
+    .bl-card .bl-card-label { font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; }
+    .bl-card .bl-card-val { font-size:22px; font-weight:800; margin-top:6px; color:var(--text, #f1f5f9); }
+    .bl-card .bl-card-sub { font-size:11px; color:var(--muted); margin-top:2px; }
+    .bl-badge { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:600; }
+    .bl-badge.answered { background:rgba(16,185,129,.15); color:#10b981; }
+    .bl-badge.failed { background:rgba(239,68,68,.15); color:#ef4444; }
+    .bl-badge.voicemail { background:rgba(245,158,11,.15); color:#f59e0b; }
+    .bl-badge.other { background:rgba(100,116,139,.15); color:#94a3b8; }
+    .bl-badge.pending { background:rgba(59,130,246,.15); color:#3b82f6; }
+    .bl-pill-btn { background:var(--panel2, #1e293b); border:1px solid var(--border, rgba(148,163,184,.2)); color:var(--text, #e2e8f0); border-radius:7px; padding:4px 10px; font-size:12px; cursor:pointer; }
+    .bl-pill-btn:hover { border-color:var(--brand); color:var(--brand); }
+    .bl-pill-btn:disabled { opacity:.4; cursor:not-allowed; }
   </style>
 </head>
 
@@ -3313,6 +3342,7 @@
         <a data-view="meetings"><span class="icon">📅</span> Meetings <span class="nav-badge"
             id="navMeetCount">0</span></a>
         <a data-view="analytics"><span class="icon">📈</span> Analytics</a>
+        <a data-view="billing"><span class="icon">💰</span> Billing</a>
         <a data-view="counselor"><span class="icon">🏥</span> Counselor Hub</a>
         <a data-view="pipeline"><span class="icon">🔄</span> Pipeline</a>
         <a data-view="enrollments"><span class="icon">📋</span> Enrollments <span class="nav-badge"
@@ -3674,6 +3704,122 @@
                 </select>
               </div>
               <div style="padding:20px 20px 10px" id="dailyChart"></div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ─── BILLING & COST ANALYTICS ─── -->
+        <section class="view" id="view-billing">
+          <div class="an-page">
+
+            <!-- Header + filters -->
+            <div class="an-header">
+              <div>
+                <h2 class="an-title">💰 Billing &amp; Cost Analytics</h2>
+                <p class="an-sub" style="margin:2px 0 0;color:var(--muted);font-size:13px">Actual Twilio charges for every AI call — never estimated.</p>
+              </div>
+              <div class="an-header-right" style="flex-wrap:wrap;gap:8px">
+                <button class="btn btn-secondary btn-sm" onclick="loadBilling()">↻ Refresh</button>
+                <button class="btn btn-secondary btn-sm" onclick="exportBilling('csv')">⬇ CSV</button>
+                <button class="btn btn-secondary btn-sm" onclick="exportBilling('xlsx')">⬇ Excel</button>
+                <button class="btn btn-secondary btn-sm" onclick="exportBilling('pdf')">⬇ PDF</button>
+                <button class="btn btn-primary btn-sm" id="blImportBtn" onclick="blImportHistorical()" style="display:none">⤓ Import Historical Calls</button>
+              </div>
+            </div>
+
+            <!-- Historical import status (admin) -->
+            <div id="blBackfillBar" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:10px;background:var(--panel2);border:1px solid var(--border);font-size:13px;color:var(--muted)"></div>
+
+            <!-- Filter bar -->
+            <div class="ov-card" style="margin-bottom:16px">
+              <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:14px 16px">
+                <div><label class="bl-flabel">From</label><input type="date" id="blFrom" class="bl-input" onchange="blApplyFilters()"></div>
+                <div><label class="bl-flabel">To</label><input type="date" id="blTo" class="bl-input" onchange="blApplyFilters()"></div>
+                <div><label class="bl-flabel">Campaign</label><select id="blCampaign" class="bl-input" onchange="blApplyFilters()"><option value="">All campaigns</option></select></div>
+                <div id="blCounselorFilterWrap"><label class="bl-flabel">Counselor</label><select id="blCounselor" class="bl-input" onchange="blApplyFilters()"><option value="">All counselors</option></select></div>
+                <div><label class="bl-flabel">Status</label><select id="blStatus" class="bl-input" onchange="blApplyFilters()">
+                  <option value="">All statuses</option><option value="completed">Answered</option>
+                  <option value="no-answer">No answer</option><option value="busy">Busy</option>
+                  <option value="failed">Failed</option><option value="voicemail">Voicemail</option><option value="canceled">Canceled</option>
+                </select></div>
+                <div><label class="bl-flabel">Min $</label><input type="number" step="0.001" id="blCostMin" class="bl-input" style="width:80px" onchange="blApplyFilters()"></div>
+                <div><label class="bl-flabel">Max $</label><input type="number" step="0.001" id="blCostMax" class="bl-input" style="width:80px" onchange="blApplyFilters()"></div>
+                <div style="flex:1;min-width:160px"><label class="bl-flabel">Search</label><input type="text" id="blSearch" class="bl-input" style="width:100%" placeholder="Student, parent, phone, SID…" oninput="blDebouncedSearch()"></div>
+                <button class="btn btn-secondary btn-sm" onclick="blResetFilters()">Clear</button>
+              </div>
+            </div>
+
+            <!-- Summary cards -->
+            <div id="blSummary" class="bl-cards"></div>
+
+            <!-- Charts -->
+            <div class="an-mid" style="margin-top:16px">
+              <div class="ov-card"><div class="ov-card-hdr"><h4>📈 Daily Spend (30d)</h4></div><div style="padding:14px;height:240px"><canvas id="blChartDaily"></canvas></div></div>
+              <div class="ov-card"><div class="ov-card-hdr"><h4>📅 Monthly Spend</h4></div><div style="padding:14px;height:240px"><canvas id="blChartMonthly"></canvas></div></div>
+            </div>
+            <div class="an-mid">
+              <div class="ov-card"><div class="ov-card-hdr"><h4>📊 Weekly Spend</h4></div><div style="padding:14px;height:240px"><canvas id="blChartWeekly"></canvas></div></div>
+              <div class="ov-card"><div class="ov-card-hdr"><h4>📣 Cost by Campaign</h4></div><div style="padding:14px;height:240px"><canvas id="blChartCampaign"></canvas></div></div>
+            </div>
+            <div class="an-mid">
+              <div class="ov-card" id="blCounselorChartCard"><div class="ov-card-hdr"><h4>👤 Cost by Counselor</h4></div><div style="padding:14px;height:240px"><canvas id="blChartCounselor"></canvas></div></div>
+              <div class="ov-card"><div class="ov-card-hdr"><h4>👥 Cost by Lead (Top 15)</h4></div><div style="padding:14px;height:240px"><canvas id="blChartLead"></canvas></div></div>
+            </div>
+            <div class="an-mid">
+              <div class="ov-card"><div class="ov-card-hdr"><h4>⏱ Cost vs Duration</h4></div><div style="padding:14px;height:240px"><canvas id="blChartCostDuration"></canvas></div></div>
+              <div class="ov-card"><div class="ov-card-hdr"><h4>📞 Calls vs Cost &amp; Avg Cost/Call</h4></div><div style="padding:14px;height:240px"><canvas id="blChartCallsCost"></canvas></div></div>
+            </div>
+
+            <!-- Billing table -->
+            <div class="ov-card" style="margin-top:16px">
+              <div class="ov-card-hdr"><h4>🧾 Billing Records</h4><span id="blCount" style="font-size:12px;color:var(--muted)"></span></div>
+              <div style="overflow-x:auto">
+                <table class="data-table" style="width:100%">
+                  <thead><tr>
+                    <th class="bl-sort" onclick="blSort('date')">Date ⇅</th>
+                    <th class="bl-sort" onclick="blSort('student')">Student ⇅</th>
+                    <th>Parent</th>
+                    <th class="bl-sort" onclick="blSort('campaign')">Campaign ⇅</th>
+                    <th class="bl-col-counselor">Counselor</th>
+                    <th>Phone</th>
+                    <th class="bl-sort" onclick="blSort('duration')">Duration ⇅</th>
+                    <th class="bl-sort" onclick="blSort('cost')">Cost ⇅</th>
+                    <th class="bl-sort" onclick="blSort('status')">Status ⇅</th>
+                    <th>Call SID</th>
+                    <th></th>
+                  </tr></thead>
+                  <tbody id="blTableBody"><tr><td colspan="11" style="text-align:center;padding:28px;color:var(--muted)">Loading…</td></tr></tbody>
+                </table>
+              </div>
+              <div id="blPager" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;gap:10px;flex-wrap:wrap"></div>
+            </div>
+
+            <!-- Campaign + Counselor billing tables -->
+            <div class="an-mid" style="margin-top:16px">
+              <div class="ov-card"><div class="ov-card-hdr"><h4>📣 Campaign Billing</h4></div>
+                <div style="overflow-x:auto"><table class="data-table" style="width:100%"><thead><tr>
+                  <th>Campaign</th><th>Calls</th><th>Minutes</th><th>Avg Dur</th><th>Total Cost</th><th>Avg/Call</th><th>Avg/Min</th>
+                </tr></thead><tbody id="blCampaignBody"></tbody></table></div>
+              </div>
+              <div class="ov-card" id="blCounselorTableCard"><div class="ov-card-hdr"><h4>👤 Counselor Billing</h4></div>
+                <div style="overflow-x:auto"><table class="data-table" style="width:100%"><thead><tr>
+                  <th>Counselor</th><th>Calls</th><th>Minutes</th><th>Total Cost</th><th>Avg/Call</th><th>Avg Dur</th>
+                </tr></thead><tbody id="blCounselorBody"></tbody></table></div>
+              </div>
+            </div>
+
+            <!-- Reports -->
+            <div class="ov-card" style="margin-top:16px">
+              <div class="ov-card-hdr">
+                <h4>📆 Billing Reports</h4>
+                <select id="blReportGran" class="bl-input" onchange="blRenderReport()">
+                  <option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option>
+                </select>
+              </div>
+              <div style="overflow-x:auto"><table class="data-table" style="width:100%"><thead><tr>
+                <th>Period</th><th>Total Calls</th><th>Total Minutes</th><th>Total Cost</th>
+              </tr></thead><tbody id="blReportBody"></tbody></table></div>
             </div>
 
           </div>
@@ -4639,6 +4785,20 @@
     </div>
   </div>
 
+  <!-- ─── Billing Call Detail Modal ─── -->
+  <div class="modal-bg" id="billingDetailModal" onclick="if(event.target===this)closeBillingDetail()">
+    <div class="modal" style="max-width:720px">
+      <div class="modal-header">
+        <div>
+          <h2 id="blDetailName">Call Detail</h2>
+          <div class="sub" id="blDetailMeta"></div>
+        </div>
+        <button class="modal-close" onclick="closeBillingDetail()">✕</button>
+      </div>
+      <div class="modal-body" id="blDetailBody"></div>
+    </div>
+  </div>
+
   <!-- ─── Add / Edit Lead Modal ─── -->
   <div class="modal-bg" id="leadFormModal" onclick="if(event.target===this)closeLeadForm()">
     <div class="modal" style="max-width:600px">
@@ -5540,6 +5700,7 @@
       const titles = {
         overview: 'Overview', leads: 'All Leads', calls: 'Call Activity',
         meetings: 'Scheduled Meetings', analytics: 'Reports & Analytics',
+        billing: 'Billing & Cost Analytics',
         counselor: 'Counselor Dashboard', pipeline: 'Enrollment Pipeline',
         enrollments: 'Enrollments', campaigns: 'Campaign Management',
         parents: 'Parent Campaigns', counselors: 'Counselor Management', settings: 'Settings',
@@ -5551,6 +5712,7 @@
       if (name === 'calls') loadCalls();
       if (name === 'meetings') loadMeetings();
       if (name === 'analytics') loadAnalytics();
+      if (name === 'billing') loadBilling();
       if (name === 'counselor') loadCounselor('today');
       if (name === 'pipeline') loadPipeline();
       if (name === 'enrollments') loadEnrollments();
@@ -7235,6 +7397,32 @@
           }
         } catch (_) { }
 
+        // Billing history for this lead (actual Twilio costs)
+        try {
+          const bill = await api('/billing/by-lead/' + l._id);
+          const brows = bill.rows || [];
+          const t = bill.totals || {};
+          if (brows.length) {
+            body += `<div class="section-title">💰 Billing History (${brows.length})</div>
+            <div class="detail-grid">
+              <div class="detail-cell"><div class="lbl">Total Cost</div><div class="val"><strong>${blMoney(t.totalCost, t.currency)}</strong></div></div>
+              <div class="detail-cell"><div class="lbl">Total Minutes</div><div class="val">${t.totalMinutes || 0}</div></div>
+              <div class="detail-cell"><div class="lbl">Total Calls</div><div class="val">${t.totalCalls || 0}</div></div>
+            </div>
+            <div style="overflow-x:auto;margin-top:8px"><table class="data-table" style="width:100%">
+              <thead><tr><th>Date</th><th>Campaign</th><th>Duration</th><th>Cost</th><th>Status</th><th></th></tr></thead>
+              <tbody>${brows.map(r => `<tr>
+                <td>${r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}</td>
+                <td>${esc(r.campaign_name || 'Demo / Unassigned')}</td>
+                <td>${blFmtDuration(r.duration_seconds)}</td>
+                <td>${r.twilio_price != null ? '<strong>' + blMoney(r.twilio_price, r.currency) + '</strong>' : '<span class="bl-badge pending">pending</span>'}</td>
+                <td>${blStatusBadge(r.call_status)}</td>
+                <td><button class="bl-pill-btn" onclick="openBillingDetail('${r.id}')">Details</button></td>
+              </tr>`).join('')}</tbody>
+            </table></div>`;
+          }
+        } catch (_) { }
+
         body += `
       <div class="action-bar">
         ${l.status === 'calling'
@@ -8637,6 +8825,487 @@
       }
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    //   BILLING & COST ANALYTICS
+    // ═══════════════════════════════════════════════════════════════════════
+    const blState = { page: 1, pageSize: 25, sortBy: 'date', sortDir: 'desc' };
+    const blCharts = {};            // Chart.js instances (destroyed before re-create)
+    let _blFiltersReady = false;
+    let _blSearchTimer = null;
+
+    function blIsAdmin() { return (window._currentUser?.role || '') === 'admin'; }
+
+    function blMoney(n, cur) {
+      const v = Number(n) || 0;
+      const sym = (cur === 'USD' || !cur) ? '$' : '';
+      const suffix = (cur && cur !== 'USD') ? ' ' + cur : '';
+      const dp = Math.abs(v) >= 1 ? 2 : 4;
+      return sym + v.toFixed(dp) + suffix;
+    }
+    function blFmtDuration(sec) {
+      sec = Number(sec) || 0;
+      const m = Math.floor(sec / 60), s = sec % 60;
+      return m > 0 ? `${m}m ${s}s` : `${s}s`;
+    }
+    function blStatusBadge(status) {
+      const s = (status || '').toLowerCase();
+      let cls = 'other', label = status || '—';
+      if (s === 'completed') { cls = 'answered'; label = 'Answered'; }
+      else if (['no-answer', 'busy', 'failed'].includes(s)) { cls = 'failed'; }
+      else if (s === 'voicemail') { cls = 'voicemail'; }
+      return `<span class="bl-badge ${cls}">${esc(label)}</span>`;
+    }
+
+    // Chart theming (works on the app's dark surface; light-safe fallback colors)
+    const BL_PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#ef4444', '#84cc16', '#f97316', '#14b8a6', '#a855f7', '#eab308'];
+    function blAxisColor() { return '#94a3b8'; }
+    function blGridColor() { return 'rgba(148,163,184,.12)'; }
+    function blBaseOpts(extra = {}) {
+      return Object.assign({
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: blAxisColor(), font: { size: 11 } } } },
+        scales: {
+          x: { ticks: { color: blAxisColor(), font: { size: 10 } }, grid: { color: blGridColor() } },
+          y: { ticks: { color: blAxisColor(), font: { size: 10 } }, grid: { color: blGridColor() }, beginAtZero: true },
+        },
+      }, extra);
+    }
+    function blDestroyChart(key) { if (blCharts[key]) { blCharts[key].destroy(); delete blCharts[key]; } }
+    function blMakeChart(key, canvasId, config) {
+      const el = document.getElementById(canvasId);
+      if (!el || typeof Chart === 'undefined') return;
+      blDestroyChart(key);
+      blCharts[key] = new Chart(el.getContext('2d'), config);
+    }
+
+    async function loadBilling() {
+      // Role gating: hide counselor-only widgets for non-admins
+      const admin = blIsAdmin();
+      ['blCounselorFilterWrap', 'blCounselorChartCard', 'blCounselorTableCard'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.style.display = admin ? '' : 'none';
+      });
+      document.querySelectorAll('.bl-col-counselor').forEach(el => { el.style.display = admin ? '' : 'none'; });
+
+      // Historical import is admin-only
+      const importBtn = document.getElementById('blImportBtn');
+      if (importBtn) importBtn.style.display = admin ? '' : 'none';
+      if (admin) blLoadBackfillStatus();
+
+      await blPopulateFilters();
+      await Promise.all([blLoadAnalytics(), loadBillingTable()]);
+    }
+
+    async function blLoadBackfillStatus() {
+      const bar = document.getElementById('blBackfillBar');
+      if (!bar) return;
+      try {
+        const s = await api('/billing/backfill/status');
+        bar.style.display = '';
+        if (s.running) {
+          bar.innerHTML = `⏳ <strong>Historical import running…</strong> creating billing records for existing calls.`;
+        } else if (s.done) {
+          const im = s.summary || {};
+          bar.innerHTML = `✅ <strong>Historical import complete.</strong> ${s.historicalRecords} imported · ${s.totalRecords} total billing records.` +
+            (im.finalized != null ? ` (${im.finalized} priced, ${im.pending || 0} pending)` : '');
+        } else {
+          bar.innerHTML = `📥 Historical calls have not been imported yet. Click <strong>Import Historical Calls</strong> to fetch actual Twilio charges for all existing calls.`;
+        }
+      } catch (e) {
+        // 503 (table missing) or 403 — show a hint only for real errors
+        if (/not set up/i.test(e.message)) { bar.style.display = ''; bar.innerHTML = `⚠️ ${esc(e.message)}`; }
+        else bar.style.display = 'none';
+      }
+    }
+
+    async function blImportHistorical() {
+      const btn = document.getElementById('blImportBtn');
+      if (!confirm('Import billing for ALL existing calls? This fetches the actual Twilio price for each past call. It runs once and skips anything already imported.')) return;
+      try {
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ Importing…'; }
+        await api('/billing/backfill', { method: 'POST' });
+        toast('📥 Historical import started — records will appear live as they are priced.', 'success');
+        blLoadBackfillStatus();
+      } catch (e) {
+        toast('❌ ' + e.message, 'error');
+        if (btn) { btn.disabled = false; btn.textContent = '⤓ Import Historical Calls'; }
+      }
+    }
+
+    function blOnBackfillEvent(msg) {
+      const bar = document.getElementById('blBackfillBar');
+      const btn = document.getElementById('blImportBtn');
+      if (bar) {
+        bar.style.display = '';
+        if (msg.done) {
+          bar.innerHTML = `✅ <strong>Historical import complete.</strong> ${msg.created || 0} created (${msg.finalized || 0} priced, ${msg.pending || 0} pending), ${msg.skipped || 0} skipped.`;
+          if (btn) { btn.disabled = false; btn.textContent = '⤓ Import Historical Calls'; }
+          // Refresh the whole view now that rows exist
+          if ((document.querySelector('.view.active')?.id || '') === 'view-billing') loadBilling();
+        } else {
+          bar.innerHTML = `⏳ <strong>Importing…</strong> ${msg.processed || 0}/${msg.total || 0} calls (${msg.finalized || 0} priced).`;
+        }
+      }
+    }
+
+    async function blPopulateFilters() {
+      if (_blFiltersReady) return;
+      try {
+        if (!CAMPAIGNS.length) { try { const d = await api('/campaigns'); CAMPAIGNS = d.campaigns || []; } catch (_) {} }
+        const cSel = document.getElementById('blCampaign');
+        if (cSel) cSel.innerHTML = '<option value="">All campaigns</option>' +
+          CAMPAIGNS.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+        if (blIsAdmin()) {
+          try {
+            const counselors = await api('/counselors');
+            const sel = document.getElementById('blCounselor');
+            if (sel) sel.innerHTML = '<option value="">All counselors</option>' +
+              (counselors || []).map(c => `<option value="${c.id}">${esc(c.fullName || c.email)}</option>`).join('');
+          } catch (_) {}
+        }
+        _blFiltersReady = true;
+      } catch (_) {}
+    }
+
+    function blResetFilters() {
+      ['blFrom', 'blTo', 'blCampaign', 'blCounselor', 'blStatus', 'blCostMin', 'blCostMax', 'blSearch']
+        .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+      blApplyFilters();
+    }
+    function blDebouncedSearch() { clearTimeout(_blSearchTimer); _blSearchTimer = setTimeout(blApplyFilters, 350); }
+    function blApplyFilters() { blState.page = 1; loadBillingTable(); }
+
+    function blFilterQuery() {
+      const p = new URLSearchParams();
+      const g = id => (document.getElementById(id)?.value || '').trim();
+      if (g('blFrom')) p.set('dateFrom', g('blFrom'));
+      if (g('blTo')) p.set('dateTo', g('blTo') + 'T23:59:59');
+      if (g('blCampaign')) p.set('campaignId', g('blCampaign'));
+      if (g('blCounselor')) p.set('counselorId', g('blCounselor'));
+      if (g('blStatus')) p.set('status', g('blStatus'));
+      if (g('blCostMin')) p.set('costMin', g('blCostMin'));
+      if (g('blCostMax')) p.set('costMax', g('blCostMax'));
+      if (g('blSearch')) p.set('search', g('blSearch'));
+      return p;
+    }
+
+    function blSort(col) {
+      if (blState.sortBy === col) blState.sortDir = blState.sortDir === 'asc' ? 'desc' : 'asc';
+      else { blState.sortBy = col; blState.sortDir = 'desc'; }
+      loadBillingTable();
+    }
+    function blGoPage(p) { blState.page = p; loadBillingTable(); }
+    function blSetPageSize(v) { blState.pageSize = parseInt(v) || 25; blState.page = 1; loadBillingTable(); }
+
+    async function loadBillingTable() {
+      const tbody = document.getElementById('blTableBody');
+      if (!tbody) return;
+      const colspan = blIsAdmin() ? 11 : 10;
+      tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center;padding:24px;color:var(--muted)">Loading…</td></tr>`;
+      try {
+        const p = blFilterQuery();
+        p.set('page', blState.page); p.set('pageSize', blState.pageSize);
+        p.set('sortBy', blState.sortBy); p.set('sortDir', blState.sortDir);
+        const res = await api('/billing?' + p.toString());
+        blRenderRows(res.rows || []);
+        blRenderPager(res.total || 0, res.page || 1, res.pageSize || blState.pageSize);
+        const cnt = document.getElementById('blCount');
+        if (cnt) cnt.textContent = `${res.total || 0} record${(res.total || 0) === 1 ? '' : 's'}`;
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center;padding:24px;color:var(--danger)">${esc(e.message)}</td></tr>`;
+      }
+    }
+
+    function blRenderRows(rows) {
+      const tbody = document.getElementById('blTableBody');
+      const admin = blIsAdmin();
+      const colspan = admin ? 11 : 10;
+      if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center;padding:24px;color:var(--muted)">No billing records match your filters.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = rows.map(r => {
+        const priceCell = r.twilio_price != null
+          ? `<strong>${blMoney(r.twilio_price, r.currency)}</strong>`
+          : `<span class="bl-badge pending">pending</span>`;
+        return `<tr>
+          <td data-label="Date">${r.created_at ? new Date(r.created_at).toLocaleString() : '—'}</td>
+          <td data-label="Student"><strong>${esc(r.student_name || '—')}</strong></td>
+          <td data-label="Parent">${esc(r.parent_name || '—')}</td>
+          <td data-label="Campaign">${esc(r.campaign_name || 'Demo / Unassigned')}</td>
+          ${admin ? `<td class="bl-col-counselor" data-label="Counselor">${esc(r.counselor_id ? (r.counselor_id.slice(0, 8) + '…') : '—')}</td>` : ''}
+          <td data-label="Phone" style="font-family:monospace;font-size:12px">${esc(r.phone_number || r.to_number || '—')}</td>
+          <td data-label="Duration">${blFmtDuration(r.duration_seconds)}</td>
+          <td data-label="Cost">${priceCell}</td>
+          <td data-label="Status">${blStatusBadge(r.call_status)}</td>
+          <td data-label="Call SID" style="font-family:monospace;font-size:11px;color:var(--muted)">${esc((r.call_sid || '').slice(0, 12))}…</td>
+          <td data-label=""><button class="bl-pill-btn" onclick="openBillingDetail('${r.id}')">Details</button></td>
+        </tr>`;
+      }).join('');
+    }
+
+    function blRenderPager(total, page, pageSize) {
+      const pager = document.getElementById('blPager');
+      if (!pager) return;
+      const pages = Math.max(1, Math.ceil(total / pageSize));
+      const from = total ? (page - 1) * pageSize + 1 : 0;
+      const to = Math.min(total, page * pageSize);
+      pager.innerHTML = `
+        <div style="font-size:12px;color:var(--muted)">Showing ${from}–${to} of ${total}</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="bl-pill-btn" ${page <= 1 ? 'disabled' : ''} onclick="blGoPage(1)">« First</button>
+          <button class="bl-pill-btn" ${page <= 1 ? 'disabled' : ''} onclick="blGoPage(${page - 1})">‹ Prev</button>
+          <span style="font-size:12px;color:var(--muted)">Page ${page} / ${pages}</span>
+          <button class="bl-pill-btn" ${page >= pages ? 'disabled' : ''} onclick="blGoPage(${page + 1})">Next ›</button>
+          <button class="bl-pill-btn" ${page >= pages ? 'disabled' : ''} onclick="blGoPage(${pages})">Last »</button>
+          <select class="bl-input" style="padding:4px 8px" onchange="blSetPageSize(this.value)">
+            ${[25, 50, 100, 200].map(n => `<option value="${n}" ${n === pageSize ? 'selected' : ''}>${n}/pg</option>`).join('')}
+          </select>
+        </div>`;
+    }
+
+    async function blLoadAnalytics() {
+      try {
+        const a = await api('/billing/analytics');
+        _blReports = a.reports || { daily: [], weekly: [], monthly: [] };
+        blRenderSummary(a.summary || {});
+        blRenderCharts(a.charts || {});
+        blRenderCampaignBilling(a.byCampaign || []);
+        if (blIsAdmin()) blRenderCounselorBilling(a.byCounselor || []);
+        blRenderReport();
+      } catch (e) {
+        const s = document.getElementById('blSummary');
+        if (s) s.innerHTML = `<div class="bl-card" style="grid-column:1/-1;color:var(--danger)">${esc(e.message)}</div>`;
+      }
+    }
+
+    function blCard(label, val, sub) {
+      return `<div class="bl-card"><div class="bl-card-label">${label}</div><div class="bl-card-val">${val}</div>${sub ? `<div class="bl-card-sub">${sub}</div>` : ''}</div>`;
+    }
+    function blRenderSummary(s) {
+      const cur = s.currency || 'USD';
+      const el = document.getElementById('blSummary');
+      if (!el) return;
+      el.innerHTML =
+        blCard('Cost Today', blMoney(s.costToday, cur)) +
+        blCard('Cost This Week', blMoney(s.costWeek, cur)) +
+        blCard('Cost This Month', blMoney(s.costMonth, cur)) +
+        blCard('Cost This Year', blMoney(s.costYear, cur)) +
+        blCard('Lifetime Cost', blMoney(s.lifetimeCost, cur)) +
+        blCard('Avg Cost / Call', blMoney(s.avgCostPerCall, cur)) +
+        blCard('Avg Cost / Minute', blMoney(s.avgCostPerMinute, cur)) +
+        blCard('Total Call Minutes', (s.totalMinutes || 0).toLocaleString()) +
+        blCard('Total Calls', (s.totalCalls || 0).toLocaleString(), s.pendingCount ? `${s.pendingCount} pending price` : '') +
+        blCard('Answered', (s.answeredCalls || 0).toLocaleString()) +
+        blCard('Failed', (s.failedCalls || 0).toLocaleString()) +
+        blCard('Voicemail', (s.voicemailCalls || 0).toLocaleString());
+    }
+
+    function blRenderCharts(c) {
+      const spendOpts = blBaseOpts();
+      // Daily spend (line)
+      blMakeChart('daily', 'blChartDaily', {
+        type: 'line',
+        data: { labels: (c.daily || []).map(d => d.label), datasets: [{ label: 'Cost', data: (c.daily || []).map(d => d.cost), borderColor: BL_PALETTE[0], backgroundColor: 'rgba(59,130,246,.15)', fill: true, tension: .3, pointRadius: 2 }] },
+        options: spendOpts,
+      });
+      // Weekly spend (bar)
+      blMakeChart('weekly', 'blChartWeekly', {
+        type: 'bar',
+        data: { labels: (c.weekly || []).map(d => d.label), datasets: [{ label: 'Cost', data: (c.weekly || []).map(d => d.cost), backgroundColor: BL_PALETTE[1] }] },
+        options: blBaseOpts(),
+      });
+      // Monthly spend (bar)
+      blMakeChart('monthly', 'blChartMonthly', {
+        type: 'bar',
+        data: { labels: (c.monthly || []).map(d => d.label), datasets: [{ label: 'Cost', data: (c.monthly || []).map(d => d.cost), backgroundColor: BL_PALETTE[3] }] },
+        options: blBaseOpts(),
+      });
+      // Cost by campaign (horizontal bar)
+      blMakeChart('campaign', 'blChartCampaign', {
+        type: 'bar',
+        data: { labels: (c.costByCampaign || []).map(d => d.label), datasets: [{ label: 'Cost', data: (c.costByCampaign || []).map(d => d.totalCost), backgroundColor: (c.costByCampaign || []).map((_, i) => BL_PALETTE[i % BL_PALETTE.length]) }] },
+        options: blBaseOpts({ indexAxis: 'y' }),
+      });
+      // Cost by counselor (horizontal bar) — admin only
+      if (blIsAdmin()) {
+        blMakeChart('counselor', 'blChartCounselor', {
+          type: 'bar',
+          data: { labels: (c.costByCounselor || []).map(d => d.label), datasets: [{ label: 'Cost', data: (c.costByCounselor || []).map(d => d.totalCost), backgroundColor: (c.costByCounselor || []).map((_, i) => BL_PALETTE[i % BL_PALETTE.length]) }] },
+          options: blBaseOpts({ indexAxis: 'y' }),
+        });
+      }
+      // Cost by lead (horizontal bar)
+      blMakeChart('lead', 'blChartLead', {
+        type: 'bar',
+        data: { labels: (c.costByLead || []).map(d => d.label), datasets: [{ label: 'Cost', data: (c.costByLead || []).map(d => d.totalCost), backgroundColor: BL_PALETTE[4] }] },
+        options: blBaseOpts({ indexAxis: 'y' }),
+      });
+      // Cost vs Duration (scatter)
+      blMakeChart('costDur', 'blChartCostDuration', {
+        type: 'scatter',
+        data: { datasets: [{ label: 'Calls', data: (c.costVsDuration || []), backgroundColor: BL_PALETTE[0] }] },
+        options: blBaseOpts({
+          scales: {
+            x: { title: { display: true, text: 'Duration (s)', color: blAxisColor() }, ticks: { color: blAxisColor() }, grid: { color: blGridColor() } },
+            y: { title: { display: true, text: 'Cost', color: blAxisColor() }, ticks: { color: blAxisColor() }, grid: { color: blGridColor() }, beginAtZero: true },
+          },
+        }),
+      });
+      // Calls vs Cost + Avg cost/call (combo)
+      const ccLabels = (c.callsVsCost || []).map(d => d.label);
+      const avgMap = {}; (c.avgCostPerCall || []).forEach(d => { avgMap[d.label] = d.value; });
+      blMakeChart('callsCost', 'blChartCallsCost', {
+        type: 'bar',
+        data: {
+          labels: ccLabels,
+          datasets: [
+            { type: 'bar', label: 'Calls', data: (c.callsVsCost || []).map(d => d.calls), backgroundColor: 'rgba(59,130,246,.5)', yAxisID: 'y' },
+            { type: 'line', label: 'Cost', data: (c.callsVsCost || []).map(d => d.cost), borderColor: BL_PALETTE[1], yAxisID: 'y1', tension: .3, pointRadius: 2 },
+            { type: 'line', label: 'Avg $/Call', data: ccLabels.map(l => avgMap[l] || 0), borderColor: BL_PALETTE[2], borderDash: [4, 3], yAxisID: 'y1', tension: .3, pointRadius: 0 },
+          ],
+        },
+        options: blBaseOpts({
+          scales: {
+            x: { ticks: { color: blAxisColor(), font: { size: 10 } }, grid: { color: blGridColor() } },
+            y: { position: 'left', ticks: { color: blAxisColor() }, grid: { color: blGridColor() }, beginAtZero: true, title: { display: true, text: 'Calls', color: blAxisColor() } },
+            y1: { position: 'right', ticks: { color: blAxisColor() }, grid: { drawOnChartArea: false }, beginAtZero: true, title: { display: true, text: 'Cost', color: blAxisColor() } },
+          },
+        }),
+      });
+    }
+
+    function blRenderCampaignBilling(list) {
+      const tb = document.getElementById('blCampaignBody');
+      if (!tb) return;
+      if (!list.length) { tb.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>`; return; }
+      tb.innerHTML = list.map(g => `<tr>
+        <td><strong>${esc(g.label)}</strong></td>
+        <td>${g.totalCalls}</td><td>${g.totalMinutes}</td><td>${blFmtDuration(g.avgDuration)}</td>
+        <td><strong>${blMoney(g.totalCost)}</strong></td><td>${blMoney(g.avgCostPerCall)}</td><td>${blMoney(g.avgCostPerMinute)}</td>
+      </tr>`).join('');
+    }
+    function blRenderCounselorBilling(list) {
+      const tb = document.getElementById('blCounselorBody');
+      if (!tb) return;
+      if (!list.length) { tb.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>`; return; }
+      tb.innerHTML = list.map(g => `<tr>
+        <td><strong>${esc(g.label)}</strong></td>
+        <td>${g.totalCalls}</td><td>${g.totalMinutes}</td>
+        <td><strong>${blMoney(g.totalCost)}</strong></td><td>${blMoney(g.avgCostPerCall)}</td><td>${blFmtDuration(g.avgDuration)}</td>
+      </tr>`).join('');
+    }
+
+    let _blReports = { daily: [], weekly: [], monthly: [] };
+    function blRenderReport() {
+      const gran = document.getElementById('blReportGran')?.value || 'daily';
+      const rows = _blReports[gran] || [];
+      const tb = document.getElementById('blReportBody');
+      if (!tb) return;
+      if (!rows.length) { tb.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>`; return; }
+      tb.innerHTML = rows.slice().reverse().map(r => `<tr>
+        <td>${esc(r.label)}</td><td>${r.calls}</td><td>${r.minutes}</td><td><strong>${blMoney(r.cost)}</strong></td>
+      </tr>`).join('');
+    }
+
+    async function openBillingDetail(id) {
+      try {
+        const d = await api('/billing/' + id);
+        const b = d.billing || {};
+        document.getElementById('blDetailName').textContent = b.student_name || 'Call Detail';
+        document.getElementById('blDetailMeta').textContent =
+          `${b.campaign_name || 'Demo / Unassigned'} · ${b.created_at ? new Date(b.created_at).toLocaleString() : ''}`;
+
+        let body = `
+          <div class="section-title">💵 Billing</div>
+          <div class="detail-grid">
+            <div class="detail-cell"><div class="lbl">Twilio Cost</div><div class="val">${b.twilio_price != null ? '<strong>' + blMoney(b.twilio_price, b.currency) + '</strong>' : '<span class="bl-badge pending">pending</span>'}</div></div>
+            <div class="detail-cell"><div class="lbl">Currency</div><div class="val">${esc(b.currency || 'USD')}</div></div>
+            <div class="detail-cell"><div class="lbl">Billing Status</div><div class="val">${esc(b.billing_status || '—')}</div></div>
+            <div class="detail-cell"><div class="lbl">Call Status</div><div class="val">${blStatusBadge(b.call_status)}</div></div>
+            <div class="detail-cell"><div class="lbl">Duration</div><div class="val">${blFmtDuration(b.duration_seconds)} (${b.duration_minutes || 0} min billed)</div></div>
+            <div class="detail-cell"><div class="lbl">Per-Minute Rate</div><div class="val">${b.price_per_minute != null ? blMoney(b.price_per_minute, b.currency) : '—'}</div></div>
+            <div class="detail-cell"><div class="lbl">Direction</div><div class="val">${esc(b.direction || '—')}</div></div>
+            <div class="detail-cell"><div class="lbl">Source</div><div class="val">${b.source === 'historical-import' ? '<span class="bl-badge other">Historical Import</span>' : '<span class="bl-badge answered">Live</span>'}</div></div>
+            ${b.recording_sid ? `<div class="detail-cell"><div class="lbl">Recording SID</div><div class="val" style="font-family:monospace;font-size:11px">${esc(b.recording_sid)}</div></div>` : ''}
+          </div>
+
+          <div class="section-title">📇 Call Information</div>
+          <div class="detail-grid">
+            <div class="detail-cell"><div class="lbl">Student</div><div class="val">${esc(b.student_name || '—')}</div></div>
+            <div class="detail-cell"><div class="lbl">Parent</div><div class="val">${esc(b.parent_name || '—')}</div></div>
+            <div class="detail-cell"><div class="lbl">Phone</div><div class="val" style="font-family:monospace">${esc(b.phone_number || '—')}</div></div>
+            <div class="detail-cell"><div class="lbl">From → To</div><div class="val" style="font-family:monospace;font-size:12px">${esc(b.from_number || '—')} → ${esc(b.to_number || '—')}</div></div>
+            <div class="detail-cell"><div class="lbl">Campaign</div><div class="val">${esc(b.campaign_name || 'Demo / Unassigned')}</div></div>
+            <div class="detail-cell"><div class="lbl">Call SID</div><div class="val" style="font-family:monospace;font-size:11px">${esc(b.call_sid || '—')}</div></div>
+          </div>`;
+
+        if (d.timeline && d.timeline.length) {
+          body += `<div class="section-title">🕓 Timeline</div><div style="margin-bottom:12px">` +
+            d.timeline.map(t => `<div style="display:flex;gap:10px;font-size:13px;padding:4px 0"><span style="color:var(--muted);min-width:150px">${t.at ? new Date(t.at).toLocaleString() : '—'}</span><span>${esc(t.event)}</span></div>`).join('') +
+            `</div>`;
+        }
+
+        if (d.aiSummary) body += `<div class="section-title">🧠 AI Summary</div><div class="summary" style="white-space:pre-wrap;font-size:13px;line-height:1.6">${esc(d.aiSummary)}</div>`;
+
+        if (d.recordingUrl === 'FAILED') {
+          body += `<div class="section-title">🎙️ Recording</div><div style="color:#ef4444;font-size:13px">⚠️ Recording failed — Twilio could not capture audio.</div>`;
+        } else if (d.recordingUrl && d.leadId != null && d.attemptIndex != null) {
+          body += `<div class="section-title">🎙️ Recording</div>
+            <audio controls preload="none" data-rec="/api/leads/${d.leadId}/recording/${d.attemptIndex}" style="width:100%;border-radius:8px"></audio>`;
+        }
+
+        if (d.transcript) {
+          body += `<div class="section-title">📄 Transcript</div>
+            <div class="transcript" style="padding:12px;border-radius:8px;background:var(--bg);line-height:1.7;font-size:13px">` +
+            d.transcript.split('\n').map(line => {
+              if (line.startsWith('AI:')) return `<div style="margin-bottom:4px"><span style="color:#60a5fa;font-weight:600">AI:</span> ${esc(line.slice(3).trim())}</div>`;
+              if (line.startsWith('Caller:')) return `<div style="margin-bottom:4px"><span style="color:#34d399;font-weight:600">Caller:</span> ${esc(line.slice(7).trim())}</div>`;
+              return line.trim() ? `<div style="margin-bottom:4px;color:var(--muted)">${esc(line)}</div>` : '';
+            }).join('') + `</div>`;
+        }
+
+        document.getElementById('blDetailBody').innerHTML = body;
+        document.getElementById('billingDetailModal').classList.add('active');
+        hydrateRecordings();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+    function closeBillingDetail() { document.getElementById('billingDetailModal').classList.remove('active'); }
+
+    async function exportBilling(format) {
+      try {
+        const p = blFilterQuery();
+        const res = await fetch('/api/billing/export?' + p.toString(), {
+          headers: { 'Authorization': 'Bearer ' + (window._authToken || '') },
+        });
+        if (!res.ok) throw new Error('Export failed (' + res.status + ')');
+        const csvText = await res.text();
+        const stamp = new Date().toISOString().slice(0, 10);
+
+        if (format === 'csv') {
+          const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob); a.download = `billing-${stamp}.csv`; a.click();
+          URL.revokeObjectURL(a.href);
+          return;
+        }
+        const wb = XLSX.read(csvText, { type: 'string' });
+        if (format === 'xlsx') {
+          XLSX.writeFile(wb, `billing-${stamp}.xlsx`);
+          return;
+        }
+        if (format === 'pdf') {
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const aoa = XLSX.utils.sheet_to_json(ws, { header: 1 });
+          const [head, ...rows] = aoa;
+          const { jsPDF } = window.jspdf;
+          const doc = new jsPDF({ orientation: 'landscape' });
+          doc.setFontSize(13); doc.text('Billing Report — ' + stamp, 14, 14);
+          doc.autoTable({ head: [head], body: rows, startY: 20, styles: { fontSize: 6 }, headStyles: { fillColor: [59, 130, 246] } });
+          doc.save(`billing-${stamp}.pdf`);
+        }
+      } catch (e) { toast('Export error: ' + e.message, 'error'); }
+    }
+
     // Boot — auth required
     (async function boot() {
       await initAuth();
@@ -8663,13 +9332,28 @@
       let _sseRetry = 1000;
       function connectSSE() {
         try {
-          const sse = new EventSource('/api/crm/updates/stream');
+          // EventSource can't send Authorization headers — pass the JWT as a query param.
+          const url = '/api/crm/updates/stream?token=' + encodeURIComponent(window._authToken || '');
+          const sse = new EventSource(url);
           sse.onopen = () => { _sseRetry = 1000; };
           sse.onmessage = (e) => {
-            console.log('Real-time update received:', e.data);
-            // Targeted refresh — avoid reloading everything on every heartbeat
+            let msg = {};
+            try { msg = JSON.parse(e.data); } catch (_) {}
+            const activeView = document.querySelector('.view.active')?.id || '';
+
+            if (msg.type === 'billing-backfill') {
+              if (typeof blOnBackfillEvent === 'function') blOnBackfillEvent(msg);
+              return;
+            }
+            if (msg.type === 'billing-updated') {
+              // Live-refresh billing wherever it's visible
+              if (activeView === 'view-billing') loadBilling();
+              return;
+            }
+            // Default: targeted refresh for lead/meeting updates
             loadLeads();
             loadMeetings();
+            if (activeView === 'view-billing') loadBilling();
           };
           sse.onerror = () => {
             sse.close();

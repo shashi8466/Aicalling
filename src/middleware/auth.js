@@ -44,6 +44,44 @@ async function requireAuth(req, res, next) {
 }
 
 /**
+ * Same verification as requireAuth, but accepts the JWT from the `token` query
+ * param as well as the Authorization header. Needed for Server-Sent Events:
+ * the browser EventSource API cannot set custom headers, so the dashboard
+ * passes the Supabase access token as ?token=<jwt>.
+ */
+async function requireAuthQuery(req, res, next) {
+  try {
+    const header = req.headers.authorization;
+    const token = (header && header.startsWith('Bearer '))
+      ? header.slice(7)
+      : (req.query.token || '');
+
+    if (!token) return res.status(401).json({ error: 'Authentication required' });
+
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      return res.status(401).json({ error: 'Invalid or expired session — please log in again' });
+    }
+
+    const { data: profile, error: profErr } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    if (profErr || !profile) return res.status(401).json({ error: 'User profile not found' });
+    if (!profile.is_active)  return res.status(403).json({ error: 'Your account is inactive or pending admin approval' });
+
+    req.user    = user;
+    req.profile = profile;
+    next();
+  } catch (e) {
+    logger.error('requireAuthQuery error', { msg: e.message });
+    res.status(500).json({ error: 'Authentication error' });
+  }
+}
+
+/**
  * Must be used AFTER requireAuth.
  * Rejects non-admin users with 403.
  */
@@ -54,4 +92,4 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-module.exports = { requireAuth, requireAdmin };
+module.exports = { requireAuth, requireAdmin, requireAuthQuery };
