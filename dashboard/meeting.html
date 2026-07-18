@@ -162,6 +162,16 @@ button { font-family: inherit; }
 
 #video-area.layout-speaker #speaker-stage { display: block; }
 
+/* Presentation mode: a screen share is active. It always wins the stage,
+   regardless of whichever gallery/speaker/multispeaker layout was picked manually. */
+#video-area.presenting #speaker-stage { display: block; background: #000; }
+#video-area.presenting #speaker-stage .ptile.screenshare video { object-fit: contain; background: #000; }
+#speaker-stage.zoom-manual { overflow: auto; }
+#speaker-stage.zoom-manual .ptile.screenshare video {
+  object-fit: none; width: auto; height: auto; max-width: none; max-height: none;
+  transform-origin: 0 0;
+}
+
 #video-grid {
   flex: 1 1 0; min-height: 0;
   display: grid; gap: 16px;
@@ -169,13 +179,32 @@ button { font-family: inherit; }
   align-items: stretch; justify-items: stretch;
   width: 100%; height: 100%;
 }
-#video-area.layout-speaker #video-grid {
+#video-area.layout-speaker #video-grid,
+#video-area.presenting #video-grid {
   flex: 0 0 140px; min-height: 140px; display: flex;
   overflow-x: auto; overflow-y: hidden; justify-content: center;
 }
-#video-area.layout-speaker #video-grid .ptile {
+#video-area.layout-speaker #video-grid .ptile,
+#video-area.presenting #video-grid .ptile {
   width: 220px; flex-shrink: 0; border-radius: 8px;
 }
+
+/* Stage controls (fit / 100% / zoom / fullscreen) — shown only while presenting */
+#stage-controls {
+  position: absolute; top: 12px; right: 12px; z-index: 15;
+  display: none; gap: 6px;
+  background: rgba(0,0,0,.55); backdrop-filter: blur(4px);
+  padding: 6px; border-radius: 10px;
+}
+#video-area.presenting #stage-controls { display: flex; }
+.stage-btn {
+  width: 36px; height: 36px; border: none; border-radius: 6px;
+  background: rgba(255,255,255,.08); color: #fff; cursor: pointer;
+  font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center;
+  transition: background .15s;
+}
+.stage-btn:hover { background: rgba(255,255,255,.22); }
+.stage-btn.active { background: var(--blue); color: #202124; }
 
 /* Participant Tile */
 .ptile {
@@ -520,9 +549,14 @@ button { font-family: inherit; }
     <!-- Video area -->
     <div id="video-area" class="layout-speaker">
       <div id="speaker-stage"></div>
+      <div id="stage-controls">
+        <button class="stage-btn" id="btn-zoom-fit" title="Fit to screen" onclick="stageZoomFit()">⤢</button>
+        <button class="stage-btn" id="btn-zoom-100" title="100% zoom" onclick="stageZoom100()">1:1</button>
+        <button class="stage-btn" title="Zoom out" onclick="stageZoomOut()">−</button>
+        <button class="stage-btn" title="Zoom in" onclick="stageZoomIn()">+</button>
+        <button class="stage-btn" title="Full screen" onclick="stageToggleFS()">⛶</button>
+      </div>
       <div id="video-grid"></div>
-      <!-- Self PiP (shown when >1 participant) -->
-      <div id="pip"><video id="pip-vid" autoplay muted playsinline></video><div class="pip-label" id="pip-lbl"></div></div>
     </div>
 
     <!-- Side panel -->
@@ -688,6 +722,11 @@ function prevToggleMic()  { window.__M && window.__M.prevMic();   }
 function prevToggleCam()  { window.__M && window.__M.prevCam();   }
 function toggleLayout()   { window.__M && window.__M.layoutToggle(); }
 function selectLayout(l)  { window.__M && window.__M.layoutSelect(l); }
+function stageZoomFit()   { window.__M && window.__M.zoomFit();    }
+function stageZoom100()   { window.__M && window.__M.zoom100();    }
+function stageZoomIn()    { window.__M && window.__M.zoomIn();     }
+function stageZoomOut()   { window.__M && window.__M.zoomOut();    }
+function stageToggleFS()  { window.__M && window.__M.fullscreen(); }
 </script>
 
 <script>
@@ -700,6 +739,7 @@ function $(id){ return document.getElementById(id); }
 /* ════ State ════ */
 var room=null, micOn=true, camOn=true, scrOn=false, handOn=false;
 var scrTrack=null, localName='', localSid='', isHost=false;
+var presentingSid=null, stageZoomMode='fit', stageZoomScale=1;
 var timerTick=null, t0=null, toastTimer=null, netTick=null;
 var panelOpen='', emojiOpen=false, layoutOpen=false, layoutMode='speaker';
 var myHandRaised=false;
@@ -898,19 +938,22 @@ function attachMedia(p,track){
       var scrSid = p.sid + '-screen';
       if(!tiles[scrSid]) {
         var grid=$('video-grid');
-        var tile=document.createElement('div'); tile.className='ptile dominant'; tile.dataset.sid=scrSid;
+        var tile=document.createElement('div'); tile.className='ptile screenshare dominant'; tile.dataset.sid=scrSid;
         var vid=document.createElement('video');
         vid.autoplay=true; vid.playsInline=true; vid.muted=true; /* screen shares usually muted locally */
         tile.appendChild(vid);
-        
+
         var info=document.createElement('div'); info.className='ptile-info';
         var nameSpan=document.createElement('span'); nameSpan.className='ptile-name'; nameSpan.textContent=p.name+"'s screen";
         info.appendChild(nameSpan); tile.appendChild(info);
-        
+
         grid.appendChild(tile);
         tiles[scrSid] = {tile:tile, video:vid, isScreen:true, ownerSid:p.sid};
       }
       track.attach(tiles[scrSid].video);
+      presentingSid = scrSid;
+      doStageZoom('fit');
+      toast((p.name||p.identity)+' started presenting');
       reflow();
     } else {
       track.attach(t.video); t.tile.classList.remove('cam-off');
@@ -935,6 +978,7 @@ function detachMedia(p,track){
         try{track.detach(tiles[scrSid].video);}catch(e){}
         tiles[scrSid].tile.remove();
         delete tiles[scrSid];
+        if(presentingSid===scrSid){ presentingSid=null; toast('Presentation ended'); }
         reflow();
       }
     } else {
@@ -1074,11 +1118,16 @@ function reflow(){
     if(tile.parentElement !== grid) grid.appendChild(tile);
   });
 
-  var scrSid = keys.find(function(sid){ return tiles[sid].isScreen; });
-  var dominantSid = scrSid || keys.find(function(sid){ return tiles[sid].tile.classList.contains('dominant'); });
+  if (presentingSid && tiles[presentingSid]) {
+    area.className = 'presenting';
+    if (stage) stage.appendChild(tiles[presentingSid].tile);
+    return;
+  }
+
+  var dominantSid = keys.find(function(sid){ return tiles[sid].tile.classList.contains('dominant'); });
   if(!dominantSid && keys.length > 0) dominantSid = keys.find(function(sid){ return sid !== localSid; }) || localSid;
 
-  var forceSpeaker = (layoutMode === 'speaker' || scrSid) && !isMobile;
+  var forceSpeaker = layoutMode === 'speaker' && !isMobile;
 
   if (forceSpeaker) {
     area.className = 'layout-speaker';
@@ -1150,6 +1199,37 @@ function syncCamUI(){
   var b=$('btn-cam'); if(!b) return;
   if(camOn){b.classList.remove('off');b.textContent='📷';}
   else{b.classList.add('off');b.textContent='🚫';}
+}
+
+/* ════ PRESENTATION STAGE — fit / 100% / zoom / fullscreen ════ */
+function doStageZoom(mode){
+  var stage=$('speaker-stage'); if(!stage||!presentingSid) return;
+  var t=tiles[presentingSid]; if(!t) return;
+  stageZoomMode=mode; stageZoomScale=1;
+  t.video.style.transform='';
+  stage.classList.toggle('zoom-manual', mode!=='fit');
+  syncStageControls();
+}
+function doStageZoomStep(dir){
+  var stage=$('speaker-stage'); if(!stage||!presentingSid) return;
+  var t=tiles[presentingSid]; if(!t) return;
+  stageZoomMode='manual';
+  stageZoomScale=Math.min(3,Math.max(0.25,stageZoomScale+dir*0.25));
+  stage.classList.add('zoom-manual');
+  t.video.style.transform='scale('+stageZoomScale+')';
+  syncStageControls();
+}
+function syncStageControls(){
+  var fitBtn=$('btn-zoom-fit'), oneBtn=$('btn-zoom-100');
+  if(fitBtn) fitBtn.classList.toggle('active', stageZoomMode==='fit');
+  if(oneBtn) oneBtn.classList.toggle('active', stageZoomMode==='100');
+}
+function doStageFullscreen(){
+  var stage=$('speaker-stage'); if(!stage) return;
+  try{
+    if(document.fullscreenElement){ document.exitFullscreen(); }
+    else if(stage.requestFullscreen){ stage.requestFullscreen(); }
+  }catch(e){}
 }
 
 function doScreen(){
@@ -1544,6 +1624,10 @@ document.addEventListener('click',function(e){
 /* ════ RESIZE / ROTATION LISTENER ════ */
 window.addEventListener('resize', reflow);
 
+/* ════ DOUBLE-CLICK STAGE TO FULLSCREEN ════ */
+var stageEl=$('speaker-stage');
+if(stageEl) stageEl.addEventListener('dblclick', doStageFullscreen);
+
 /* ════ WIRE GLOBAL STUBS ════ */
 window.__M={
   join:     doJoin,
@@ -1561,7 +1645,12 @@ window.__M={
   prevMic:  doPrevMic,
   prevCam:  doPrevCam,
   layoutToggle: doLayoutToggle,
-  layoutSelect: doLayoutSelect
+  layoutSelect: doLayoutSelect,
+  zoomFit:  function(){ doStageZoom('fit'); },
+  zoom100:  function(){ doStageZoom('100'); },
+  zoomIn:   function(){ doStageZoomStep(1); },
+  zoomOut:  function(){ doStageZoomStep(-1); },
+  fullscreen: doStageFullscreen
 };
 
 })(); /* end IIFE */
