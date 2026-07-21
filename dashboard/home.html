@@ -595,7 +595,7 @@ footer{ border-top:1px solid var(--border); padding:64px 0 32px;}
         <a href="/login" class="btn btn-ghost">Book Demo</a>
       </div>
       <div class="waveform">
-        <div class="waveform-label"><b>Live AI call</b>Speaking with Priya M.</div>
+        <div class="waveform-label"><b>Live AI call</b>Speaking with Shashi Kumar</div>
         <div class="wave-bars" id="heroWave"></div>
         <span class="pill-live">LIVE</span>
       </div>
@@ -613,8 +613,8 @@ footer{ border-top:1px solid var(--border); padding:64px 0 32px;}
       <div class="call-card">
         <div class="call-top">
           <div class="call-person">
-            <div class="call-avatar">PM</div>
-            <div><b>Priya M.</b><span>Prospective Student</span></div>
+            <div class="call-avatar">SK</div>
+            <div><b>Shashi Kumar</b><span>Prospective Student</span></div>
           </div>
           <span class="pill-live" id="callTimer">LIVE · 00:00</span>
         </div>
@@ -1120,7 +1120,7 @@ for (let i = 0; i < 40; i++) {
 
 /* ---------- LIVE CALL DIALOGUE SIMULATION ---------- */
 const dialogue = [
-  { speaker: 'ai', text: 'Hi Priya! I saw you registered for our SAT prep demo program. Are you looking to boost your score for university?' },
+  { speaker: 'ai', text: 'Hi Shashi! I saw you registered for our SAT prep demo program. Are you looking to boost your score for university?' },
   { speaker: 'student', text: 'Yeah, I am trying to get at least a 1450 to apply to UC schools.' },
   { speaker: 'ai', text: 'That\'s an excellent goal. We\'ve helped hundreds of students reach that range. Are you currently in your junior or senior year?' },
   { speaker: 'student', text: 'I\'m a junior, so I\'m taking the test this November.' },
@@ -1141,7 +1141,7 @@ function showNextLine() {
   const div = document.createElement('div');
   div.className = `tr-line ${line.speaker} reveal`;
   div.innerHTML = `
-    <span class="tr-tag">${line.speaker === 'ai' ? 'AI Agent' : 'Priya (Student)'}</span>
+    <span class="tr-tag">${line.speaker === 'ai' ? 'AI Agent' : 'Shashi (Student)'}</span>
     ${line.text}
   `;
   callTranscript.appendChild(div);
