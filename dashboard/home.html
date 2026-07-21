@@ -534,6 +534,21 @@ footer{ border-top:1px solid var(--border); padding:64px 0 32px;}
 }
 @media (max-width:720px){
   .navlinks{ display:none;}
+  .navlinks.mobile-open {
+    display: flex !important;
+    flex-direction: column;
+    position: absolute;
+    top: 70px;
+    left: 0;
+    right: 0;
+    background: rgba(8, 12, 22, 0.98);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    padding: 24px;
+    gap: 18px;
+    z-index: 100;
+    text-align: center;
+  }
   .burger{ display:flex;}
   .hero h1{ font-size:36px;}
   .wrap{ padding:0 20px;}
@@ -553,10 +568,10 @@ footer{ border-top:1px solid var(--border); padding:64px 0 32px;}
 <!-- ================= HEADER ================= -->
 <header>
   <div class="nav">
-    <div class="logo">
+    <a href="/" class="logo">
       <img src="/assets/logo.png" alt="Aiprep365" class="logo-img">
       <div>Aiprep365<span class="logo-sub">AI Admissions Agent</span></div>
-    </div>
+    </a>
     <nav class="navlinks">
       <a href="#features">Features</a>
       <a href="#workflow">Solutions</a>
@@ -768,10 +783,10 @@ footer{ border-top:1px solid var(--border); padding:64px 0 32px;}
   <div class="wrap">
     <div class="foot-grid">
       <div class="foot-brand">
-        <div class="logo">
+        <a href="/" class="logo">
           <img src="/assets/logo.png" alt="Aiprep365" class="logo-img">
           <div>Aiprep365</div>
-        </div>
+        </a>
         <p>AI voice calling, CRM, and analytics for admissions teams that don't want a lead to go quiet.</p>
       </div>
       <div class="foot-col">
@@ -1167,6 +1182,19 @@ const observer = new IntersectionObserver((entries) => {
 
 document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 
+/* ---------- BURGER MENU TOGGLE ---------- */
+const burger = document.querySelector('.burger');
+const navlinks = document.querySelector('.navlinks');
+if (burger && navlinks) {
+  burger.onclick = () => {
+    navlinks.classList.toggle('mobile-open');
+  };
+  navlinks.querySelectorAll('a').forEach(link => {
+    link.onclick = () => {
+      navlinks.classList.remove('mobile-open');
+    };
+  });
+}
 </script>
 </body>
 </html>
