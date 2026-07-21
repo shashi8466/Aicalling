@@ -30,7 +30,7 @@ module.exports = {
   brevo: {
     apiKey:    process.env.BREVO_API_KEY,
     fromEmail: process.env.BREVO_FROM_EMAIL || 'admissions@Aiprep365.com',
-    fromName:  process.env.BREVO_FROM_NAME  || 'Shashi Kumar – Aiprep365',
+    fromName:  process.env.BREVO_FROM_NAME  || 'Antra Kumar – Aiprep365',
   },
 
   google: {
@@ -60,7 +60,7 @@ module.exports = {
   },
 
   company: {
-    counselorName:  process.env.COUNSELOR_NAME  || 'Shashi Kumar',
+    counselorName:  process.env.COUNSELOR_NAME  || 'Antra Kumar',
     counselorEmail: process.env.COUNSELOR_EMAIL || process.env.BREVO_FROM_EMAIL || '',
     counselorPhone: process.env.COUNSELOR_PHONE || '',
     website:        process.env.COMPANY_WEBSITE || 'https://Aiprep365.com',

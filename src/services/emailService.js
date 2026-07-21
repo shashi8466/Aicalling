@@ -637,7 +637,7 @@ td{border-collapse:collapse}
     const c = cfg.company;
     return `
 <h2>Hi ${l.parentName || l.fullName}! 👋</h2>
-<p>Thank you for reaching out to <strong>Aiprep365</strong>! I'm <strong>Shashi Kumar</strong>, your dedicated Admissions Counselor, and I'm genuinely excited to help <strong>${l.fullName}</strong> reach their academic goals.</p>
+<p>Thank you for reaching out to <strong>Aiprep365</strong>! I'm <strong>Antra Kumar</strong>, your dedicated Admissions Counselor, and I'm genuinely excited to help <strong>${l.fullName}</strong> reach their academic goals.</p>
 
 <div class="box">
   📞 <strong>We'll be calling you shortly</strong> at <strong>${l.phone}</strong> to learn more and answer any questions.<br>
@@ -648,7 +648,7 @@ td{border-collapse:collapse}
   <div class="cell"><div class="lbl">Student</div><div class="val">${l.fullName}</div></div>
   <div class="cell"><div class="lbl">Grade</div><div class="val">${l.grade || 'To confirm'}</div></div>
   <div class="cell"><div class="lbl">Program</div><div class="val">${l.courseInterest || 'To discuss'}</div></div>
-  <div class="cell"><div class="lbl">Counselor</div><div class="val">Shashi Kumar</div></div>
+  <div class="cell"><div class="lbl">Counselor</div><div class="val">Antra Kumar</div></div>
 </div>
 
 ${this._programCards(l.courseInterest)}
@@ -656,7 +656,7 @@ ${this._programCards(l.courseInterest)}
 <a href="${c.website}" class="btn">Explore All Programs</a>
 
 <div class="sig">
-  <strong>Shashi Kumar</strong>
+  <strong>Antra Kumar</strong>
   Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}<br>
   🌐 <a href="${c.website}">${c.website}</a>
@@ -838,7 +838,7 @@ ${this._programCards(l.courseInterest)}
 ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">Join Video Meeting</a>` : ''}
 
 <div class="sig">
-  <strong>Shashi Kumar</strong>
+  <strong>Antra Kumar</strong>
   Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
 </div>`;
@@ -848,7 +848,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
     const c = cfg.company;
     return `
 <h2>We tried to reach you! 📞</h2>
-<p>Hi ${l.parentName || l.fullName}! I'm <strong>Shashi Kumar</strong> from Aiprep365. I recently called regarding <strong>${l.courseInterest || 'our test prep programs'}</strong> for ${l.fullName} but wasn't able to connect.</p>
+<p>Hi ${l.parentName || l.fullName}! I'm <strong>Antra Kumar</strong> from Aiprep365. I recently called regarding <strong>${l.courseInterest || 'our test prep programs'}</strong> for ${l.fullName} but wasn't able to connect.</p>
 
 <div class="box">
   📌 <strong>Let's find a time that works for you!</strong><br>
@@ -867,7 +867,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 <a href="mailto:${c.counselorEmail}?subject=Callback Request – ${l.fullName}" class="btn">Request a Callback</a>
 
 <div class="sig">
-  <strong>Shashi Kumar</strong>
+  <strong>Antra Kumar</strong>
   Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
 </div>`;
@@ -890,7 +890,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">Join Tomorrow's Video Meeting</a>` : ''}
 
 <div class="sig">
-  <strong>Shashi Kumar</strong>
+  <strong>Antra Kumar</strong>
   Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
 </div>`;
@@ -1027,7 +1027,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 </table>
 
 <div class="sig">
-  <strong>Shashi Kumar</strong>
+  <strong>Antra Kumar</strong>
   Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}<br>
   🌐 <a href="${site}">${site}</a>
@@ -1055,7 +1055,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 <a href="mailto:${c.counselorEmail}?subject=Parent Discussion – ${l.fullName}" class="btn">Schedule a Parent Discussion →</a>
 
 <div class="sig">
-  <strong>Shashi Kumar</strong>
+  <strong>Antra Kumar</strong>
   Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
 </div>`;
@@ -1093,7 +1093,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 <a href="${c.website}" class="btn">See All Programs & Pricing →</a>
 
 <div class="sig">
-  <strong>Shashi Kumar</strong>
+  <strong>Antra Kumar</strong>
   Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
 </div>`;
@@ -1124,7 +1124,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 <a href="mailto:${c.counselorEmail}?subject=Reserve Spot – ${l.fullName}" class="btn">Reserve ${l.fullName}'s Spot →</a>
 
 <div class="sig">
-  <strong>Shashi Kumar</strong>
+  <strong>Antra Kumar</strong>
   Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
 </div>`;
@@ -1154,7 +1154,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 <a href="mailto:${c.counselorEmail}?subject=Enrollment – ${l.fullName}" class="btn">Confirm Enrollment →</a>
 
 <div class="sig">
-  <strong>Shashi Kumar</strong>
+  <strong>Antra Kumar</strong>
   Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
 </div>`;
@@ -1164,7 +1164,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
     const c = cfg.company;
     return `
 <h2>Hi ${l.parentName || l.fullName}! I wanted to check in 👋</h2>
-<p>This is <strong>Shashi Kumar</strong> from Aiprep365. I've been following up because I genuinely believe ${l.fullName} has what it takes to hit an incredible score — and I don't want them to miss the window.</p>
+<p>This is <strong>Antra Kumar</strong> from Aiprep365. I've been following up because I genuinely believe ${l.fullName} has what it takes to hit an incredible score — and I don't want them to miss the window.</p>
 
 <div class="box">
   📌 <strong>Where ${l.fullName} stands right now:</strong><br><br>
@@ -1183,10 +1183,10 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 
 <p>I'd love to hop on a quick 15-minute call to answer any remaining questions. Just reply to this email or call me directly.</p>
 
-<a href="mailto:${c.counselorEmail}?subject=Quick Question – ${l.fullName}" class="btn">Reply to Shashi →</a>
+<a href="mailto:${c.counselorEmail}?subject=Quick Question – ${l.fullName}" class="btn">Reply to Antra →</a>
 
 <div class="sig">
-  <strong>Shashi Kumar</strong>
+  <strong>Antra Kumar</strong>
   Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}<br>
   🌐 <a href="${c.website}">${c.website}</a>
@@ -1216,7 +1216,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 <a href="mailto:${c.counselorEmail}?subject=Re: ${l.fullName} – Checking In" class="btn">Reconnect With Us →</a>
 
 <div class="sig">
-  <strong>Shashi Kumar</strong>
+  <strong>Antra Kumar</strong>
   Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}<br>
   🌐 <a href="${c.website}">${c.website}</a>
@@ -1247,7 +1247,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 <a href="${c.website}" class="btn">Enroll Now →</a>
 
 <div class="sig">
-  <strong>Shashi Kumar</strong>
+  <strong>Antra Kumar</strong>
   Admissions Counselor | Aiprep365<br>
   📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
 </div>`;

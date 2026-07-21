@@ -32,83 +32,187 @@
   --tbar-h:    80px;
   --panel-w:   360px;
   --r:         12px;
+  --grad1:     #8ab4f8;
+  --grad2:     #a78bfa;
+  --glass-bg:  rgba(40,42,45,0.55);
+  --glass-brd: rgba(255,255,255,0.09);
+  --glass-shadow: 0 8px 32px rgba(0,0,0,0.35);
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--txt); overflow: hidden; -webkit-font-smoothing: antialiased; }
 button { font-family: inherit; }
 
 /* ═══════════════════════════════════════════════════
-   JOIN SCREEN
+   PRE-JOIN SCREEN (premium)
 ═══════════════════════════════════════════════════ */
 #pg-join {
   display: flex; align-items: center; justify-content: center;
-  height: 100vh;
-  background: var(--bg);
+  min-height: 100vh; height: 100vh; overflow-y: auto;
+  padding: 32px 24px;
+  background:
+    radial-gradient(1200px 600px at 12% -10%, rgba(138,180,248,0.10), transparent 60%),
+    radial-gradient(1000px 600px at 100% 110%, rgba(167,139,250,0.10), transparent 60%),
+    var(--bg);
 }
-.join-wrap { display: flex; gap: 48px; align-items: center; width: min(900px, 96vw); }
-.join-preview {
-  flex: 1; min-width: 0;
-  background: #000; border-radius: 16px; overflow: hidden;
-  aspect-ratio: 16/9; position: relative;
+.pj-wrap {
+  display: grid; grid-template-columns: 65% 35%; gap: 24px;
+  width: min(1280px, 100%); max-height: calc(100vh - 64px);
+}
+.pj-left  { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.pj-right { display: flex; flex-direction: column; min-width: 0; }
+
+/* ─── Preview card ─── */
+.pj-preview {
+  position: relative; flex: 1 1 auto; min-height: 340px;
+  background: #000; border-radius: 20px; overflow: hidden;
+  box-shadow: var(--glass-shadow); border: 1px solid var(--glass-brd);
   display: flex; align-items: center; justify-content: center;
-  box-shadow: var(--shadow);
 }
-.join-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-.join-preview-off {
+.pj-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.pj-preview-off {
   position: absolute; inset: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
-  background: #202124;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  background: linear-gradient(160deg, #26282b, #1a1b1d);
 }
-.prev-av {
-  width: 90px; height: 90px; border-radius: 50%;
-  background: #3c4043;
+.pj-av {
+  width: 110px; height: 110px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--grad1), var(--grad2));
   display: flex; align-items: center; justify-content: center;
-  font-size: 32px; font-weight: 400; color: #fff;
+  font-size: 38px; font-weight: 600; color: #16171a;
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
 }
-.prev-btns {
-  position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
-  display: flex; gap: 16px;
+.pj-off-label { color: var(--txt2); font-size: .9rem; font-weight: 500; }
+.pj-enable-btn {
+  margin-top: 6px; padding: 10px 20px; border: none; border-radius: 24px;
+  background: linear-gradient(135deg, var(--grad1), var(--grad2)); color: #16171a;
+  font-weight: 600; font-size: .85rem; cursor: pointer; transition: transform .15s, box-shadow .15s;
 }
-.prev-btn {
-  width: 48px; height: 48px; border-radius: 50%; border: 1px solid var(--border); cursor: pointer;
-  display: flex; align-items: center; justify-content: center; font-size: 20px;
-  background: rgba(60,64,67,0.7); color: #fff; transition: background .15s;
-  backdrop-filter: blur(4px);
-}
-.prev-btn:hover { background: rgba(60,64,67,0.9); }
-.prev-btn.off { background: var(--red); border-color: transparent; }
-.prev-btn.off:hover { background: #d93025; }
+.pj-enable-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(138,180,248,.3); }
 
-.join-card {
-  display: flex; flex-direction: column;
-  width: 380px; flex-shrink: 0;
+.pj-preview-btns {
+  position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 14px; z-index: 2;
 }
-.join-card h1 { font-size: 2.2rem; font-weight: 400; margin-bottom: .5rem; }
-.join-card .sub { color: var(--txt2); font-size: 1rem; margin-bottom: 2rem; }
-.join-err {
-  background: rgba(234,67,53,.12); color: #f28b82; border-radius: 8px; padding: 12px;
-  font-size: .9rem; margin-bottom: 1.5rem; display: none;
+.pj-round-btn {
+  width: 52px; height: 52px; border-radius: 50%; border: 1px solid var(--glass-brd); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; font-size: 21px;
+  background: rgba(60,64,67,0.75); color: #fff; transition: background .15s, transform .15s;
+  backdrop-filter: blur(6px);
 }
-.join-input {
-  display: block; width: 100%; padding: 14px 16px;
-  background: transparent; border: 1px solid #5f6368;
-  border-radius: 4px; color: var(--txt); font-size: 1rem;
-  margin-bottom: 1.5rem; transition: border-color .2s;
-}
-.join-input:focus { outline: none; border-color: var(--blue); border-width: 2px; padding: 13px 15px; }
-.join-btn {
-  display: block; padding: 12px 24px; width: fit-content;
-  background: var(--blue); color: #202124; border: none;
-  border-radius: 24px; font-size: .95rem; font-weight: 500;
-  cursor: pointer; transition: background .15s;
-}
-.join-btn:hover:not(:disabled) { background: #aecbfa; }
-.join-btn:disabled { opacity: .5; cursor: not-allowed; }
+.pj-round-btn:hover { background: rgba(60,64,67,0.95); transform: translateY(-1px); }
+.pj-round-btn.off { background: var(--red); border-color: transparent; }
+.pj-round-btn.off:hover { background: #d93025; }
 
-@media (max-width: 768px) {
-  .join-wrap { flex-direction: column; }
-  .join-card { width: 100%; align-items: center; text-align: center; }
-  .join-btn { width: 100%; }
+.pj-mic-meter {
+  display: flex; align-items: flex-end; gap: 2px; height: 24px;
+}
+.pj-mic-meter div { width: 3px; border-radius: 2px; background: rgba(255,255,255,.25); transition: background .1s, height .07s; height: 4px; }
+
+/* ─── Device controls card ─── */
+.pj-devices {
+  background: var(--glass-bg); backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-brd); border-radius: 18px;
+  box-shadow: var(--glass-shadow);
+  padding: 14px 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+}
+.pj-ctrl {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(255,255,255,.05); border: 1px solid var(--glass-brd);
+  border-radius: 12px; padding: 8px 12px; font-size: .8rem; color: var(--txt);
+  transition: background .15s;
+}
+.pj-ctrl:hover { background: rgba(255,255,255,.09); }
+.pj-ctrl select {
+  background: transparent; border: none; color: var(--txt); font-size: .78rem;
+  max-width: 130px; cursor: pointer; outline: none;
+}
+.pj-ctrl select option { background: var(--bg2); color: var(--txt); }
+.pj-toggle-chip {
+  display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
+  background: rgba(255,255,255,.05); border: 1px solid var(--glass-brd);
+  border-radius: 12px; padding: 8px 14px; font-size: .8rem; color: var(--txt2);
+  transition: all .15s;
+}
+.pj-toggle-chip:hover { background: rgba(255,255,255,.09); color: var(--txt); }
+.pj-toggle-chip.active { background: linear-gradient(135deg, var(--grad1), var(--grad2)); color: #16171a; border-color: transparent; font-weight: 600; }
+.pj-toggle-chip.disabled { opacity: .4; cursor: not-allowed; pointer-events: none; }
+.pj-ctrl-note { font-size: .7rem; color: var(--txt2); width: 100%; }
+
+/* ─── Right info panel ─── */
+.pj-info {
+  flex: 1; display: flex; flex-direction: column;
+  background: var(--glass-bg); backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-brd); border-radius: 20px;
+  box-shadow: var(--glass-shadow);
+  padding: 26px; overflow-y: auto; gap: 18px;
+}
+.pj-brand { display: flex; align-items: center; gap: 10px; }
+.pj-brand img { height: 28px; width: auto; }
+.pj-brand-txt { display: flex; flex-direction: column; }
+.pj-brand-txt b { font-size: .85rem; font-weight: 600; }
+.pj-brand-txt span { font-size: .68rem; color: var(--txt2); }
+
+.pj-title { font-size: 1.55rem; font-weight: 600; letter-spacing: -.01em; }
+.pj-subtitle { color: var(--txt2); font-size: .86rem; margin-top: -12px; }
+
+.pj-meta { display: flex; flex-direction: column; gap: 10px; }
+.pj-meta-row { display: flex; justify-content: space-between; align-items: baseline; font-size: .85rem; gap: 12px; }
+.pj-meta-row .lbl { color: var(--txt2); white-space: nowrap; }
+.pj-meta-row .val { font-weight: 500; text-align: right; }
+.pj-chips { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.pj-chip { background: rgba(255,255,255,.07); border-radius: 20px; padding: 3px 10px; font-size: .72rem; }
+
+.pj-clock { font-size: .8rem; color: var(--txt2); }
+
+.pj-status {
+  display: flex; align-items: center; gap: 8px;
+  border-radius: 12px; padding: 10px 14px; font-size: .8rem; font-weight: 500;
+  background: rgba(129,201,149,.12); color: var(--green);
+  border: 1px solid rgba(129,201,149,.25); transition: all .2s;
+}
+.pj-status.warn { background: rgba(253,226,147,.12); color: var(--yellow); border-color: rgba(253,226,147,.25); }
+.pj-status.bad  { background: rgba(242,139,130,.12); color: var(--red2); border-color: rgba(242,139,130,.25); }
+
+.pj-err {
+  background: rgba(234,67,53,.12); color: #f28b82; border-radius: 10px; padding: 10px 14px;
+  font-size: .82rem; display: none;
+}
+
+.pj-name-lbl { font-size: .72rem; color: var(--txt2); font-weight: 500; display: block; margin-bottom: 6px; }
+.pj-input {
+  display: block; width: 100%; padding: 12px 14px;
+  background: rgba(255,255,255,.05); border: 1px solid var(--glass-brd);
+  border-radius: 10px; color: var(--txt); font-size: .92rem;
+  transition: border-color .2s, background .2s;
+}
+.pj-input:focus { outline: none; border-color: var(--grad1); background: rgba(255,255,255,.08); }
+
+.pj-join-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 15px 24px; border: none;
+  background: linear-gradient(135deg, var(--grad1), var(--grad2));
+  color: #16171a; border-radius: 14px; font-size: 1rem; font-weight: 700;
+  cursor: pointer; transition: transform .15s, box-shadow .15s, opacity .15s;
+  box-shadow: 0 8px 20px rgba(138,180,248,.25);
+}
+.pj-join-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 26px rgba(138,180,248,.35); }
+.pj-join-btn:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+
+.pj-quick-join { display: flex; gap: 16px; justify-content: center; }
+.pj-quick-join button {
+  background: none; border: none; color: var(--txt2); font-size: .78rem;
+  cursor: pointer; text-decoration: underline; text-underline-offset: 3px; padding: 4px;
+}
+.pj-quick-join button:hover { color: var(--txt); }
+
+.pj-foot { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+.pj-foot-row { display: flex; justify-content: space-between; font-size: .7rem; color: var(--txt2); gap: 8px; }
+.pj-foot-powered { text-align: center; font-size: .7rem; color: var(--txt2); padding-top: 10px; border-top: 1px solid var(--glass-brd); }
+
+@media (max-width: 900px) {
+  #pg-join { height: auto; min-height: 100vh; padding: 20px 16px; }
+  .pj-wrap { grid-template-columns: 1fr; max-height: none; }
+  .pj-preview { min-height: 260px; }
 }
 
 /* ═══════════════════════════════════════════════════
@@ -520,34 +624,97 @@ button { font-family: inherit; }
 
 <!-- ═══════════════════════════ JOIN ═══════════════════════════ -->
 <div id="pg-join">
-  <div class="join-wrap">
+  <div class="pj-wrap">
 
-    <!-- Camera preview -->
-    <div class="join-preview" id="prev-wrap">
-      <video id="prev-vid" autoplay muted playsinline></video>
-      <div class="join-preview-off" id="prev-off">
-        <div class="prev-av" id="prev-ini">?</div>
-        <span style="font-size:.78rem;color:#888">Camera is off</span>
+    <!-- ─── Left: preview + device controls ─── -->
+    <div class="pj-left">
+      <div class="pj-preview" id="prev-wrap">
+        <video id="prev-vid" autoplay muted playsinline></video>
+        <video id="pj-raw-vid" autoplay muted playsinline style="display:none"></video>
+        <canvas id="pj-fx-canvas" style="display:none"></canvas>
+
+        <div class="pj-preview-off" id="prev-off">
+          <div class="pj-av" id="prev-ini">?</div>
+          <span class="pj-off-label" id="pj-off-label">Camera is off</span>
+          <button class="pj-enable-btn" id="pj-enable-btn" style="display:none" onclick="pjRequestPermissions()">Enable Camera</button>
+        </div>
+
+        <div class="pj-preview-btns">
+          <button class="pj-round-btn" id="prev-mic" title="Toggle mic" onclick="prevToggleMic()">🎤</button>
+          <div class="pj-mic-meter" id="pj-mic-meter" title="Microphone level">
+            <div></div><div></div><div></div><div></div><div></div>
+          </div>
+          <button class="pj-round-btn" id="prev-cam" title="Toggle camera" onclick="prevToggleCam()">📷</button>
+        </div>
       </div>
-      <div class="prev-btns">
-        <button class="prev-btn" id="prev-mic" title="Toggle mic" onclick="prevToggleMic()">🎤</button>
-        <button class="prev-btn" id="prev-cam" title="Toggle camera" onclick="prevToggleCam()">📷</button>
+
+      <div class="pj-devices">
+        <label class="pj-ctrl" title="Camera">📷 <select id="pj-sel-cam"></select></label>
+        <label class="pj-ctrl" title="Microphone">🎙️ <select id="pj-sel-mic"></select></label>
+        <label class="pj-ctrl" id="pj-spk-ctrl" title="Speaker">🔊 <select id="pj-sel-spk"></select></label>
+
+        <button class="pj-toggle-chip" id="pj-test-spk-btn" onclick="pjTestSpeaker()">▶ Test Speaker</button>
+        <button class="pj-toggle-chip" id="pj-chip-noise" onclick="pjToggleNoise()">🧹 Noise Cancellation</button>
+        <button class="pj-toggle-chip" id="pj-chip-blur" onclick="pjToggleBlur()">🌫️ Background Blur</button>
+        <button class="pj-toggle-chip" id="pj-chip-vbg" onclick="pjCycleVirtualBg()">🖼️ Virtual Background: Off</button>
+
+        <div class="pj-ctrl-note" id="pj-spk-note" style="display:none">Speaker selection isn't supported in this browser — audio will play on your system default output.</div>
+        <div class="pj-ctrl-note" id="pj-fx-note" style="display:none">Background effects couldn't load — check your connection and reload to try again.</div>
       </div>
     </div>
 
-    <!-- Join card -->
-    <div class="join-card">
-      <h1>Consultation</h1>
-      <p class="sub">Ready to join the session?</p>
+    <!-- ─── Right: meeting info + join ─── -->
+    <div class="pj-right">
+      <div class="pj-info">
 
-      <div id="join-err" class="join-err"></div>
+        <div class="pj-brand">
+          <img src="/assets/logo.png" alt="AIPrep365" onerror="this.style.display='none'" />
+          <div class="pj-brand-txt">
+            <b>AIPrep365</b>
+            <span>Secure End-to-End Meeting</span>
+          </div>
+        </div>
 
-      <label style="font-size:.75rem;color:var(--txt2);font-weight:500;display:block;margin-bottom:5px">Your name</label>
-      <input id="name-in" class="join-input" type="text" placeholder="Enter your full name" autocomplete="name" maxlength="60" />
+        <div>
+          <div class="pj-title">Consultation Session</div>
+          <p class="pj-subtitle">Ready to join the session?</p>
+        </div>
 
-      <button id="join-btn" class="join-btn" onclick="joinMeeting()">Join Now</button>
-      <p class="join-note">Your camera and microphone will be activated when you join.</p>
+        <div class="pj-meta">
+          <div class="pj-meta-row"><span class="lbl">Hosted by</span><span class="val">AIPrep365 Admissions Team</span></div>
+          <div class="pj-meta-row"><span class="lbl">Meeting Type</span><span class="val">Online Consultation</span></div>
+          <div class="pj-meta-row"><span class="lbl">Duration</span><span class="val">30 Minutes</span></div>
+          <div class="pj-meta-row"><span class="lbl">Participants</span><span class="pj-chips">
+            <span class="pj-chip">Counselor</span><span class="pj-chip">Student</span><span class="pj-chip">Parent</span>
+          </span></div>
+        </div>
+
+        <div class="pj-clock" id="pj-clock"></div>
+
+        <div class="pj-status" id="pj-status">🟢 Ready to Join</div>
+
+        <div id="join-err" class="pj-err"></div>
+
+        <div>
+          <label class="pj-name-lbl" for="name-in">Your name</label>
+          <input id="name-in" class="pj-input" type="text" placeholder="Enter your full name" autocomplete="name" maxlength="60" />
+        </div>
+
+        <button id="join-btn" class="pj-join-btn" onclick="joinMeeting()">Join Meeting</button>
+
+        <div class="pj-quick-join">
+          <button onclick="pjJoinWithout('cam')">Join without Camera</button>
+          <button onclick="pjJoinWithout('mic')">Join without Microphone</button>
+        </div>
+
+        <div class="pj-foot">
+          <div class="pj-foot-row"><span id="pj-net-status">🟡 Checking network…</span><span id="pj-browser-status">Checking browser…</span></div>
+          <div class="pj-foot-powered">Powered by AIPrep365</div>
+        </div>
+
+      </div>
     </div>
+
   </div>
 </div>
 
@@ -724,9 +891,37 @@ button { font-family: inherit; }
 })();
 </script>
 
+<!-- MediaPipe Selfie Segmentation — jsDelivr primary, unpkg fallback. Best-effort only:
+     if it fails to load, background blur/virtual background simply stay unavailable
+     (see pj-fx-note) — everything else on the page keeps working. -->
+<script>
+(function(){
+  var SRCS=[
+    'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js',
+    'https://unpkg.com/@mediapipe/selfie_segmentation/selfie_segmentation.js'
+  ];
+  var i=0;
+  function load(){
+    if(i>=SRCS.length){ window.__pjSegFailed=true; return; }
+    var s=document.createElement('script');
+    s.src=SRCS[i++];
+    s.onload=function(){console.log('[MediaPipe] Loaded:',s.src);};
+    s.onerror=function(){console.warn('[MediaPipe] Failed:',s.src);load();};
+    document.head.appendChild(s);
+  }
+  load();
+})();
+</script>
+
 <!-- Global onclick stubs — defined before IIFE so they are ALWAYS available -->
 <script>
 function joinMeeting()    { window.__M && window.__M.join();      }
+function pjRequestPermissions() { window.__M && window.__M.reqPerms();    }
+function pjTestSpeaker()        { window.__M && window.__M.testSpk();     }
+function pjToggleNoise()        { window.__M && window.__M.toggleNoise(); }
+function pjToggleBlur()         { window.__M && window.__M.toggleBlur();  }
+function pjCycleVirtualBg()     { window.__M && window.__M.cycleVbg();    }
+function pjJoinWithout(kind)    { window.__M && window.__M.joinWithout(kind); }
 function toggleMic()      { window.__M && window.__M.mic();       }
 function toggleCamera()   { window.__M && window.__M.cam();       }
 function toggleScreen()   { window.__M && window.__M.screen();    }
@@ -767,6 +962,17 @@ var panelOpen='', emojiOpen=false, layoutOpen=false, layoutMode='speaker';
 var myHandRaised=false;
 var prevMicOn=true, prevCamOn=true, prevStream=null;
 
+/* ════ Pre-join premium panel state ════ */
+var pjCamId=null, pjMicId=null, pjSpkId=null;
+var pjNoiseSuppress=true;
+var pjBgMode='off'; /* 'off' | 'blur' | 'vbg1' | 'vbg2' */
+var pjVbgLabels={off:'Off', blur:'Blur', vbg1:'Office', vbg2:'Gradient'};
+var pjFxCanvas=null, pjFxCtx=null, pjFxRAF=null, pjFxTrack=null, pjFxStream=null;
+var pjSegmenter=null, pjSegmenterFailed=false, pjSegLoadAttempts=0;
+var pjMicCtx=null, pjMicAnalyser=null, pjMicRAF=null;
+var pjNetTick=null, pjClockTick=null;
+var pjCamPermission='unknown', pjMicPermission='unknown';
+
 /* Map: sid → { tile, video, info, hand, muted, camOff } */
 var tiles={};
 /* Map: sid → { name, mic, cam, hand, host } */
@@ -778,17 +984,102 @@ function startPreview(){
   if(nameIn) nameIn.addEventListener('input',function(){
     var ini=$('prev-ini'); if(ini) ini.textContent=initials(nameIn.value.trim()||'?');
   });
-  navigator.mediaDevices.getUserMedia({video:true,audio:false})
-    .then(function(s){
-      prevStream=s;
-      var v=$('prev-vid'); if(v){v.srcObject=s; v.style.display='block';}
-      $('prev-off').style.display='none';
-    }).catch(function(){/* camera denied */});
+
+  pjCamId=localStorage.getItem('pj.camId')||null;
+  pjMicId=localStorage.getItem('pj.micId')||null;
+  pjSpkId=localStorage.getItem('pj.spkId')||null;
+  pjNoiseSuppress=localStorage.getItem('pj.noiseSuppress')!=='0';
+  pjBgMode=localStorage.getItem('pj.bgMode')||'off';
+  pjSyncBgChips();
+  var noiseBtn=$('pj-chip-noise'); if(noiseBtn) noiseBtn.classList.toggle('active',pjNoiseSuppress);
+
+  pjInitClock();
+  pjInitBrowserCheck();
+  pjInitNetworkCheck();
+
+  pjAcquirePreviewStream()
+    .then(pjApplyStreamToPreview)
+    .catch(function(){
+      pjCamPermission='denied'; pjMicPermission='denied';
+      var off=$('prev-off'), vid=$('prev-vid'), enBtn=$('pj-enable-btn'), lbl=$('pj-off-label');
+      if(off) off.style.display='flex';
+      if(vid) vid.style.display='none';
+      if(enBtn) enBtn.style.display='inline-block';
+      if(lbl) lbl.textContent='Camera & microphone access needed';
+      pjUpdateStatus();
+    });
 }
 startPreview();
 
+/* ════ Pre-join: device acquisition ════ */
+function pjGetAudioConstraints(){
+  var c={noiseSuppression:pjNoiseSuppress, echoCancellation:true, autoGainControl:true};
+  if(pjMicId) c.deviceId={exact:pjMicId};
+  return c;
+}
+function pjAcquirePreviewStream(){
+  var wantVideo = pjCamId ? {deviceId:{exact:pjCamId}} : true;
+  return navigator.mediaDevices.getUserMedia({video:wantVideo, audio:pjGetAudioConstraints()})
+    .catch(function(){
+      /* stale/unavailable saved device id, or generic failure — retry with generic constraints */
+      return navigator.mediaDevices.getUserMedia({video:true, audio:{noiseSuppression:pjNoiseSuppress, echoCancellation:true, autoGainControl:true}});
+    })
+    .catch(function(){
+      return navigator.mediaDevices.getUserMedia({video:true, audio:false})
+        .then(function(s){ pjMicPermission='denied'; return s; });
+    })
+    .catch(function(){
+      return navigator.mediaDevices.getUserMedia({video:false, audio:true})
+        .then(function(s){ pjCamPermission='denied'; return s; });
+    });
+}
+function pjApplyStreamToPreview(s){
+  if(prevStream && prevStream!==s){ prevStream.getTracks().forEach(function(t){t.stop();}); }
+  prevStream=s;
+  pjStopMicMeter();
+
+  var vTrack=s.getVideoTracks()[0], aTrack=s.getAudioTracks()[0];
+  var hasVideo=!!vTrack, hasAudio=!!aTrack;
+  pjCamPermission = hasVideo ? 'granted' : 'denied';
+  pjMicPermission = hasAudio ? 'granted' : 'denied';
+  if(vTrack){ var vs=vTrack.getSettings(); if(vs.deviceId) pjCamId=vs.deviceId; }
+  if(aTrack){ var as=aTrack.getSettings(); if(as.deviceId) pjMicId=as.deviceId; }
+
+  s.getVideoTracks().forEach(function(t){ t.enabled=prevCamOn; });
+  s.getAudioTracks().forEach(function(t){ t.enabled=prevMicOn; });
+
+  if(hasAudio) pjStartMicMeter(s);
+
+  if(pjBgMode!=='off' && hasVideo){
+    pjStartFx(s);
+  } else {
+    pjStopFx();
+    var v=$('prev-vid'); if(v) v.srcObject=s;
+  }
+
+  var vid=$('prev-vid'), off=$('prev-off'), enBtn=$('pj-enable-btn'), lbl=$('pj-off-label');
+  if(hasVideo && prevCamOn){
+    if(vid) vid.style.display='block';
+    if(off) off.style.display='none';
+  } else {
+    if(vid) vid.style.display='none';
+    if(off) off.style.display='flex';
+    if(enBtn) enBtn.style.display = hasVideo ? 'none' : 'inline-block';
+    if(lbl) lbl.textContent = hasVideo ? 'Camera is off' : 'Camera permission needed';
+  }
+
+  pjUpdateStatus();
+  pjPopulateDeviceSelects();
+}
+function doPjRequestPermissions(){
+  pjAcquirePreviewStream().then(pjApplyStreamToPreview).catch(function(){
+    toast('Permission still denied — check your browser\'s site settings.');
+  });
+}
+
 function doPrevMic(){
   prevMicOn=!prevMicOn;
+  if(prevStream) prevStream.getAudioTracks().forEach(function(t){ t.enabled=prevMicOn; });
   var b=$('prev-mic'); if(!b) return;
   b.textContent=prevMicOn?'🎤':'🔇';
   b.classList.toggle('off',!prevMicOn);
@@ -801,8 +1092,284 @@ function doPrevCam(){
   var b=$('prev-cam'); if(!b) return;
   b.textContent=prevCamOn?'📷':'🚫';
   b.classList.toggle('off',!prevCamOn);
-  $('prev-vid').style.display=prevCamOn?'block':'none';
-  $('prev-off').style.display=prevCamOn?'none':'flex';
+  var vid=$('prev-vid'), off=$('prev-off');
+  if(vid) vid.style.display=prevCamOn?'block':'none';
+  if(off) off.style.display=prevCamOn?'none':'flex';
+}
+
+/* ════ Pre-join: device selects ════ */
+function pjPopulateDeviceSelects(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.enumerateDevices) return;
+  navigator.mediaDevices.enumerateDevices().then(function(devs){
+    pjFillSelect('pj-sel-cam', devs.filter(function(d){return d.kind==='videoinput';}), pjCamId, function(id){
+      pjCamId=id; localStorage.setItem('pj.camId',id);
+      pjAcquirePreviewStream().then(pjApplyStreamToPreview);
+    });
+    pjFillSelect('pj-sel-mic', devs.filter(function(d){return d.kind==='audioinput';}), pjMicId, function(id){
+      pjMicId=id; localStorage.setItem('pj.micId',id);
+      pjAcquirePreviewStream().then(pjApplyStreamToPreview);
+    });
+    pjFillSelect('pj-sel-spk', devs.filter(function(d){return d.kind==='audiooutput';}), pjSpkId, function(id){
+      pjSpkId=id; localStorage.setItem('pj.spkId',id);
+      var v=$('prev-vid'); if(v && v.setSinkId) v.setSinkId(id).catch(function(){});
+    });
+  }).catch(function(){});
+}
+function pjFillSelect(id, devs, selectedId, onChange){
+  var sel=$(id); if(!sel) return;
+  if(sel.dataset.wired!=='1'){
+    sel.addEventListener('change', function(){ onChange(sel.value); });
+    sel.dataset.wired='1';
+  }
+  sel.innerHTML = devs.length ? '' : '<option value="">No device found</option>';
+  devs.forEach(function(d,i){
+    var o=document.createElement('option');
+    o.value=d.deviceId; o.textContent=d.label || (id+' '+(i+1));
+    sel.appendChild(o);
+  });
+  if(selectedId && devs.some(function(d){return d.deviceId===selectedId;})) sel.value=selectedId;
+}
+
+/* ════ Pre-join: mic level meter ════ */
+function pjStartMicMeter(stream){
+  try{
+    var AudioCtx=window.AudioContext||window.webkitAudioContext;
+    if(!AudioCtx) return;
+    pjMicCtx=new AudioCtx();
+    var src=pjMicCtx.createMediaStreamSource(stream);
+    pjMicAnalyser=pjMicCtx.createAnalyser();
+    pjMicAnalyser.fftSize=256;
+    src.connect(pjMicAnalyser);
+    var data=new Uint8Array(pjMicAnalyser.frequencyBinCount);
+    var bars=document.querySelectorAll('#pj-mic-meter div');
+    function loop(){
+      if(!pjMicAnalyser) return;
+      pjMicAnalyser.getByteFrequencyData(data);
+      var sum=0; for(var i=0;i<data.length;i++) sum+=data[i];
+      var level=Math.min(1, (sum/data.length)/60);
+      bars.forEach(function(b,idx){
+        var thresh=(idx+1)/bars.length;
+        var active=level>=thresh;
+        b.style.height=(active?(6+idx*4):4)+'px';
+        b.style.background=active?'var(--green)':'rgba(255,255,255,.25)';
+      });
+      pjMicRAF=requestAnimationFrame(loop);
+    }
+    loop();
+  }catch(e){}
+}
+function pjStopMicMeter(){
+  if(pjMicRAF){ cancelAnimationFrame(pjMicRAF); pjMicRAF=null; }
+  if(pjMicCtx){ try{pjMicCtx.close();}catch(e){} pjMicCtx=null; }
+  pjMicAnalyser=null;
+}
+
+/* ════ Pre-join: noise cancellation ════ */
+function doPjToggleNoise(){
+  pjNoiseSuppress=!pjNoiseSuppress;
+  localStorage.setItem('pj.noiseSuppress', pjNoiseSuppress?'1':'0');
+  var b=$('pj-chip-noise'); if(b) b.classList.toggle('active', pjNoiseSuppress);
+  pjAcquirePreviewStream().then(pjApplyStreamToPreview);
+}
+
+/* ════ Pre-join: speaker test ════ */
+function doPjTestSpeaker(){
+  try{
+    var AudioCtx=window.AudioContext||window.webkitAudioContext;
+    var ctx=new AudioCtx();
+    var osc=ctx.createOscillator(), gain=ctx.createGain(), dest=ctx.createMediaStreamDestination();
+    osc.frequency.value=440; gain.gain.value=0.18;
+    osc.connect(gain); gain.connect(dest);
+    var audioEl=document.createElement('audio');
+    audioEl.srcObject=dest.stream; audioEl.autoplay=true;
+    var sinkP = (pjSpkId && audioEl.setSinkId) ? audioEl.setSinkId(pjSpkId).catch(function(){}) : Promise.resolve();
+    sinkP.then(function(){ osc.start(); });
+    toast('Playing test tone…');
+    setTimeout(function(){ try{osc.stop();}catch(e){} try{ctx.close();}catch(e){} audioEl.remove(); }, 900);
+  }catch(e){ toast('Could not play test tone.'); }
+}
+
+/* ════ Pre-join: network quality & browser compatibility ════ */
+function pjPingOnce(){
+  var t0=performance.now();
+  fetch('/health',{cache:'no-store'}).then(function(){
+    var ms=performance.now()-t0;
+    var el=$('pj-net-status'); if(!el) return;
+    if(ms<150) el.textContent='🟢 Network: Good';
+    else if(ms<400) el.textContent='🟡 Network: Fair';
+    else el.textContent='🟠 Network: Slow';
+  }).catch(function(){
+    var el=$('pj-net-status'); if(el) el.textContent='🔴 Network: Offline';
+  });
+}
+function pjInitNetworkCheck(){
+  pjPingOnce();
+  pjNetTick=setInterval(pjPingOnce, 5000);
+}
+function pjInitBrowserCheck(){
+  var el=$('pj-browser-status'); if(!el) return;
+  var ok = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.RTCPeerConnection);
+  var spk = !!(window.HTMLMediaElement && HTMLMediaElement.prototype.setSinkId);
+  if(ok && spk) el.textContent='✅ Fully supported';
+  else if(ok) el.textContent='⚠️ Limited — speaker selection unavailable';
+  else el.textContent='⚠️ Unsupported browser';
+  if(!spk){
+    var spkCtrl=$('pj-spk-ctrl'); if(spkCtrl) spkCtrl.style.display='none';
+    var testBtn=$('pj-test-spk-btn'); if(testBtn) testBtn.style.display='none';
+    var note=$('pj-spk-note'); if(note) note.style.display='block';
+  }
+}
+
+/* ════ Pre-join: live clock ════ */
+function pjInitClock(){
+  function tick(){
+    var el=$('pj-clock'); if(!el) return;
+    var d=new Date();
+    el.textContent = d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'}) +
+      ' · ' + d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+  }
+  tick();
+  pjClockTick=setInterval(tick, 30000);
+}
+
+/* ════ Pre-join: connection status pill ════ */
+function pjUpdateStatus(){
+  var el=$('pj-status'); if(!el) return;
+  if(pjCamPermission==='denied'){
+    el.className='pj-status warn'; el.textContent='🟡 Camera permission required';
+  } else if(pjMicPermission==='denied'){
+    el.className='pj-status warn'; el.textContent='🟡 Microphone permission required';
+  } else {
+    el.className='pj-status'; el.textContent='🟢 Ready to Join';
+  }
+}
+
+/* ════ Pre-join: background blur / virtual background ════ */
+function pjSyncBgChips(){
+  var blurBtn=$('pj-chip-blur'); if(blurBtn) blurBtn.classList.toggle('active', pjBgMode==='blur');
+  var vbgBtn=$('pj-chip-vbg');
+  if(vbgBtn){
+    vbgBtn.classList.toggle('active', pjBgMode==='vbg1'||pjBgMode==='vbg2');
+    vbgBtn.textContent='🖼️ Virtual Background: '+(pjVbgLabels[pjBgMode]||'Off');
+  }
+}
+function pjApplyBgMode(){
+  if(pjBgMode==='off'){ pjStopFx(); }
+  else if(prevStream && prevStream.getVideoTracks().length){ pjStartFx(prevStream); }
+}
+function doPjToggleBlur(){
+  pjBgMode = (pjBgMode==='blur') ? 'off' : 'blur';
+  localStorage.setItem('pj.bgMode', pjBgMode);
+  pjSyncBgChips();
+  pjApplyBgMode();
+}
+function doPjCycleVirtualBg(){
+  if(pjBgMode==='vbg1') pjBgMode='vbg2';
+  else if(pjBgMode==='vbg2') pjBgMode='off';
+  else pjBgMode='vbg1';
+  localStorage.setItem('pj.bgMode', pjBgMode);
+  pjSyncBgChips();
+  pjApplyBgMode();
+}
+
+function pjEnsureSegmenter(cb){
+  if(pjSegmenterFailed){ cb(null); return; }
+  if(pjSegmenter){ cb(pjSegmenter); return; }
+  function tryInit(){
+    if(window.__pjSegFailed){ pjSegmenterFailed=true; cb(null); return; }
+    if(!window.SelfieSegmentation){
+      pjSegLoadAttempts++;
+      if(pjSegLoadAttempts>75){ pjSegmenterFailed=true; cb(null); return; }
+      setTimeout(tryInit,200); return;
+    }
+    try{
+      var seg=new window.SelfieSegmentation({locateFile:function(f){
+        return 'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/'+f;
+      }});
+      seg.setOptions({modelSelection:1, selfieMode:true});
+      seg.onResults(pjOnSegResults);
+      pjSegmenter=seg;
+      cb(seg);
+    }catch(e){ pjSegmenterFailed=true; cb(null); }
+  }
+  tryInit();
+}
+function pjStartFx(stream){
+  var raw=$('pj-raw-vid'); if(!raw) return;
+  raw.srcObject=stream;
+  pjEnsureSegmenter(function(seg){
+    if(!seg){
+      pjBgMode='off'; pjSyncBgChips();
+      var note=$('pj-fx-note'); if(note) note.style.display='block';
+      toast('Background effects unavailable');
+      var v=$('prev-vid'); if(v) v.srcObject=stream;
+      return;
+    }
+    var canvas=$('pj-fx-canvas'); if(!canvas) return;
+    canvas.width=640; canvas.height=480;
+    pjFxCanvas=canvas; pjFxCtx=canvas.getContext('2d');
+    if(!pjFxStream){
+      pjFxStream=canvas.captureStream(25);
+      pjFxTrack=pjFxStream.getVideoTracks()[0];
+    }
+    var v=$('prev-vid'); if(v) v.srcObject=pjFxStream;
+    if(pjFxRAF) cancelAnimationFrame(pjFxRAF);
+    function frameLoop(){
+      if(pjBgMode==='off') return;
+      if(raw.readyState>=2){ try{ seg.send({image:raw}); }catch(e){} }
+      pjFxRAF=requestAnimationFrame(frameLoop);
+    }
+    frameLoop();
+  });
+}
+function pjOnSegResults(results){
+  if(!pjFxCtx||!pjFxCanvas) return;
+  var ctx=pjFxCtx, w=pjFxCanvas.width, h=pjFxCanvas.height;
+  ctx.save();
+  ctx.clearRect(0,0,w,h);
+  ctx.globalCompositeOperation='source-over';
+  ctx.drawImage(results.segmentationMask,0,0,w,h);
+  ctx.globalCompositeOperation='source-in';
+  ctx.drawImage(results.image,0,0,w,h);
+  ctx.globalCompositeOperation='destination-over';
+  if(pjBgMode==='blur'){
+    ctx.filter='blur(12px)';
+    ctx.drawImage(results.image,0,0,w,h);
+    ctx.filter='none';
+  } else if(pjBgMode==='vbg1'){
+    var g=ctx.createLinearGradient(0,0,w,h);
+    g.addColorStop(0,'#16324a'); g.addColorStop(1,'#0d3b3b');
+    ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+  } else if(pjBgMode==='vbg2'){
+    var g2=ctx.createLinearGradient(0,0,w,h);
+    g2.addColorStop(0,'#3a1c5c'); g2.addColorStop(1,'#1c2b5c');
+    ctx.fillStyle=g2; ctx.fillRect(0,0,w,h);
+  }
+  ctx.restore();
+}
+function pjStopFx(){
+  if(pjFxRAF){ cancelAnimationFrame(pjFxRAF); pjFxRAF=null; }
+  if(pjFxTrack){ try{pjFxTrack.stop();}catch(e){} }
+  pjFxTrack=null; pjFxStream=null; pjFxCtx=null; pjFxCanvas=null;
+  var v=$('prev-vid');
+  if(v && prevStream) v.srcObject=prevStream;
+}
+function pjTeardownFx(){
+  pjStopFx();
+  pjStopMicMeter();
+  if(prevStream){ try{prevStream.getTracks().forEach(function(t){t.stop();});}catch(e){} prevStream=null; }
+}
+function pjStopPrejoinLoops(){
+  if(pjNetTick){ clearInterval(pjNetTick); pjNetTick=null; }
+  if(pjClockTick){ clearInterval(pjClockTick); pjClockTick=null; }
+  pjStopMicMeter();
+}
+
+/* ════ Pre-join: quick-join variants ════ */
+function doPjJoinWithout(kind){
+  if(kind==='cam' && prevCamOn) doPrevCam();
+  if(kind==='mic' && prevMicOn) doPrevMic();
+  doJoin();
 }
 
 /* ════ JOIN ════ */
@@ -814,8 +1381,10 @@ function doJoin(){
   btnEl.disabled=true; btnEl.textContent='Joining…';
   localName=name;
 
-  /* Stop preview stream */
-  if(prevStream){ prevStream.getTracks().forEach(function(t){t.stop();}); prevStream=null; }
+  /* Stop the preview stream UNLESS a background effect is active — the fx canvas
+     pipeline reads live frames from it via #pj-raw-vid and must keep running so the
+     track we publish after connecting doesn't freeze. */
+  if(pjBgMode==='off' && prevStream){ prevStream.getTracks().forEach(function(t){t.stop();}); prevStream=null; }
 
   var roomName=window.location.pathname.split('/').pop();
   isHost=new URLSearchParams(window.location.search).get('host')==='true';
@@ -869,14 +1438,37 @@ function connectRoom(token,url){
 
   return room.connect(url,token,{autoSubscribe:true})
     .then(function(){
-      return room.localParticipant.enableCameraAndMicrophone();
+      var bgActive = pjBgMode!=='off' && !!pjFxTrack;
+      var micOpts = {noiseSuppression:pjNoiseSuppress, echoCancellation:true, autoGainControl:true};
+      if(pjMicId) micOpts.deviceId=pjMicId;
+      var camOpts = {};
+      if(pjCamId) camOpts.deviceId=pjCamId;
+
+      var camPromise;
+      if(bgActive){
+        /* A background effect is running — publish the processed canvas track directly
+           instead of letting LiveKit open its own (unprocessed) camera stream. */
+        camPromise = prevCamOn
+          ? room.localParticipant.publishTrack(new LK.LocalVideoTrack(pjFxTrack), {source: LK.Track.Source.Camera, name:'camera'})
+          : Promise.resolve();
+      } else {
+        camPromise = room.localParticipant.setCameraEnabled(prevCamOn, camOpts);
+      }
+
+      return Promise.all([
+        camPromise,
+        room.localParticipant.setMicrophoneEnabled(prevMicOn, micOpts)
+      ]);
     })
     .then(function(){
-      localSid=room.localParticipant.sid;
+      if(pjSpkId){ try{ room.switchActiveDevice('audiooutput', pjSpkId); }catch(e){} }
+      /* The preview stream's own mic track is no longer needed — LiveKit captured its own. */
+      if(prevStream){ prevStream.getAudioTracks().forEach(function(t){ try{t.stop();}catch(e){} }); }
 
-      /* Apply preview preferences */
-      if(!prevMicOn){ micOn=false; room.localParticipant.setMicrophoneEnabled(false); syncMicUI(); }
-      if(!prevCamOn){ camOn=false; room.localParticipant.setCameraEnabled(false); syncCamUI(); }
+      localSid=room.localParticipant.sid;
+      micOn=prevMicOn; camOn=prevCamOn;
+      syncMicUI(); syncCamUI();
+      pjStopPrejoinLoops();
 
       addTile(room.localParticipant,true,isHost);
 
@@ -1118,6 +1710,7 @@ function onData(payload, participant, kind){
 
 function onDisc(){
   clearInterval(timerTick); clearInterval(netTick);
+  pjTeardownFx();
   $('pg-meet').style.display='none';
   var d=$('pg-disc');
   if(d){ d.style.display='flex'; d.style.flexDirection='column'; }
@@ -1674,7 +2267,13 @@ window.__M={
   zoom100:  function(){ doStageZoom('100'); },
   zoomIn:   function(){ doStageZoomStep(1); },
   zoomOut:  function(){ doStageZoomStep(-1); },
-  fullscreen: doStageFullscreen
+  fullscreen: doStageFullscreen,
+  reqPerms:    doPjRequestPermissions,
+  testSpk:     doPjTestSpeaker,
+  toggleNoise: doPjToggleNoise,
+  toggleBlur:  doPjToggleBlur,
+  cycleVbg:    doPjCycleVirtualBg,
+  joinWithout: doPjJoinWithout
 };
 
 })(); /* end IIFE */

@@ -264,7 +264,7 @@ class CalendarService {
       `🎥 Video Meeting Link: ${meetLink}`,
       `   (No login required — just enter your name and join)`,
       ``,
-      `Booked by Shashi Kumar, AI Admissions Counselor.`,
+      `Booked by Antra Kumar, AI Admissions Counselor.`,
     ].join('\n');
   }
 }
