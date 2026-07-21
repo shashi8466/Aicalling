@@ -45,18 +45,16 @@ const CAMPAIGNS = {
     program: 'SAT',
     turn0Line: (lead) =>
       `We're excited to let you know that we've launched a new SAT Preparation Batch, and for a limited time we're offering an exclusive 40% discount on enrollment. ` +
-      `May I take a minute to tell you about the program?`,
+      `We're proud to have helped over 2,000 families and earned more than 300 five-star reviews from students and parents. ` +
+      `Would you like to learn more about our SAT Preparation Program?`,
     systemContext: (lead) =>
 `━━━ CAMPAIGN: SAT BATCH PROMOTION ━━━
 This is an OUTREACH call inviting ${firstName(lead)} to join Test Prep Pundits's newly launched SAT Preparation Batch.
 
-OPENING INTENT (already delivered): Announced the new SAT Batch with a 40% discount and asked if we can take a minute to tell them about the program.
+OPENING INTENT (already delivered): Announced the new SAT Batch with a 40% discount, cited 2,000+ families helped and 300+ five-star reviews, and asked if they'd like to learn more about the SAT Preparation Program.
 
-If they say YES to the opening:
-Say: "Our SAT Preparation Program includes a personalized SAT study plan, live expert classes, full-length SAT practice tests, one-on-one mentoring, college admissions guidance, and regular progress tracking. We're proud to have helped 2,000+ happy families and earned 300+ five-star reviews from students and parents. Would you like to learn more about our SAT Preparation Program?"
-
-If they say YES to learning more:
-Say: "That's wonderful! I'd be happy to schedule a FREE 10–15 minute consultation with one of our SAT advisors. During the consultation, we'll explain the complete program, answer your questions, and help you create the right SAT preparation plan." then [OFFER_MEETING]
+If they say YES:
+Say: "That's wonderful! I'd be happy to schedule a FREE 10–15 minute consultation with one of our SAT advisors. During the consultation, we'll explain the complete program, answer your questions, and help you create the right SAT preparation plan. When would you like to schedule this?" then [OFFER_MEETING]
 
 After the meeting is booked, say:
 "Perfect! Your consultation has been successfully scheduled. You'll receive the meeting details by email shortly. You can also visit www.testpreppundits.com to learn more."
@@ -71,19 +69,17 @@ GOAL: book a FREE 10–15 minute consultation with an SAT advisor.`
     name: 'ACT Batch Promotion',
     program: 'ACT',
     turn0Line: (lead) =>
-      `We're excited to announce our new ACT Preparation Batch, and we're currently offering an exclusive 40% discount for a limited time. ` +
-      `May I take a minute to tell you about the program?`,
+      `We're excited to let you know that we've launched a new ACT Preparation Batch, and for a limited time we're offering an exclusive 40% discount on enrollment. ` +
+      `We're proud to have helped over 2,000 families and earned more than 300 five-star reviews from students and parents. ` +
+      `Would you like to learn more about our ACT Preparation Program?`,
     systemContext: (lead) =>
 `━━━ CAMPAIGN: ACT BATCH PROMOTION ━━━
 This is an OUTREACH call inviting ${firstName(lead)} to join Test Prep Pundits's new ACT Preparation Batch.
 
-OPENING INTENT (already delivered): Announced the new ACT Batch with a 40% discount and asked if we can take a minute to tell them about the program.
+OPENING INTENT (already delivered): Announced the new ACT Batch with a 40% discount, cited 2,000+ families helped and 300+ five-star reviews, and asked if they'd like to learn more about the ACT Preparation Program.
 
-If they say YES to the opening:
-Say: "Our ACT Preparation Program includes a personalized ACT study plan, live expert classes, full-length ACT practice exams, one-on-one mentoring, college admissions guidance, and weekly progress tracking. We've helped 2,000+ happy families and have received 300+ five-star reviews. Would you like to learn more about our ACT Preparation Program?"
-
-If they say YES to learning more:
-Say: "Fantastic! I'd be happy to schedule a FREE 10–15 minute consultation with one of our ACT advisors. They'll explain the program, answer your questions, and help you prepare for the ACT." then [OFFER_MEETING]
+If they say YES:
+Say: "That's wonderful! I'd be happy to schedule a FREE 10–15 minute consultation with one of our ACT advisors. During the consultation, we'll explain the complete program, answer your questions, and help you create the right ACT preparation plan. When would you like to schedule this?" then [OFFER_MEETING]
 
 After the meeting is booked, say:
 "Perfect! Your consultation has been successfully scheduled. You'll receive your meeting details by email shortly. For more information, visit www.testpreppundits.com."
@@ -98,19 +94,17 @@ GOAL: book a FREE 10–15 minute consultation with an ACT advisor.`
     name: 'AP Course Promotion',
     program: 'AP',
     turn0Line: (lead) =>
-      `We're excited to announce our new Advanced Placement (AP) Preparation Program, and we're offering an exclusive 40% discount for a limited time. ` +
-      `May I take a minute to tell you about the program?`,
+      `We're excited to let you know that we've launched our new AP Preparation Program, and for a limited time we're offering an exclusive 40% discount on enrollment. ` +
+      `We're proud to have helped over 2,000 families and earned more than 300 five-star reviews from students and parents. ` +
+      `Would you like to learn more about our AP Preparation Program?`,
     systemContext: (lead) =>
 `━━━ CAMPAIGN: AP COURSE PROMOTION ━━━
 This is an OUTREACH call inviting ${firstName(lead)} to Test Prep Pundits's new AP Preparation Program.
 
-OPENING INTENT (already delivered): Announced the new AP Program with a 40% discount and asked if we can take a minute to tell them about the program.
+OPENING INTENT (already delivered): Announced the new AP Program with a 40% discount, cited 2,000+ families helped and 300+ five-star reviews, and asked if they'd like to learn more about the AP Preparation Program.
 
-If they say YES to the opening:
-Say: "Our AP Preparation Program includes subject-specific AP preparation, live expert instructors, practice tests and assignments, personalized study plans, one-on-one academic mentoring, and progress tracking. We've proudly helped 2,000+ happy families and earned 300+ five-star reviews. Would you like to learn more about our AP Preparation Program?"
-
-If they say YES to learning more:
-Say: "Excellent! I'd be happy to schedule a FREE 10–15 minute consultation with one of our AP advisors. They'll explain the program, answer your questions, and help you choose the right AP courses." then [OFFER_MEETING]
+If they say YES:
+Say: "That's wonderful! I'd be happy to schedule a FREE 10–15 minute consultation with one of our AP advisors. During the consultation, we'll explain the complete program, answer your questions, and help you choose the right AP subjects and preparation plan. When would you like to schedule this?" then [OFFER_MEETING]
 
 After the meeting is booked, say:
 "Perfect! Your consultation has been successfully scheduled. You'll receive the meeting details by email shortly. You can also visit www.testpreppundits.com for more information."
