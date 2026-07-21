@@ -76,11 +76,11 @@ button { font-family: inherit; }
 }
 .pj-av {
   width: 110px; height: 110px; border-radius: 50%;
-  background: linear-gradient(135deg, var(--grad1), var(--grad2));
+  background: #fff; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
-  font-size: 38px; font-weight: 600; color: #16171a;
   box-shadow: 0 8px 24px rgba(0,0,0,.35);
 }
+.pj-av img { width: 74%; height: 74%; object-fit: contain; }
 .pj-off-label { color: var(--txt2); font-size: .9rem; font-weight: 500; }
 .pj-enable-btn {
   margin-top: 6px; padding: 10px 20px; border: none; border-radius: 24px;
@@ -153,7 +153,7 @@ button { font-family: inherit; }
 .pj-brand-txt span { font-size: .68rem; color: var(--txt2); }
 
 .pj-title { font-size: 1.55rem; font-weight: 600; letter-spacing: -.01em; }
-.pj-subtitle { color: var(--txt2); font-size: .86rem; margin-top: -12px; }
+.pj-subtitle { color: var(--txt2); font-size: .86rem; margin-top: 4px; }
 
 .pj-meta { display: flex; flex-direction: column; gap: 10px; }
 .pj-meta-row { display: flex; justify-content: space-between; align-items: baseline; font-size: .85rem; gap: 12px; }
@@ -634,7 +634,7 @@ button { font-family: inherit; }
         <canvas id="pj-fx-canvas" style="display:none"></canvas>
 
         <div class="pj-preview-off" id="prev-off">
-          <div class="pj-av" id="prev-ini">?</div>
+          <div class="pj-av" id="prev-ini"><img src="/logos/logo1.png" alt="TestPrepPundits" /></div>
           <span class="pj-off-label" id="pj-off-label">Camera is off</span>
           <button class="pj-enable-btn" id="pj-enable-btn" style="display:none" onclick="pjRequestPermissions()">Enable Camera</button>
         </div>
@@ -668,10 +668,10 @@ button { font-family: inherit; }
       <div class="pj-info">
 
         <div class="pj-brand">
-          <img src="/assets/logo.png" alt="AIPrep365" onerror="this.style.display='none'" />
+          <img src="/logos/logo1.png" alt="TestPrepPundits" onerror="this.style.display='none'" />
           <div class="pj-brand-txt">
-            <b>AIPrep365</b>
-            <span>Secure End-to-End Meeting</span>
+            <b>TestPrepPundits</b>
+            <span>AI Powered Admissions</span>
           </div>
         </div>
 
@@ -681,7 +681,7 @@ button { font-family: inherit; }
         </div>
 
         <div class="pj-meta">
-          <div class="pj-meta-row"><span class="lbl">Hosted by</span><span class="val">AIPrep365 Admissions Team</span></div>
+          <div class="pj-meta-row"><span class="lbl">Hosted by</span><span class="val">TestPrepPundits Admissions Team</span></div>
           <div class="pj-meta-row"><span class="lbl">Meeting Type</span><span class="val">Online Consultation</span></div>
           <div class="pj-meta-row"><span class="lbl">Duration</span><span class="val">30 Minutes</span></div>
           <div class="pj-meta-row"><span class="lbl">Participants</span><span class="pj-chips">
@@ -709,7 +709,7 @@ button { font-family: inherit; }
 
         <div class="pj-foot">
           <div class="pj-foot-row"><span id="pj-net-status">🟡 Checking network…</span><span id="pj-browser-status">Checking browser…</span></div>
-          <div class="pj-foot-powered">Powered by AIPrep365</div>
+          <div class="pj-foot-powered">Powered by TestPrepPundits</div>
         </div>
 
       </div>
@@ -980,11 +980,6 @@ var peers={};
 
 /* ════ Preview (Join Screen) ════ */
 function startPreview(){
-  var nameIn=$('name-in');
-  if(nameIn) nameIn.addEventListener('input',function(){
-    var ini=$('prev-ini'); if(ini) ini.textContent=initials(nameIn.value.trim()||'?');
-  });
-
   pjCamId=localStorage.getItem('pj.camId')||null;
   pjMicId=localStorage.getItem('pj.micId')||null;
   pjSpkId=localStorage.getItem('pj.spkId')||null;
@@ -1294,6 +1289,14 @@ function pjEnsureSegmenter(cb){
   }
   tryInit();
 }
+function pjFailFx(reason){
+  pjSegmenterFailed=true;
+  pjSegmenter=null;
+  pjBgMode='off'; pjSyncBgChips();
+  var note=$('pj-fx-note'); if(note) note.style.display='block';
+  toast('Background effects unavailable'+(reason?' ('+reason+')':''));
+  pjStopFx();
+}
 function pjStartFx(stream){
   var raw=$('pj-raw-vid'); if(!raw) return;
   raw.srcObject=stream;
@@ -1314,9 +1317,18 @@ function pjStartFx(stream){
     }
     var v=$('prev-vid'); if(v) v.srcObject=pjFxStream;
     if(pjFxRAF) cancelAnimationFrame(pjFxRAF);
+    var busy=false;
+    /* MediaPipe's graph is NOT reentrant — send() must fully resolve (onResults
+       fired) before the next frame is sent, or the WASM module aborts and dies
+       permanently. Gate on a busy flag and always handle the returned promise. */
     function frameLoop(){
-      if(pjBgMode==='off') return;
-      if(raw.readyState>=2){ try{ seg.send({image:raw}); }catch(e){} }
+      if(pjBgMode==='off'||pjSegmenterFailed) return;
+      if(!busy && raw.readyState>=2){
+        busy=true;
+        seg.send({image:raw})
+          .catch(function(e){ pjFailFx('segmentation error'); console.warn('[BG FX] send failed',e); })
+          .then(function(){ busy=false; });
+      }
       pjFxRAF=requestAnimationFrame(frameLoop);
     }
     frameLoop();
