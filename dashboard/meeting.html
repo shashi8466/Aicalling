@@ -125,6 +125,7 @@ button { font-family: inherit; }
 .pj-ctrl select {
   background: transparent; border: none; color: var(--txt); font-size: .78rem;
   max-width: 130px; cursor: pointer; outline: none;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .pj-ctrl select option { background: var(--bg2); color: var(--txt); }
 .pj-toggle-chip {
@@ -210,9 +211,14 @@ button { font-family: inherit; }
 .pj-foot-powered { text-align: center; font-size: .7rem; color: var(--txt2); padding-top: 10px; border-top: 1px solid var(--glass-brd); }
 
 @media (max-width: 900px) {
-  #pg-join { height: auto; min-height: 100vh; padding: 20px 16px; }
+  /* body has overflow:hidden globally, so #pg-join must stay the bounded,
+     scrollable container (height:100vh + overflow-y:auto from the base rule) —
+     switching it to height:auto here left the taller stacked content with
+     nowhere to scroll, clipping the name field and Join button. */
+  #pg-join { align-items: flex-start; padding: 20px 16px 40px; }
   .pj-wrap { grid-template-columns: 1fr; max-height: none; }
-  .pj-preview { min-height: 260px; }
+  .pj-preview { min-height: 220px; }
+  .pj-ctrl select { max-width: 100px; }
 }
 
 /* ═══════════════════════════════════════════════════
