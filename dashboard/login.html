@@ -413,7 +413,7 @@ async function checkExistingSession() {
   if (!sbClient) return;
   const { data: { session } } = await sbClient.auth.getSession();
   if (session) {
-    window.location.href = '/';
+    window.location.href = '/dashboard';
   }
 }
 
@@ -571,7 +571,7 @@ async function handleSignup() {
       return;
     }
 
-    window.location.href = '/';
+    window.location.href = '/dashboard';
   } catch (err) {
     showError(err.message || 'Unexpected error. Please try again.');
     btn.disabled  = false;
@@ -609,7 +609,7 @@ async function handleLogin() {
       return;
     }
 
-    window.location.href = '/';
+    window.location.href = '/dashboard';
   } catch (err) {
     showError(err.message || 'Unexpected error. Please try again.');
     btn.disabled  = false;

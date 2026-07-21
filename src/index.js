@@ -104,7 +104,17 @@ app.get('/login.html', (req, res) => {
   res.redirect(301, '/login');
 });
 app.get('/index.html', (req, res) => {
-  res.redirect(301, '/');
+  res.redirect(301, '/dashboard');
+});
+
+// Route for home/landing page
+app.get('/', (req, res) => {
+  res.sendFile(path.join(dashDir, 'home.html'));
+});
+
+// Route for clean dashboard URL
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(dashDir, 'index.html'));
 });
 
 // Route for clean login URL
