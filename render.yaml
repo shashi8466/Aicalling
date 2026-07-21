@@ -72,7 +72,7 @@ services:
 
       # Company
       - key: COUNSELOR_NAME
-        value: Shashi Kumar
+        value: Antra Kumar
       - key: COUNSELOR_EMAIL
         sync: false
       - key: COUNSELOR_PHONE
