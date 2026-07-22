@@ -63,6 +63,12 @@
       position: sticky;
       top: 0;
       height: 100vh;
+      overflow-y: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    .sidebar::-webkit-scrollbar {
+      display: none;
     }
 
     .brand {
@@ -75,13 +81,14 @@
     }
 
     .brand img.logo {
-      width: 110px;
+      width: 140px;
       height: auto;
       max-width: 100%;
-      background: #fff;
-      padding: 6px;
-      border-radius: 10px;
-      box-shadow: 0 3px 10px rgba(0, 0, 0, .22);
+      background: transparent;
+      padding: 0;
+      border-radius: 0;
+      box-shadow: none;
+      object-fit: contain;
     }
 
     .brand-text {
@@ -3357,7 +3364,7 @@
     <!-- ─── SIDEBAR ─── -->
     <aside class="sidebar">
       <div class="brand">
-        <img src="/assets/logo.png" alt="Aiprep365" class="logo">
+        <img src="/assets/hg_logo1.png" alt="Aiprep365" class="logo">
         <div class="brand-text">
           <div class="title">Admin Dashboard</div>
           <div class="sub">AI Admissions Agent</div>

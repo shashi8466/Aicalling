@@ -161,12 +161,22 @@ header::after{
   padding:16px 32px; max-width:1240px; margin:0 auto;
 }
 .logo{
-  display:flex; align-items:center; gap:12px;
-  font-family:var(--font-display); font-weight:700; font-size:17px;
+  display:inline-flex; align-items:center;
+  background:transparent;
+  padding:0;
+  border-radius:0;
+  box-shadow:none;
+  transition:opacity .2s ease, transform .2s ease;
+}
+.logo:hover{
+  opacity: 0.9;
+  transform: translateY(-1px);
 }
 .logo img.logo-img {
-  width: 96px;
-  height: 65px;
+  height: 105px;
+  max-width: 350px;
+  width: auto;
+  display: block;
   object-fit: contain;
 }
 
@@ -554,7 +564,7 @@ footer{ border-top:1px solid var(--border); padding:64px 0 32px;}
 <header>
   <div class="nav">
     <a href="/" class="logo">
-      <img src="/assets/hg_logo_icon.png" alt="Aiprep365" class="logo-img">
+      <img src="/assets/hg_logo1.png" alt="Aiprep365" class="logo-img">
     </a>
     <nav class="navlinks">
       <a href="#features">Features</a>
@@ -761,7 +771,7 @@ footer{ border-top:1px solid var(--border); padding:64px 0 32px;}
     <div class="foot-grid">
       <div class="foot-brand">
         <a href="/" class="logo">
-          <img src="/assets/hg_logo_icon.png" alt="Aiprep365" class="logo-img">
+          <img src="/assets/hg_logo1.png" alt="Aiprep365" class="logo-img">
         </a>
         <p>AI voice calling, CRM, and analytics for admissions teams that don't want a lead to go quiet.</p>
       </div>
