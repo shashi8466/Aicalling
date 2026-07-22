@@ -169,7 +169,6 @@ header::after{
   height: 86px;
   object-fit: contain;
 }
-.logo-sub{ display:block; font-family:var(--font-mono); font-weight:400; font-size:10px; color:var(--text-2); letter-spacing:.04em; margin-top:1px;}
 
 .navlinks{ display:flex; align-items:center; gap:34px; }
 .navlinks a{ font-size:14px; color:var(--text-1); font-weight:500; transition:color .15s; }
@@ -433,21 +432,10 @@ header::after{
 
 /* ============ STATS ============ */
 .stats-sec{ padding:70px 0; border-top:1px solid var(--border); border-bottom:1px solid var(--border);}
-.stats-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:20px; text-align:center;}
+.stats-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:20px; text-align:center;}
 .stat-num{ font-family:var(--font-mono); font-size:42px; font-weight:600; background:var(--grad-signal); -webkit-background-clip:text; background-clip:text; color:transparent;}
 .stat-lbl{ font-size:13px; color:var(--text-1); margin-top:8px;}
 
-/* ============ TESTIMONIALS ============ */
-.test-sec{ padding:104px 0;}
-.test-card{ max-width:720px; margin:0 auto; text-align:center; border:1px solid var(--border); border-radius:var(--radius-lg); padding:56px 44px; background:linear-gradient(160deg, var(--surface), var(--bg-1)); position:relative; overflow:hidden;}
-.test-card::before{
-  content:"“"; position:absolute; top:-6px; left:26px; font-family:var(--font-display); font-size:120px; font-weight:700;
-  background:var(--grad-signal); -webkit-background-clip:text; background-clip:text; color:transparent; opacity:.16; line-height:1; pointer-events:none;
-}
-.stars{ display:flex; justify-content:center; gap:4px; margin-bottom:22px; position:relative;}
-.test-quote{ font-family:var(--font-display); font-size:22px; font-weight:500; line-height:1.5; margin-bottom:26px; color:var(--text-0); position:relative;}
-.test-person{ display:flex; align-items:center; justify-content:center; gap:12px;}
-.test-avatar{ width:40px;height:40px;border-radius:50%; background:var(--grad-signal); display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-weight:600; font-size:13px;}
 .test-meta b{ display:block; font-size:14px;}
 .test-meta span{ font-size:12px; color:var(--text-2);}
 .test-nav{ display:flex; justify-content:center; gap:10px; margin-top:28px;}
@@ -557,6 +545,7 @@ footer{ border-top:1px solid var(--border); padding:64px 0 32px;}
 @media (prefers-reduced-motion: reduce){
   *{ animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important; }
 }
+
 </style>
 </head>
 <body>
@@ -565,8 +554,7 @@ footer{ border-top:1px solid var(--border); padding:64px 0 32px;}
 <header>
   <div class="nav">
     <a href="/" class="logo">
-      <img src="/assets/logo.png" alt="Aiprep365" class="logo-img">
-      <div>Aiprep365<span class="logo-sub">AI Admissions Agent</span></div>
+      <img src="/assets/hg_logo.png" alt="Aiprep365" class="logo-img">
     </a>
     <nav class="navlinks">
       <a href="#features">Features</a>
@@ -731,13 +719,6 @@ footer{ border-top:1px solid var(--border); padding:64px 0 32px;}
   <div class="wrap stats-grid" id="statsGrid"></div>
 </section>
 
-<!-- ================= TESTIMONIALS ================= -->
-<section class="test-sec">
-  <div class="wrap">
-    <div class="test-card reveal" id="testCard"></div>
-  </div>
-</section>
-
 <!-- ================= PRICING ================= -->
 <section class="pricing-sec" id="pricing">
   <div class="wrap">
@@ -780,8 +761,7 @@ footer{ border-top:1px solid var(--border); padding:64px 0 32px;}
     <div class="foot-grid">
       <div class="foot-brand">
         <a href="/" class="logo">
-          <img src="/assets/logo.png" alt="Aiprep365" class="logo-img">
-          <div>Aiprep365</div>
+          <img src="/assets/hg_logo.png" alt="Aiprep365" class="logo-img">
         </a>
         <p>AI voice calling, CRM, and analytics for admissions teams that don't want a lead to go quiet.</p>
       </div>
@@ -994,43 +974,53 @@ whyItems.forEach(w => {
 
 /* ---------- STATS GRID ---------- */
 const statsList = [
-  { num: '30s', lbl: 'Average Speed-to-Contact' },
-  { num: '2.4x', lbl: 'Increase in Qualified Pipeline' },
-  { num: '82.3%', lbl: 'Average Answer Connection Rate' },
-  { num: '100%', lbl: 'Twilio Carrier-Cost Pricing' }
+  { val: 30, suffix: 's', decimals: 0, lbl: 'Average Speed-to-Contact' },
+  { val: 2.4, suffix: 'x', decimals: 1, lbl: 'Increase in Qualified Pipeline' },
+  { val: 82.3, suffix: '%', decimals: 1, lbl: 'Average Answer Connection Rate' }
 ];
 
 const statsGrid = document.getElementById('statsGrid');
-statsList.forEach(s => {
+statsList.forEach((s, idx) => {
   statsGrid.innerHTML += `
     <div class="reveal">
-      <div class="stat-num">${s.num}</div>
+      <div class="stat-num" id="statNum${idx}">0${s.suffix}</div>
       <div class="stat-lbl">${s.lbl}</div>
     </div>
   `;
 });
 
-/* ---------- TESTIMONIALS ---------- */
-const testimonials = [
-  { initials: 'SJ', name: 'Sarah Jenkins', role: 'Director of Admissions, Northfield Institute', quote: 'Aiprep365 has revolutionized how we handle incoming student interest. Every single lead gets called within seconds, qualified instantly, and routed directly onto our calendars. Our enrollment is up 38%!' }
-];
+// Number counting animation
+const statsObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting && !statsGrid.classList.contains('counted')) {
+      statsGrid.classList.add('counted');
+      statsList.forEach((s, idx) => {
+        const el = document.getElementById(`statNum${idx}`);
+        const duration = 2000;
+        const startTime = performance.now();
+        
+        function update(currentTime) {
+          const elapsed = currentTime - startTime;
+          const progress = Math.min(elapsed / duration, 1);
+          const easeProgress = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+          
+          const currentVal = (s.val * easeProgress).toFixed(s.decimals);
+          el.innerText = currentVal + s.suffix;
+          
+          if (progress < 1) {
+            requestAnimationFrame(update);
+          } else {
+            el.innerText = s.val.toFixed(s.decimals) + s.suffix;
+          }
+        }
+        requestAnimationFrame(update);
+      });
+    }
+  });
+}, { threshold: 0.5 });
 
-const testCard = document.getElementById('testCard');
-testimonials.forEach(t => {
-  testCard.innerHTML = `
-    <div class="stars">
-      ${ICONS.star}${ICONS.star}${ICONS.star}${ICONS.star}${ICONS.star}
-    </div>
-    <div class="test-quote">"${t.quote}"</div>
-    <div class="test-person">
-      <div class="test-avatar">${t.initials}</div>
-      <div class="test-meta">
-        <b>${t.name}</b>
-        <span>${t.role}</span>
-      </div>
-    </div>
-  `;
-});
+if(statsGrid) statsObserver.observe(statsGrid);
+
 
 /* ---------- PRICING PLANS ---------- */
 const plans = [
