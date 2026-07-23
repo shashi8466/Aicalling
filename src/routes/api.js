@@ -7,6 +7,9 @@ const router    = express.Router();
 const axios     = require('axios');
 const supabase  = require('../db/supabase');
 const Lead      = require('../models/Lead');
+const MeetingRecording = require('../models/MeetingRecording');
+const MeetingTranscript = require('../models/MeetingTranscript');
+const MeetingAnalysis = require('../models/MeetingAnalysis');
 const poller    = require('../jobs/poller');
 const twilioSvc = require('../services/twilioService');
 const sheetsSvc = require('../services/sheetsService');
@@ -247,6 +250,76 @@ router.get('/leads/:id/recording/:attemptIdx', async (req, res) => {
   } catch(e) {
     logger.error('Recording stream error', { msg: e.message });
     res.status(204).end();
+  }
+});
+
+// AI Meeting Recording — most recent meeting recording for this lead, as a
+// short-lived signed URL for <audio>/<video> playback or download.
+router.get('/leads/:id/meeting-recording', async (req, res) => {
+  try {
+    const rec = await MeetingRecording.findOne({ leadId: req.params.id });
+    if (!rec) return res.status(204).end();
+    if (rec.status === 'failed' || !rec.storagePath) {
+      return res.json({ status: rec.status, durationSeconds: rec.durationSeconds || 0 });
+    }
+    const { data, error } = await supabase.storage
+      .from(cfg.supabaseStorage.bucket)
+      .createSignedUrl(rec.storagePath, 3600); // 1 hour
+    if (error) {
+      logger.error('Meeting recording signed URL error', { msg: error.message });
+      return res.json({ status: rec.status, durationSeconds: rec.durationSeconds || 0 });
+    }
+    res.json({ status: rec.status, durationSeconds: rec.durationSeconds || 0, url: data.signedUrl });
+  } catch (e) {
+    logger.error('Meeting recording lookup error', { msg: e.message });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// AI Meeting Transcription — speaker-labeled, timestamped transcript for this lead's meeting.
+router.get('/leads/:id/meeting-transcript', async (req, res) => {
+  try {
+    const transcript = await MeetingTranscript.findOne({ leadId: req.params.id });
+    if (!transcript) return res.status(204).end();
+    res.json({ fullText: transcript.fullText, segments: transcript.segments || [], language: transcript.language });
+  } catch (e) {
+    logger.error('Meeting transcript lookup error', { msg: e.message });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// AI Meeting Intelligence (Phase 2) — summary, action items, sentiment timeline, conversation intelligence.
+router.get('/leads/:id/meeting-analysis', async (req, res) => {
+  try {
+    const analysis = await MeetingAnalysis.findOne({ leadId: req.params.id });
+    if (!analysis) return res.status(204).end();
+    res.json({
+      _id: analysis._id,
+      summary: analysis.summary,
+      actionItems: analysis.actionItems || [],
+      sentimentTimeline: analysis.sentimentTimeline || [],
+      intelligence: analysis.intelligence || {},
+    });
+  } catch (e) {
+    logger.error('Meeting analysis lookup error', { msg: e.message });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Toggle a single action item's done state (counselor checks it off in the CRM).
+router.patch('/leads/:id/meeting-analysis/action-item', async (req, res) => {
+  try {
+    const { index, done } = req.body;
+    const analysis = await MeetingAnalysis.findOne({ leadId: req.params.id });
+    if (!analysis) return res.status(404).json({ error: 'No meeting analysis found for this lead' });
+    const items = analysis.actionItems || [];
+    if (!items[index]) return res.status(400).json({ error: 'Invalid action item index' });
+    items[index].done = !!done;
+    const updated = await MeetingAnalysis.findByIdAndUpdate(analysis._id, { actionItems: items });
+    res.json({ actionItems: updated.actionItems });
+  } catch (e) {
+    logger.error('Meeting action-item toggle error', { msg: e.message });
+    res.status(500).json({ error: e.message });
   }
 });
 

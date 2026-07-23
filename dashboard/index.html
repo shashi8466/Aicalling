@@ -7379,10 +7379,122 @@
 
         // Objections & Follow-ups
         try {
-          const [objections, followUps] = await Promise.all([
+          const [objections, followUps, meetingRecording, meetingTranscript, meetingAnalysis] = await Promise.all([
             fetch('/api/crm/objections?leadId=' + l._id).then(r => r.json()).catch(() => []),
             fetch('/api/crm/follow-ups?leadId=' + l._id).then(r => r.json()).catch(() => []),
+            fetch('/api/leads/' + l._id + '/meeting-recording').then(r => r.status === 204 ? null : r.json()).catch(() => null),
+            fetch('/api/leads/' + l._id + '/meeting-transcript').then(r => r.status === 204 ? null : r.json()).catch(() => null),
+            fetch('/api/leads/' + l._id + '/meeting-analysis').then(r => r.status === 204 ? null : r.json()).catch(() => null),
           ]);
+
+          if (meetingRecording || meetingTranscript) {
+            const statusLabels = { recording: '🔴 Recording in progress', processing: '⏳ Processing…', ready: '⏳ Transcribing…', transcribed: '✅ Ready', failed: '⚠️ Recording failed' };
+            body += `<div class="section-title">🎥 Meeting Recording &amp; Transcript</div>`;
+            if (meetingRecording) {
+              body += `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">${statusLabels[meetingRecording.status] || esc(meetingRecording.status || '')}${meetingRecording.durationSeconds ? ' · ' + Math.round(meetingRecording.durationSeconds / 60) + ' min' : ''}</div>`;
+              if (meetingRecording.url) {
+                body += `<video controls preload="none" src="${meetingRecording.url}" style="width:100%;max-height:360px;border-radius:8px;background:#000"></video>
+                  <a href="${meetingRecording.url}" download target="_blank" class="btn btn-secondary btn-sm" style="margin-top:8px">⬇ Download Recording</a>`;
+              }
+            }
+            if (meetingTranscript && meetingTranscript.fullText) {
+              const speakerColors = ['#60a5fa', '#34d399', '#f472b6', '#fbbf24'];
+              const speakerColorMap = {};
+              let colorIdx = 0;
+              body += `
+                <details style="margin-top:10px">
+                  <summary style="cursor:pointer;color:var(--brand);font-size:12px;font-weight:600;margin-bottom:6px">📄 View Transcript${meetingTranscript.language ? ' (' + esc(meetingTranscript.language) + ')' : ''}</summary>
+                  <input type="text" placeholder="Search transcript…" oninput="filterMeetingTranscript(this)" style="width:100%;margin-bottom:8px;padding:6px 10px;border-radius:6px;border:1px solid var(--border,#333);background:var(--bg);color:inherit">
+                  <div class="transcript" style="padding:12px;border-radius:8px;background:var(--bg);line-height:1.7;font-size:13px">${
+                    (meetingTranscript.segments && meetingTranscript.segments.length ? meetingTranscript.segments : meetingTranscript.fullText.split('\n').map(l => ({ speaker: l.split(':')[0], text: l.split(':').slice(1).join(':').trim() })))
+                      .map(seg => {
+                        if (!speakerColorMap[seg.speaker]) speakerColorMap[seg.speaker] = speakerColors[colorIdx++ % speakerColors.length];
+                        const ts = seg.startMs != null ? `<span style="color:var(--muted);font-size:11px;margin-right:6px">${fmtMs(seg.startMs)}</span>` : '';
+                        return `<div class="transcript-line" style="margin-bottom:4px">${ts}<span style="color:${speakerColorMap[seg.speaker]};font-weight:600">${esc(seg.speaker || 'Speaker')}:</span> ${esc(seg.text || '')}</div>`;
+                      }).join('')
+                  }</div>
+                </details>`;
+            }
+          }
+
+          if (meetingAnalysis) {
+            const sentimentStyle = {
+              Positive: { e: '😊', c: '#34d399' }, Neutral: { e: '😐', c: '#9ca3af' }, Confused: { e: '😕', c: '#fb923c' },
+              Interested: { e: '🤔', c: '#60a5fa' }, Excited: { e: '🤩', c: '#a78bfa' }, Concerned: { e: '😟', c: '#fbbf24' },
+              Frustrated: { e: '😤', c: '#f87171' }, Hesitant: { e: '😬', c: '#eab308' },
+            };
+            const iq = meetingAnalysis.intelligence || {};
+
+            if (meetingAnalysis.summary) {
+              body += `<div class="section-title">🧠 AI Meeting Summary</div>
+                <div class="summary" style="white-space:pre-wrap;font-size:13px;line-height:1.6">${esc(meetingAnalysis.summary)}</div>`;
+            }
+
+            if (meetingAnalysis.actionItems && meetingAnalysis.actionItems.length) {
+              body += `<div class="section-title">✅ AI Action Items</div><div style="margin-bottom:12px">`;
+              ['counselor', 'student'].forEach(who => {
+                const items = meetingAnalysis.actionItems.map((it, i) => ({ ...it, i })).filter(it => it.assignee === who);
+                if (!items.length) return;
+                body += `<div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin:8px 0 4px">${who === 'counselor' ? '👩‍💼 Counselor Tasks' : '🎓 Student Tasks'}</div>`;
+                items.forEach(it => {
+                  body += `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;cursor:pointer;${it.done ? 'opacity:.55;text-decoration:line-through' : ''}">
+                    <input type="checkbox" ${it.done ? 'checked' : ''} onchange="toggleMeetingActionItem('${l._id}', ${it.i}, this.checked, this)">
+                    ${esc(it.task)}
+                  </label>`;
+                });
+              });
+              body += `</div>`;
+            }
+
+            if (meetingAnalysis.sentimentTimeline && meetingAnalysis.sentimentTimeline.length) {
+              body += `<div class="section-title">📈 Sentiment Timeline</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+                  ${meetingAnalysis.sentimentTimeline.map(p => {
+                    const s = sentimentStyle[p.sentiment] || { e: '•', c: 'var(--muted)' };
+                    return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--panel2);border-radius:8px;padding:6px 10px;min-width:64px">
+                      <span style="font-size:18px">${s.e}</span>
+                      <span style="font-size:10px;color:${s.c};font-weight:600">${esc(p.sentiment)}</span>
+                      <span style="font-size:10px;color:var(--muted)">${fmtMs(p.atMs)}</span>
+                    </div>`;
+                  }).join('')}
+                </div>`;
+            }
+
+            if (Object.keys(iq).length) {
+              body += `<div class="section-title">📊 AI Conversation Intelligence</div>
+                <div class="detail-grid">
+                  ${iq.interestScore != null ? `<div class="detail-cell"><div class="lbl">Student Interest Score</div><div class="val"><strong>${iq.interestScore}%</strong></div></div>` : ''}
+                  ${iq.enrollmentProbability != null ? `<div class="detail-cell"><div class="lbl">Enrollment Probability</div><div class="val"><strong>${iq.enrollmentProbability}%</strong></div></div>` : ''}
+                  ${iq.buyingIntent ? `<div class="detail-cell"><div class="lbl">Buying Intent</div><div class="val">${esc(iq.buyingIntent)}</div></div>` : ''}
+                  ${iq.confidenceLevel ? `<div class="detail-cell"><div class="lbl">Confidence Level</div><div class="val">${esc(iq.confidenceLevel)}</div></div>` : ''}
+                </div>`;
+
+              if (iq.detectedTopics && iq.detectedTopics.length) {
+                body += `<div style="margin-top:10px"><div class="lbl" style="margin-bottom:6px">Detected Topics</div>
+                  <div style="display:flex;gap:6px;flex-wrap:wrap">${iq.detectedTopics.map(t => `<span style="display:inline-flex;align-items:center;background:rgba(96,165,250,.12);color:#60a5fa;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;margin:3px">${esc(t)}</span>`).join('')}</div></div>`;
+              }
+              if (iq.commonQuestions && iq.commonQuestions.length) {
+                body += `<div style="margin-top:10px"><div class="lbl" style="margin-bottom:6px">Common Questions</div>
+                  <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7">${iq.commonQuestions.map(q => `<li>${esc(q)}</li>`).join('')}</ul></div>`;
+              }
+              if (iq.objections && iq.objections.length) {
+                body += `<div style="margin-top:10px"><div class="lbl" style="margin-bottom:6px">Objections</div>
+                  <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7">${iq.objections.map(o => `<li>${esc(o)}</li>`).join('')}</ul></div>`;
+              }
+
+              const talk = iq.talkTimeMs || {};
+              const talkRows = Object.entries(talk);
+              if (talkRows.length || iq.questionsAsked != null || iq.avgResponseTimeMs != null) {
+                body += `<div style="margin-top:10px"><div class="lbl" style="margin-bottom:6px">Conversation Statistics</div>
+                  <div class="detail-grid">
+                    ${talkRows.map(([name, ms]) => `<div class="detail-cell"><div class="lbl">${esc(name)} Talking Time</div><div class="val">${fmtMs(ms)}</div></div>`).join('')}
+                    ${iq.questionsAsked != null ? `<div class="detail-cell"><div class="lbl">Questions Asked</div><div class="val">${iq.questionsAsked}</div></div>` : ''}
+                    ${iq.avgResponseTimeMs != null ? `<div class="detail-cell"><div class="lbl">Avg Response Time</div><div class="val">${(iq.avgResponseTimeMs / 1000).toFixed(1)}s</div></div>` : ''}
+                  </div></div>`;
+              }
+            }
+          }
+
           if (objections.length) {
             body += `<div class="section-title">⚠️ Objections (${objections.length})</div>`;
             body += `<div style="margin-bottom:12px">${objections.map(o => `
@@ -8580,6 +8692,34 @@
     function catEmoji(c) { return { hot: '🔥', warm: '⚡', cold: '❄️' }[c] || ''; }
     function sentEmoji(s) { return { positive: '😊', neutral: '😐', negative: '😞' }[s] || ''; }
     function fmtStatus(s) { return (s || '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()); }
+    function fmtMs(ms) {
+      const totalSec = Math.floor((Number(ms) || 0) / 1000);
+      const m = Math.floor(totalSec / 60), s = totalSec % 60;
+      return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+    function filterMeetingTranscript(inputEl) {
+      const term = inputEl.value.trim().toLowerCase();
+      const container = inputEl.closest('details').querySelector('.transcript');
+      container.querySelectorAll('.transcript-line').forEach(line => {
+        line.style.display = !term || line.textContent.toLowerCase().includes(term) ? '' : 'none';
+      });
+    }
+    async function toggleMeetingActionItem(leadId, index, done, checkboxEl) {
+      const label = checkboxEl.closest('label');
+      try {
+        await api('/leads/' + leadId + '/meeting-analysis/action-item', {
+          method: 'PATCH',
+          body: JSON.stringify({ index, done }),
+        });
+        if (label) {
+          label.style.opacity = done ? '.55' : '';
+          label.style.textDecoration = done ? 'line-through' : '';
+        }
+      } catch (e) {
+        checkboxEl.checked = !done; // revert on failure
+        toast('❌ ' + e.message, 'error');
+      }
+    }
     function fmtUptime(sec) {
       const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
       return `${h}h ${m}m`;

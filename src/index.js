@@ -18,6 +18,7 @@ const logger = require('./logger');
 const poller = require('./jobs/poller');
 
 const webhookRouter    = require('./routes/webhook');
+const livekitWebhookRouter = require('./routes/livekitWebhook');
 const apiRouter        = require('./routes/api');
 const crmRouter        = require('./routes/crm');
 const authRouter       = require('./routes/auth');
@@ -31,6 +32,7 @@ const tzScheduler      = require('./jobs/tzScheduler');
 const emailCallbackPoller = require('./jobs/emailCallbackPoller');
 const meetingReminderPoller = require('./jobs/meetingReminderPoller');
 const billingPoller    = require('./jobs/billingPoller');
+const transcriptionProcessor = require('./jobs/transcriptionProcessor');
 
 const app = express();
 
@@ -46,7 +48,10 @@ try {
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 app.use(express.urlencoded({ extended: false }));   // Twilio posts form-encoded
-app.use(express.json());
+app.use(express.json({
+  type: ['application/json', 'application/webhook+json'], // LiveKit webhooks use the latter
+  verify: (req, _res, buf) => { req.rawBody = buf.toString('utf8'); }, // needed to verify LiveKit's webhook signature
+}));
 
 app.use((req, res, next) => {
   logger.debug(`${req.method} ${req.path}`);
@@ -56,6 +61,9 @@ app.use((req, res, next) => {
 // ── Routes ──────────────────────────────────────────────────────────────────
 // Twilio webhooks — NO auth (Twilio posts without our JWT)
 app.use('/webhook', webhookRouter);
+
+// LiveKit server webhooks (room/track/egress events) — NO auth, LiveKit signs the payload itself
+app.use('/webhook/livekit', livekitWebhookRouter);
 
 // Public auth bootstrap (returns Supabase URL + anon key)
 app.use('/auth', authRouter);
@@ -235,6 +243,7 @@ async function boot() {
     emailCallbackPoller.start();
     meetingReminderPoller.start();
     billingPoller.start();
+    transcriptionProcessor.start();
 
     // One-time historical billing import — scans every existing call and
     // creates billing rows with the actual Twilio price. Guarded so it runs

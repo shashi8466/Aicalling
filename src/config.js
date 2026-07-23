@@ -48,6 +48,17 @@ module.exports = {
     anonKey:         process.env.SUPABASE_ANON_KEY || '',
   },
 
+  // Supabase Storage (S3-compatible) — destination for LiveKit Egress meeting
+  // recordings. Separate from the service-role key above: these are the S3
+  // connection credentials generated under Supabase → Storage → S3 Connection.
+  supabaseStorage: {
+    bucket:     process.env.SUPABASE_STORAGE_BUCKET   || 'meeting-recordings',
+    endpoint:   process.env.SUPABASE_S3_ENDPOINT       || '',
+    region:     process.env.SUPABASE_S3_REGION         || 'us-east-1',
+    accessKey:  process.env.SUPABASE_S3_ACCESS_KEY      || '',
+    secretKey:  process.env.SUPABASE_S3_SECRET_KEY      || '',
+  },
+
   // Legacy — kept so existing config-check endpoint still shows the field.
   db: {
     uri: process.env.MONGODB_URI || '',
