@@ -721,6 +721,79 @@ router.get('/meetings', async (req, res) => {
   }
 });
 
+// Create a meeting for an existing lead (e.g. logging a historical/manually-arranged
+// meeting). Meetings live as a single `meeting` JSONB blob on the lead record — there
+// is no separate meetings entity to create independently of a lead.
+router.post('/meetings', async (req, res) => {
+  try {
+    const { leadId, scheduledAt, meetLink, status, courseInterest } = req.body;
+    if (!leadId || !scheduledAt) {
+      return res.status(400).json({ error: 'leadId and scheduledAt are required' });
+    }
+    const lead = await Lead.findById(leadId);
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+    lead.meeting = {
+      ...(lead.meeting || {}),
+      scheduledAt,
+      meetLink: meetLink || '',
+      status: status || 'Scheduled',
+    };
+    if (courseInterest) lead.courseInterest = courseInterest;
+    lead.meetingStatus = 'Booked';
+    await lead.save();
+
+    logger.info(`Meeting created manually for lead ${lead.fullName} (${lead._id})`);
+    res.status(201).json(lead);
+  } catch (e) {
+    logger.error('Meeting create error', { msg: e.message });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Update an existing meeting (Edit on the Meetings page).
+router.patch('/meetings/:leadId', async (req, res) => {
+  try {
+    const lead = await Lead.findById(req.params.leadId);
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
+    if (!lead.meeting?.scheduledAt) return res.status(404).json({ error: 'This lead has no meeting to edit' });
+
+    const { scheduledAt, meetLink, status, courseInterest, grade } = req.body;
+    lead.meeting = {
+      ...lead.meeting,
+      ...(scheduledAt !== undefined ? { scheduledAt } : {}),
+      ...(meetLink !== undefined ? { meetLink } : {}),
+      ...(status !== undefined ? { status } : {}),
+    };
+    if (courseInterest !== undefined) lead.courseInterest = courseInterest;
+    if (grade !== undefined) lead.grade = grade;
+    await lead.save();
+
+    res.json(lead);
+  } catch (e) {
+    logger.error('Meeting update error', { msg: e.message });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Delete a meeting (clears it so the lead drops out of Upcoming/Past Meetings).
+router.delete('/meetings/:leadId', async (req, res) => {
+  try {
+    const lead = await Lead.findById(req.params.leadId);
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+    lead.meeting = {};
+    lead.meetingStatus = 'Not Booked';
+    await lead.save();
+
+    logger.info(`Meeting deleted for lead ${lead.fullName} (${lead._id})`);
+    res.json({ ok: true, message: `Meeting removed for "${lead.fullName}"` });
+  } catch (e) {
+    logger.error('Meeting delete error', { msg: e.message });
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════════════
 //   CALLS
 // ═══════════════════════════════════════════════════════════════════════

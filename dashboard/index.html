@@ -1452,8 +1452,6 @@
       font-size: 20px;
     }
 
-    .pipe-stat-body {}
-
     .pipe-stat-val {
       font-size: 24px;
       font-weight: 800;
@@ -1646,7 +1644,6 @@
     }
 
     /* keep board selector alive for any legacy ref */
-    #pipelineBoard {}
 
     /* Revenue metrics */
     .metric-cards {
@@ -6989,14 +6986,14 @@
         kpiChip('📋', past, 'Past Meetings', '#8b5cf6');
     }
 
-    function renderMeetingList(elId, list, emptyMsg, showAction) {
+    function renderMeetingList(elId, list, emptyMsg, isUpcoming) {
       const el = document.getElementById(elId);
       if (!list.length) { el.innerHTML = `<div class="empty"><div class="icon">📅</div>${emptyMsg}</div>`; return; }
       el.innerHTML = `
     <table>
       <thead><tr>
         <th>Student</th><th>Grade</th><th>Date / Time</th><th>Program</th><th>Meet Link</th><th>Status</th>
-        ${showAction ? '<th>Action</th>' : ''}
+        <th>Action</th>
       </tr></thead>
       <tbody>${list.map(l => `
         <tr>
@@ -7008,18 +7005,72 @@
           <td>${new Date(l.meeting.scheduledAt).toLocaleString()}</td>
           <td>${esc(l.courseInterest || '—')}</td>
           <td>${l.meeting.meetLink ? `<a href="${l.meeting.meetLink}" target="_blank" style="color:var(--brand)">🎥 Join</a>` : '—'}</td>
-          <td><span class="status-badge ${(l.status || '').replace(/\s/g, '-')}">${fmtStatus(l.meeting.status || l.status)}</span></td>
-          ${showAction ? `
+          <td><span class="status-badge ${(l.status || '').replace(/\\s/g, '-')}">${fmtStatus(l.meeting.status || l.status)}</span></td>
           <td>
-            <button class="btn btn-sm" style="background:var(--success);color:#fff;white-space:nowrap"
-              onclick="completeMeeting('${l._id}','${esc(l.fullName)}')">
-              ✅ Complete Meeting
-            </button>
-          </td>` : ''}
+            <div style="display:flex;gap:6px">
+              ${isUpcoming ? `
+              <button class="btn btn-sm" style="background:var(--success);color:#fff;white-space:nowrap"
+                onclick="completeMeeting('${l._id}','${esc(l.fullName)}')">
+                ✅ Complete
+              </button>` : `
+              <button class="btn btn-sm btn-secondary" onclick="editMeeting('${l._id}')">✏️ Edit</button>
+              <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="deleteMeeting('${l._id}', '${esc(l.fullName)}')">🗑️ Delete</button>
+              `}
+            </div>
+          </td>
         </tr>
       `).join('')}</tbody>
     </table>
   `;
+    }
+
+    async function deleteMeeting(leadId, name) {
+      if (!confirm(`Are you sure you want to permanently delete the meeting for ${name}?`)) return;
+      try {
+        await api('/meetings/' + leadId, { method: 'DELETE' });
+        toast('Meeting deleted successfully', 'success');
+        loadMeetings();
+      } catch (e) {
+        toast('Failed to delete meeting: ' + e.message, 'error');
+      }
+    }
+
+    async function editMeeting(leadId) {
+      const allMeetings = [...(MEETINGS.upcoming || []), ...(MEETINGS.past || [])];
+      const lead = allMeetings.find(l => l._id === leadId);
+      if (!lead) return;
+
+      const html = `
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div><label>Date & Time</label>
+          <input type="datetime-local" id="edit-mtg-date" value="${new Date(lead.meeting.scheduledAt).toISOString().slice(0,16)}" style="width:100%"></div>
+          <div><label>Meet Link</label>
+          <input type="text" id="edit-mtg-link" value="${esc(lead.meeting.meetLink || '')}" style="width:100%"></div>
+          <div><label>Status</label>
+          <select id="edit-mtg-status" style="width:100%">
+            <option value="Scheduled" ${lead.meeting.status === 'Scheduled' ? 'selected' : ''}>Scheduled</option>
+            <option value="Completed" ${lead.meeting.status === 'Completed' ? 'selected' : ''}>Completed</option>
+            <option value="Cancelled" ${lead.meeting.status === 'Cancelled' ? 'selected' : ''}>Cancelled</option>
+          </select></div>
+        </div>
+      `;
+      openModal('Edit Meeting', html, async () => {
+        const scheduledAt = new Date(document.getElementById('edit-mtg-date').value).toISOString();
+        const meetLink = document.getElementById('edit-mtg-link').value;
+        const status = document.getElementById('edit-mtg-status').value;
+        
+        try {
+          await api('/meetings/' + leadId, {
+            method: 'PATCH',
+            body: { scheduledAt, meetLink, status }
+          });
+          toast('Meeting updated', 'success');
+          loadMeetings();
+          closeModal();
+        } catch (e) {
+          toast('Error updating meeting: ' + e.message, 'error');
+        }
+      });
     }
 
     async function loadMeetingOutcomes() {
@@ -9552,6 +9603,7 @@
       setInterval(() => {
         if (!document.hidden) {
           loadLeads();
+          loadMeetings().catch(() => {});
           loadCallbacks().catch(() => {});
         }
       }, 30000);
