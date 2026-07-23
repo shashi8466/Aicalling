@@ -67,6 +67,10 @@ module.exports = {
   server: {
     port:    parseInt(process.env.PORT) || 3000,
     baseUrl: process.env.BASE_URL || 'http://localhost:3000',
+    // MEETING_BASE_URL is the permanent production domain used for meeting links.
+    // This must NEVER be a tunnel/ngrok/serveo URL.
+    // Falls back to BASE_URL for development; in production, always set this explicitly.
+    meetingBaseUrl: process.env.MEETING_BASE_URL || process.env.BASE_URL || 'http://localhost:3000',
     env:     process.env.NODE_ENV || 'development',
   },
 

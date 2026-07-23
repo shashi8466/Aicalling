@@ -26,10 +26,11 @@ function generateRoomName(lead) {
 
 /**
  * Returns the public URL that students and counselors open to join.
+ * Uses MEETING_BASE_URL (permanent production domain) — NEVER a tunnel URL.
  * Served by: GET /meeting/:roomName in index.js
  */
 function generateMeetingUrl(roomName) {
-  const base = (cfg.server.baseUrl || '').replace(/\/$/, '');
+  const base = (cfg.server.meetingBaseUrl || cfg.server.baseUrl || '').replace(/\/$/, '');
   return `${base}/meeting/${roomName}`;
 }
 

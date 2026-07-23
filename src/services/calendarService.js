@@ -126,6 +126,12 @@ class CalendarService {
     const meetLink    = livekitSvc.generateMeetingUrl(roomName);   // guest URL
     const hostMeetLink = `${meetLink}?host=true`;                  // counselor URL
 
+    // Safety guard: warn if a non-production domain was accidentally used
+    const TUNNEL_PATTERNS = ['serveousercontent.com', 'lhr.life', 'ngrok', 'localhost', '127.0.0.1'];
+    if (TUNNEL_PATTERNS.some(p => meetLink.includes(p))) {
+      logger.error(`⚠️  CRITICAL: Meeting link uses a tunnel/temporary domain: ${meetLink}. Set MEETING_BASE_URL to your permanent production URL in .env`);
+    }
+
     const inviteeList = [lead.email];
     if (lead.parentEmail)            inviteeList.push(lead.parentEmail);
     if (cfg.company.counselorEmail)  inviteeList.push(cfg.company.counselorEmail);
