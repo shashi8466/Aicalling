@@ -7296,6 +7296,13 @@
     // ─── Lead Detail Modal ─────────────────────────────
     async function openLead(id) {
       try {
+        // Show modal instantly to avoid UI freeze
+        const cached = typeof LEADS !== 'undefined' ? LEADS.find(x => x._id === id) : null;
+        document.getElementById('modalName').textContent = cached ? cached.fullName : 'Loading...';
+        document.getElementById('modalMeta').textContent = '';
+        document.getElementById('modalBody').innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Fetching lead details...</div>';
+        document.getElementById('leadModal').classList.add('active');
+
         const l = await api('/leads/' + id);
         document.getElementById('modalName').textContent = l.fullName;
         document.getElementById('modalMeta').textContent =
