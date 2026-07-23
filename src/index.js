@@ -171,7 +171,7 @@ app.use((err, req, res, _next) => {
     res.type('text/xml').status(200).send(
       '<?xml version="1.0" encoding="UTF-8"?>' +
       '<Response>' +
-        '<Say voice="Polly.Matthew-Neural">' +
+        '<Say voice="Polly.Joanna-Neural">' +
           'I apologize, we are experiencing a brief technical issue. ' +
           'A team member will call you back shortly. Thank you for your patience.' +
         '</Say>' +

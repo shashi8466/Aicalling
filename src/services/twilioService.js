@@ -11,7 +11,7 @@ const logger = require('../logger');
 const client = twilio(cfg.twilio.accountSid, cfg.twilio.authToken);
 const VR     = twilio.twiml.VoiceResponse;
 
-const VOICE  = 'Polly.Matthew-Neural';  // natural US English male voice
+const VOICE  = 'Polly.Joanna-Neural';  // natural US English female voice
 const LANG   = 'en-US';
 
 class TwilioService {

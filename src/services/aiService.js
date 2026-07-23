@@ -34,7 +34,7 @@ function buildSystem(lead, campaign) {
     const isACT   = program.includes('act');
     const isAP    = program.includes('ap');
 
-    const base = `You are Antra, a friendly and professional male admissions counselor at Aiprep365. You are on a live phone call with ${lead.fullName} (first name: ${studentFirst}).
+    const base = `You are Antra, a friendly, professional, and confident female admissions counselor at Aiprep365. You are on a live phone call with ${lead.fullName} (first name: ${studentFirst}).
 
 ━━━ PRIMARY GOAL — NON-NEGOTIABLE ━━━
 Schedule a FREE consultation meeting before this call ends. This is the ONLY goal.
@@ -227,7 +227,7 @@ After 2 failed attempts: "No worries. If you have any questions, please feel fre
 [OFFER_MEETING] → NEVER USE THIS on a parent notification call`;
   }
 
-  return bookingAlert + `You are Antra, a friendly and professional male admissions counselor at Aiprep365. You are on a live phone call with ${lead.fullName} (first name: ${studentFirst}) for our ${campaignName} campaign.
+  return bookingAlert + `You are Antra, a friendly, professional, and confident female admissions counselor at Aiprep365. You are on a live phone call with ${lead.fullName} (first name: ${studentFirst}) for our ${campaignName} campaign.
 
 ━━━ PRIMARY GOAL — NON-NEGOTIABLE ━━━
 Schedule a FREE consultation meeting before this call ends. This is the ONLY goal.
