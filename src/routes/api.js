@@ -222,6 +222,30 @@ router.get('/leads/:id', async (req, res) => {
   try {
     const lead = await Lead.findById(req.params.id);
     if (!lead) return res.status(404).json({ error: 'Lead not found' });
+    
+    // Fetch the latest meeting from meetings table
+    const { data: latestMeeting } = await supabase
+      .from('meetings')
+      .select('*')
+      .eq('lead_id', lead._id)
+      .order('scheduled_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (latestMeeting) {
+      lead.meeting = {
+        id: latestMeeting.id,
+        scheduledAt: latestMeeting.scheduled_at,
+        meetLink: latestMeeting.meet_link,
+        hostMeetLink: latestMeeting.meet_link,
+        roomName: latestMeeting.room_name,
+        status: latestMeeting.status,
+        date: latestMeeting.date,
+        time: latestMeeting.time,
+        timezone: latestMeeting.timezone,
+      };
+    }
+    
     res.json(lead);
   } catch(e) {
     res.status(500).json({ error: e.message });
@@ -692,24 +716,44 @@ router.delete('/leads/:id/calls/:callId', async (req, res) => {
 router.get('/meetings', async (req, res) => {
   try {
     const now = new Date();
-    // Fetch leads that have a meeting.scheduledAt set (JSONB filter in JS)
-    const { data: rows } = await supabase
-      .from('leads')
-      .select('id, full_name, email, phone, parent_name, parent_email, meeting, lead_score, course_interest, grade')
-      .not('meeting', 'eq', '{}')
-      .not('meeting', 'is', null)
-      .order('created_at', { ascending: false })
+    // Fetch meetings joined with leads from meetings table
+    const { data: meetingsRows, error } = await supabase
+      .from('meetings')
+      .select(`
+        *,
+        leads (
+          id, full_name, email, phone, parent_name, parent_email, lead_score, course_interest, grade, status
+        )
+      `)
+      .order('scheduled_at', { ascending: false })
       .limit(1000);
 
-    const leads = (rows || [])
-      .filter(r => r.meeting?.scheduledAt)
-      .map(r => ({
-        _id: r.id, id: r.id,
-        fullName: r.full_name, email: r.email, phone: r.phone,
-        parentName: r.parent_name, parentEmail: r.parent_email,
-        meeting: r.meeting, leadScore: r.lead_score,
-        courseInterest: r.course_interest, grade: r.grade,
-      }));
+    if (error) throw error;
+
+    const leads = (meetingsRows || [])
+      .filter(m => m.leads)
+      .map(m => {
+        const r = m.leads;
+        return {
+          _id: r.id, id: r.id,
+          fullName: r.full_name, email: r.email, phone: r.phone,
+          parentName: r.parent_name, parentEmail: r.parent_email,
+          status: r.status,
+          meeting: {
+            id: m.id,
+            scheduledAt: m.scheduled_at,
+            meetLink: m.meet_link,
+            hostMeetLink: m.meet_link,
+            roomName: m.room_name,
+            status: m.status,
+            date: m.date,
+            time: m.time,
+            timezone: m.timezone
+          },
+          leadScore: r.lead_score,
+          courseInterest: r.course_interest, grade: r.grade,
+        };
+      });
 
     leads.sort((a, b) => new Date(a.meeting.scheduledAt) - new Date(b.meeting.scheduledAt));
 
@@ -759,6 +803,24 @@ router.patch('/meetings/:leadId', async (req, res) => {
     if (!lead.meeting?.scheduledAt) return res.status(404).json({ error: 'This lead has no meeting to edit' });
 
     const { scheduledAt, meetLink, status, courseInterest, grade } = req.body;
+    
+    const { data: latestMeeting } = await supabase
+      .from('meetings')
+      .select('id')
+      .eq('lead_id', lead._id)
+      .order('scheduled_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (latestMeeting) {
+      const updatePayload = {};
+      if (scheduledAt !== undefined) updatePayload.scheduled_at = scheduledAt;
+      if (meetLink !== undefined) updatePayload.meet_link = meetLink;
+      if (status !== undefined) updatePayload.status = status;
+      updatePayload.updated_at = new Date().toISOString();
+      await supabase.from('meetings').update(updatePayload).eq('id', latestMeeting.id);
+    }
+
     lead.meeting = {
       ...lead.meeting,
       ...(scheduledAt !== undefined ? { scheduledAt } : {}),
@@ -781,6 +843,8 @@ router.delete('/meetings/:leadId', async (req, res) => {
   try {
     const lead = await Lead.findById(req.params.leadId);
     if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+    await supabase.from('meetings').delete().eq('lead_id', lead._id);
 
     lead.meeting = {};
     lead.meetingStatus = 'Not Booked';
