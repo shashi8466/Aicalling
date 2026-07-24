@@ -63,6 +63,9 @@ class SheetsService {
 
         if (!phone || !email || !name) continue;
 
+        const aiStatus = (r[c.aiStatus] || '').trim();
+        if (aiStatus === 'Deleted' || aiStatus.includes('permanently deleted')) continue;
+
         out.push({
           fullName:       name,
           grade:          (r[c.grade]          || '').trim(),
@@ -73,7 +76,7 @@ class SheetsService {
           courseInterest: (r[c.courseInterest] || '').trim(),
           submissionDate: r[c.submissionDate]  ? new Date(r[c.submissionDate]) : new Date(),
           sheetRowIndex:  i + 1,   // 1-based for Sheets API
-          aiStatus:       (r[c.aiStatus] || '').trim(),  // existing status in sheet
+          aiStatus:       aiStatus,  // existing status in sheet
         });
       }
 

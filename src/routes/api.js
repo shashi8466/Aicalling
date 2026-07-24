@@ -863,11 +863,53 @@ router.patch('/leads/:id', async (req, res) => {
 
 // Delete lead
 router.delete('/leads/:id', async (req, res) => {
+  if (req.profile?.role !== 'admin') {
+    return res.status(403).json({ error: 'Only admins can delete leads.' });
+  }
   try {
-    const lead = await Lead.findByIdAndDelete(req.params.id);
+    const lead = await Lead.findById(req.params.id);
     if (!lead) return res.status(404).json({ error: 'Lead not found' });
+    
+    if (lead.sheetRowIndex) {
+      const sheetsSvc = require('../services/sheetsService');
+      await sheetsSvc.updateRow(lead.sheetRowIndex, { status: 'Deleted', summary: 'Lead permanently deleted from CRM.' });
+    }
+
+    await Lead.findByIdAndDelete(req.params.id);
     logger.info(`Lead deleted: ${lead.fullName} <${lead.email}>`);
     res.json({ ok: true, message: `Lead "${lead.fullName}" deleted successfully` });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Bulk Delete leads
+router.post('/leads/bulk-delete', async (req, res) => {
+  if (req.profile?.role !== 'admin') {
+    return res.status(403).json({ error: 'Only admins can bulk delete leads.' });
+  }
+  try {
+    const { leadIds } = req.body;
+    if (!Array.isArray(leadIds) || !leadIds.length) {
+      return res.status(400).json({ error: 'No leadIds provided' });
+    }
+    
+    const sheetsSvc = require('../services/sheetsService');
+    let deletedCount = 0;
+    
+    for (const id of leadIds) {
+      const lead = await Lead.findById(id);
+      if (lead) {
+        if (lead.sheetRowIndex) {
+          await sheetsSvc.updateRow(lead.sheetRowIndex, { status: 'Deleted', summary: 'Bulk deleted from CRM.' });
+        }
+        deletedCount++;
+      }
+    }
+    
+    await Lead.deleteMany(leadIds);
+    logger.info(`Bulk deleted ${deletedCount} leads`);
+    res.json({ ok: true, message: `${deletedCount} leads deleted successfully.` });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }

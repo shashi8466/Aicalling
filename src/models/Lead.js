@@ -254,9 +254,48 @@ const Lead = {
 
   async findByIdAndDelete(id) {
     if (!id) return null;
+    
+    // Safely delete related records that lack ON DELETE CASCADE
+    await Promise.allSettled([
+      supabase.from('payments').delete().eq('lead_id', id),
+      supabase.from('enrollments').delete().eq('lead_id', id),
+      supabase.from('meeting_outcomes').delete().eq('lead_id', id),
+      supabase.from('lead_objections').delete().eq('lead_id', id),
+      supabase.from('campaigns_leads').delete().eq('lead_id', id),
+      supabase.from('follow_ups').delete().eq('lead_id', id),
+      supabase.from('callback_requests').delete().eq('lead_id', id),
+      supabase.from('meetings').delete().eq('lead_id', id)
+    ]);
+
     const { data, error } = await supabase.from(TABLE).delete().eq('id', id).select().single();
-    if (error || !data) return null;
+    if (error || !data) {
+      console.error('Lead delete error:', error);
+      return null;
+    }
     return W(data);
+  },
+
+  async deleteMany(ids) {
+    if (!ids || !ids.length) return null;
+    
+    // Safely delete related records
+    await Promise.allSettled([
+      supabase.from('payments').delete().in('lead_id', ids),
+      supabase.from('enrollments').delete().in('lead_id', ids),
+      supabase.from('meeting_outcomes').delete().in('lead_id', ids),
+      supabase.from('lead_objections').delete().in('lead_id', ids),
+      supabase.from('campaigns_leads').delete().in('lead_id', ids),
+      supabase.from('follow_ups').delete().in('lead_id', ids),
+      supabase.from('callback_requests').delete().in('lead_id', ids),
+      supabase.from('meetings').delete().in('lead_id', ids)
+    ]);
+
+    const { data, error } = await supabase.from(TABLE).delete().in('id', ids).select();
+    if (error) {
+      console.error('Lead bulk delete error:', error);
+      return null;
+    }
+    return (data || []).map(W);
   },
 };
 

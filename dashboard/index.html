@@ -3608,6 +3608,7 @@
               <button class="btn btn-primary btn-sm" onclick="bulkAssignCampaign()">📣 Assign</button>
               <button class="btn btn-secondary btn-sm" style="margin-left:8px;background:#f59e0b;color:#fff;border:none;" onclick="bulkAiCall()">📞 Start Bulk AI Calls</button>
               <button class="btn btn-sm" style="margin-left:8px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;font-weight:600;" onclick="openBulkEmailModal('main')">📧 Send Bulk Email</button>
+              <button class="btn btn-sm admin-only-btn" style="margin-left:8px;background:#ef4444;color:#fff;border:none;font-weight:600;display:none;" onclick="openBulkDeleteModal('main')">🗑 Delete Selected</button>
               <button class="bulk-clear" onclick="clearBulkSelect()">✕ Clear</button>
             </div>
             <div id="leadsTable"></div>
@@ -4147,6 +4148,7 @@
                 <button class="btn btn-primary btn-sm" onclick="bulkAssignCampaignClp()">📣 Assign</button>
                 <button class="btn btn-secondary btn-sm" style="margin-left:8px;background:#f59e0b;color:#fff;border:none;" onclick="bulkAiCallClp()">📞 Start Bulk AI Calls</button>
                 <button class="btn btn-sm" style="margin-left:8px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;font-weight:600;" onclick="openBulkEmailModal('clp')">📧 Send Bulk Email</button>
+                <button class="btn btn-sm admin-only-btn" style="margin-left:8px;background:#ef4444;color:#fff;border:none;font-weight:600;display:none;" onclick="openBulkDeleteModal('clp')">🗑 Delete Selected</button>
                 <button class="bulk-clear" onclick="clearClpBulkSelect()">✕ Clear</button>
               </div>
               <div id="clpLeadsTable"></div>
@@ -4223,6 +4225,7 @@
                 <button class="btn btn-primary btn-sm" onclick="bulkAssignCampaignPclp()">📣 Assign</button>
                 <button class="btn btn-secondary btn-sm" style="margin-left:8px;background:#f59e0b;color:#fff;border:none;" onclick="bulkAiCallPclp()">📞 Start Bulk AI Calls</button>
                 <button class="btn btn-sm" style="margin-left:8px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;font-weight:600;" onclick="openBulkEmailModal('pclp')">📧 Send Bulk Email</button>
+                <button class="btn btn-sm admin-only-btn" style="margin-left:8px;background:#ef4444;color:#fff;border:none;font-weight:600;display:none;" onclick="openBulkDeleteModal('pclp')">🗑 Delete Selected</button>
                 <button class="bulk-clear" onclick="clearPclpBulkSelect()">✕ Clear</button>
               </div>
               <div id="pclpLeadsTable"></div>
@@ -5050,6 +5053,30 @@
     </div>
   </div>
 
+  <!-- ─── Bulk Delete Confirmation ─── -->
+  <div class="modal-bg" id="bulkDeleteModal" onclick="if(event.target===this)closeBulkDeleteModal()">
+    <div class="modal" style="max-width:440px">
+      <div class="modal-header">
+        <div>
+          <h2 style="color:var(--danger)">🗑️ Delete Selected Leads?</h2>
+        </div>
+        <button class="modal-close" onclick="closeBulkDeleteModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="bulkDeleteContext">
+        <p style="margin-bottom:16px">You are about to permanently delete <strong id="bulkDeleteCount">0</strong> selected leads.</p>
+        <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:var(--hot)">
+          ⚠️ <strong>This action cannot be undone.</strong> All related records will be permanently removed.
+        </div>
+        <p id="bulkDeleteProgress" style="margin-bottom:16px; font-weight:bold; display:none;"></p>
+        <div style="display:flex;gap:10px" id="bulkDeleteButtons">
+          <button class="btn btn-secondary" onclick="closeBulkDeleteModal()" style="flex:1">Cancel</button>
+          <button class="btn btn-danger" onclick="bulkDeleteSelectedLeads()" style="flex:1">🗑️ Delete Selected</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ─── Delete Call Confirmation ─── -->
   <div class="modal-bg" id="deleteCallModal" onclick="if(event.target===this)closeDeleteCall()">
     <div class="modal" style="max-width:440px">
@@ -5250,6 +5277,7 @@
           document.querySelectorAll('.nav a[data-view="counselors"]').forEach(el => {
             el.style.display = '';
           });
+          document.querySelectorAll('.admin-only-btn').forEach(el => el.style.display = 'inline-block');
         }
 
         // Update sidebar brand
@@ -6210,6 +6238,67 @@
       const bar = document.getElementById('bulkBar');
       if (bar) bar.classList.remove('visible');
     }
+
+    function openBulkDeleteModal(ctx) {
+      document.getElementById('bulkDeleteContext').value = ctx;
+      let set = _selectedLeads;
+      if (ctx === 'clp') set = window._clpSelectedLeads || new Set();
+      if (ctx === 'pclp') set = window._pclpSelectedLeads || new Set();
+      
+      const n = set.size;
+      if (!n) { toast('Select at least one lead', 'error'); return; }
+      
+      document.getElementById('bulkDeleteCount').textContent = n;
+      document.getElementById('bulkDeleteProgress').style.display = 'none';
+      document.getElementById('bulkDeleteButtons').style.display = 'flex';
+      document.getElementById('bulkDeleteModal').classList.add('active');
+    }
+
+    function closeBulkDeleteModal() {
+      document.getElementById('bulkDeleteModal').classList.remove('active');
+    }
+
+    async function bulkDeleteSelectedLeads() {
+      const ctx = document.getElementById('bulkDeleteContext').value;
+      let set = _selectedLeads;
+      if (ctx === 'clp') set = window._clpSelectedLeads || new Set();
+      if (ctx === 'pclp') set = window._pclpSelectedLeads || new Set();
+      
+      const n = set.size;
+      if (!n) return;
+      
+      const leadIds = [...set];
+      const prog = document.getElementById('bulkDeleteProgress');
+      const btns = document.getElementById('bulkDeleteButtons');
+      
+      btns.style.display = 'none';
+      prog.style.display = 'block';
+      prog.textContent = `Deleting ${n} leads...`;
+      prog.style.color = 'var(--text-color)';
+      
+      try {
+        const r = await api('/leads/bulk-delete', { method: 'POST', body: JSON.stringify({ leadIds }) });
+        prog.textContent = `✓ ${r.message || n + ' deleted'}`;
+        prog.style.color = 'var(--success)';
+        toast(`✅ ${r.message || n + ' deleted'}`, 'success');
+        
+        setTimeout(() => {
+          closeBulkDeleteModal();
+          if (ctx === 'clp' && typeof clearClpBulkSelect === 'function') clearClpBulkSelect();
+          else if (ctx === 'pclp' && typeof clearPclpBulkSelect === 'function') clearPclpBulkSelect();
+          else clearBulkSelect();
+          
+          loadLeads();
+          if (typeof refreshCampaignLeads === 'function' && CLP_CAMPAIGN_ID) refreshCampaignLeads();
+        }, 1500);
+      } catch (e) { 
+        prog.textContent = `❌ ${e.message}`;
+        prog.style.color = 'var(--danger)';
+        btns.style.display = 'flex';
+        toast('❌ ' + e.message, 'error'); 
+      }
+    }
+
 
     async function bulkAssignCampaign() {
       const sel = document.getElementById('bulkCampaignSel');
