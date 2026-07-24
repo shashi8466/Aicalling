@@ -55,7 +55,21 @@ function updateEnvBaseUrl(url) {
     fs.writeFileSync(envPath, content);
     process.env.BASE_URL = url;
     cfg.server.baseUrl   = url;
-    logger.info(`📡 BASE_URL set to: ${url}`);
+    // ⚠️  NEVER update meetingBaseUrl with the tunnel URL.
+    // meetingBaseUrl is locked to MEETING_BASE_URL env var (permanent production domain).
+    // cfg.server.meetingBaseUrl stays frozen from startup — do NOT touch it here.
+    logger.info(`📡 Tunnel BASE_URL updated: ${url}  (meeting links still use: ${cfg.server.meetingBaseUrl})`);
+
+    // Safety warning if MEETING_BASE_URL is missing or was accidentally set to a tunnel
+    const TUNNEL_PATTERNS = ['serveousercontent.com', 'lhr.life', 'ngrok', 'localhost.run', 'localtunnel.me', 'localhost', '127.0.0.1'];
+    if (TUNNEL_PATTERNS.some(p => (cfg.server.meetingBaseUrl || '').includes(p))) {
+      logger.error([
+        '🚨 CRITICAL: MEETING_BASE_URL is set to a temporary tunnel/local address!',
+        `   Current value: ${cfg.server.meetingBaseUrl}`,
+        '   Meeting links sent to students will be broken and flagged as suspicious.',
+        '   Fix: Set MEETING_BASE_URL=https://aicalling-xfyr.onrender.com in your .env file.',
+      ].join('\n'));
+    }
   } catch(e) {
     logger.warn('Could not update .env:', e.message);
   }

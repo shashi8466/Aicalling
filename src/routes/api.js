@@ -220,14 +220,32 @@ router.get('/leads/export', async (req, res) => {
 
 router.get('/leads/:id', async (req, res) => {
   try {
-    const lead = await Lead.findById(req.params.id);
-    if (!lead) return res.status(404).json({ error: 'Lead not found' });
-    
+    const id = req.params.id;
+    // Validate UUID format to avoid unnecessary DB calls
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return res.status(400).json({ error: `Invalid lead ID format: "${id}"` });
+    }
+
+    // Fetch directly from Supabase with full diagnostics
+    const { data: row, error: dbErr } = await supabase.from('leads').select('*').eq('id', id).single();
+    if (dbErr) {
+      logger.error('GET /leads/:id — Supabase error', { id, code: dbErr.code, msg: dbErr.message });
+      if (dbErr.code === 'PGRST116') return res.status(404).json({ error: 'Lead not found', id });
+      return res.status(500).json({ error: dbErr.message });
+    }
+    if (!row) {
+      logger.warn('GET /leads/:id — row not found', { id });
+      return res.status(404).json({ error: 'Lead not found', id });
+    }
+
+    const { rowToAPI } = require('../db/document');
+    const lead = rowToAPI(row);
+
     // Fetch the latest meeting from meetings table
     const { data: latestMeeting } = await supabase
       .from('meetings')
       .select('*')
-      .eq('lead_id', lead._id)
+      .eq('lead_id', id)
       .order('scheduled_at', { ascending: false })
       .limit(1)
       .single();
@@ -245,9 +263,10 @@ router.get('/leads/:id', async (req, res) => {
         timezone: latestMeeting.timezone,
       };
     }
-    
+
     res.json(lead);
   } catch(e) {
+    logger.error('GET /leads/:id — unexpected error', { id: req.params.id, msg: e.message });
     res.status(500).json({ error: e.message });
   }
 });
@@ -468,6 +487,176 @@ router.post('/leads/bulk-call', async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════
+//   BULK EMAIL
+// ═══════════════════════════════════════════════════════════════════════
+
+// In-memory job store for progress tracking (server restarts clear it — acceptable)
+const _bulkEmailJobs = {};
+
+// Email template registry — all map to existing emailService methods
+const BULK_EMAIL_TEMPLATES = {
+  welcome:           { label: 'Welcome Email',          fn: (l) => emailSvc.sendNewLeadWelcome(l) },
+  confirmation:      { label: 'Meeting Confirmation',   fn: (l) => emailSvc.sendMeetingConfirmation(l) },
+  reminder:          { label: 'Meeting Reminder',       fn: (l) => emailSvc.sendMeetingReminder(l) },
+  noAnswer:          { label: 'No Answer Follow-up',    fn: (l) => emailSvc.sendNoAnswer(l) },
+  'success-stories': { label: 'Success Stories',        fn: (l) => emailSvc.sendSuccessStories(l) },
+  enrollment:        { label: 'Enrollment Follow-up',   fn: (l) => emailSvc.sendEnrollmentFollowup(l) },
+  thankyou:          { label: 'Thank You Email',        fn: (l) => emailSvc.sendEnrollmentReminder(l) },
+  programBenefits:   { label: 'Program Benefits',       fn: (l) => emailSvc.sendProgramBenefits(l) },
+  limitedSeat:       { label: 'Limited Seat Alert',     fn: (l) => emailSvc.sendLimitedSeat(l) },
+  counselorReachOut: { label: 'Counselor Reach-Out',    fn: (l) => emailSvc.sendCounselorReachOut(l) },
+  reEngagement:      { label: 'Re-Engagement',          fn: (l) => emailSvc.sendReEngagement(l) },
+  parentDiscussion:  { label: 'Parent Discussion',      fn: (l) => emailSvc.sendParentDiscussion(l) },
+};
+
+// GET /api/leads/bulk-email/templates — list all available templates
+router.get('/leads/bulk-email/templates', (req, res) => {
+  const list = Object.entries(BULK_EMAIL_TEMPLATES).map(([key, t]) => ({ key, label: t.label }));
+  res.json(list);
+});
+
+// POST /api/leads/bulk-email — kick off a bulk email job
+router.post('/leads/bulk-email', async (req, res) => {
+  try {
+    const { leadIds, templateType } = req.body;
+    if (!Array.isArray(leadIds) || !leadIds.length) {
+      return res.status(400).json({ error: 'leadIds array is required' });
+    }
+    if (!templateType || !BULK_EMAIL_TEMPLATES[templateType]) {
+      return res.status(400).json({
+        error: `Unknown templateType "${templateType}". Valid: ${Object.keys(BULK_EMAIL_TEMPLATES).join(', ')}`,
+      });
+    }
+
+    const jobId = require('crypto').randomUUID();
+    const job = {
+      id: jobId, templateType,
+      label: BULK_EMAIL_TEMPLATES[templateType].label,
+      total: leadIds.length,
+      sent: 0, failed: 0, pending: leadIds.length,
+      errors: [],
+      startedAt: new Date().toISOString(),
+      done: false,
+    };
+    _bulkEmailJobs[jobId] = job;
+
+    // Respond immediately; send in background
+    res.json({ ok: true, jobId, queued: leadIds.length, templateType });
+
+    // Background execution — sequential with small delays (avoids Brevo rate limits)
+    setImmediate(async () => {
+      const tpl = BULK_EMAIL_TEMPLATES[templateType];
+      for (const id of leadIds) {
+        try {
+          const lead = await Lead.findById(id);
+          if (!lead) {
+            job.failed++; job.pending--;
+            job.errors.push({ id, error: 'Lead not found' });
+            continue;
+          }
+          if (!lead.email) {
+            job.failed++; job.pending--;
+            job.errors.push({ id, leadName: lead.fullName, error: 'No email address on file' });
+            continue;
+          }
+
+          const result = await tpl.fn(lead);
+
+          if (result.ok) {
+            job.sent++; job.pending--;
+            // Persist to lead record
+            try {
+              lead.emailsSent = lead.emailsSent || [];
+              lead.emailsSent.push({
+                type: templateType,
+                label: tpl.label,
+                sentAt: new Date().toISOString(),
+                status: 'sent',
+                messageId: result.messageId || null,
+              });
+              await lead.save();
+            } catch (saveErr) {
+              logger.warn('bulk-email: Could not save emailsSent', { id, err: saveErr.message });
+            }
+          } else {
+            job.failed++; job.pending--;
+            job.errors.push({ id, leadName: lead.fullName, error: result.error || 'Send failed' });
+            // Still log the attempt as failed
+            try {
+              lead.emailsSent = lead.emailsSent || [];
+              lead.emailsSent.push({
+                type: templateType,
+                label: tpl.label,
+                sentAt: new Date().toISOString(),
+                status: 'failed',
+                error: result.error || 'Send failed',
+              });
+              await lead.save();
+            } catch (_) { /* ignore */ }
+          }
+        } catch (err) {
+          job.failed++; job.pending--;
+          job.errors.push({ id, error: err.message });
+          logger.error(`bulk-email: Error for lead ${id}:`, err.message);
+        }
+        // Brief pause to avoid rate limiting Brevo
+        await new Promise(r => setTimeout(r, 300));
+      }
+      job.done = true;
+      job.finishedAt = new Date().toISOString();
+      logger.info(`bulk-email job ${jobId} done — sent:${job.sent} failed:${job.failed}`);
+      // Auto-clean job after 30 minutes
+      setTimeout(() => { delete _bulkEmailJobs[jobId]; }, 30 * 60 * 1000);
+    });
+
+  } catch(e) {
+    logger.error('bulk-email endpoint error', { msg: e.message });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/leads/bulk-email/progress/:jobId — poll job status
+router.get('/leads/bulk-email/progress/:jobId', (req, res) => {
+  const job = _bulkEmailJobs[req.params.jobId];
+  if (!job) return res.status(404).json({ error: 'Job not found or expired' });
+  res.json(job);
+});
+
+// GET /api/email-analytics — aggregate email send stats across all leads
+router.get('/email-analytics', async (req, res) => {
+  try {
+    const { data: rows } = await supabase
+      .from('leads')
+      .select('emails_sent')
+      .not('emails_sent', 'eq', '[]');
+
+    let totalSent = 0, totalFailed = 0;
+    const byTemplate = {};
+
+    (rows || []).forEach(r => {
+      (r.emails_sent || []).forEach(e => {
+        totalSent += (e.status !== 'failed') ? 1 : 0;
+        totalFailed += (e.status === 'failed') ? 1 : 0;
+        const key = e.label || e.type || 'Unknown';
+        byTemplate[key] = (byTemplate[key] || 0) + 1;
+      });
+    });
+
+    const byTemplateArr = Object.entries(byTemplate)
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count);
+
+    res.json({
+      totalSent,
+      totalFailed,
+      totalEmails: totalSent + totalFailed,
+      byTemplate: byTemplateArr,
+    });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 router.post('/leads/:id/stop-call', async (req, res) => {
   try {
@@ -956,10 +1145,118 @@ router.get('/config-check', (req, res) => {
       SUPABASE_SERVICE_ROLE_KEY: check(cfg.supabase.serviceRoleKey),
     },
     server: {
-      BASE_URL: cfg.server.baseUrl,
-      PORT:     cfg.server.port,
+      BASE_URL:          cfg.server.baseUrl,
+      MEETING_BASE_URL:  cfg.server.meetingBaseUrl,
+      PORT:              cfg.server.port,
+      meetingBaseUrlSafe: !['serveousercontent.com','lhr.life','ngrok','localhost','127.0.0.1'].some(d => (cfg.server.meetingBaseUrl||'').includes(d)),
     },
   });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+//   MEETING LINK RESCUE — POST /api/meetings/fix-links
+//   Rewrites all bad tunnel-domain meeting links in Supabase to use
+//   MEETING_BASE_URL. Safe to call multiple times.
+// ═══════════════════════════════════════════════════════════════════════
+
+const BAD_LINK_PATTERNS = [
+  /https?:\/\/[a-z0-9\-]+\.serveousercontent\.com/gi,
+  /https?:\/\/[a-z0-9\-]+\.lhr\.life/gi,
+  /https?:\/\/[a-z0-9\-]+\.ngrok\.io/gi,
+  /https?:\/\/[a-z0-9\-]+\.ngrok-free\.app/gi,
+  /https?:\/\/[a-z0-9\-]+\.localtunnel\.me/gi,
+  /https?:\/\/localhost:\d+/gi,
+  /http:\/\/localhost:\d+/gi,
+];
+
+function _isBadMeetLink(url) {
+  if (!url) return false;
+  return BAD_LINK_PATTERNS.some(p => { p.lastIndex = 0; return p.test(url); });
+}
+
+function _rewriteMeetLink(url, baseUrl) {
+  const m = url.match(/\/meeting\/([^?#\s]+)([\?#].*)?$/);
+  if (!m) return null;
+  return `${baseUrl}/meeting/${m[1]}${m[2] || ''}`;
+}
+
+router.post('/meetings/fix-links', async (req, res) => {
+  try {
+    const targetBase = (process.env.MEETING_BASE_URL || cfg.server.meetingBaseUrl || '').replace(/\/$/, '');
+    if (!targetBase || !targetBase.startsWith('https')) {
+      return res.status(400).json({ error: 'MEETING_BASE_URL is not set to a valid HTTPS URL. Set it in your .env file.' });
+    }
+
+    // Check if meetingBaseUrl is itself a bad domain
+    if (_isBadMeetLink(targetBase + '/meeting/test')) {
+      return res.status(400).json({ error: `MEETING_BASE_URL "${targetBase}" is a tunnel domain. Set it to your permanent production URL.` });
+    }
+
+    let meetFixed = 0, meetSkipped = 0, meetFailed = 0;
+    let leadFixed = 0, leadSkipped = 0;
+    const errors = [];
+
+    // ── Fix meetings table ──────────────────────────────────────────
+    const { data: meetings } = await supabase
+      .from('meetings')
+      .select('id, meet_link, lead_id')
+      .not('meet_link', 'is', null)
+      .neq('meet_link', '');
+
+    for (const row of meetings || []) {
+      if (!_isBadMeetLink(row.meet_link)) { meetSkipped++; continue; }
+      const fixed = _rewriteMeetLink(row.meet_link, targetBase);
+      if (!fixed) { meetFailed++; errors.push(`Cannot parse room from: ${row.meet_link}`); continue; }
+
+      const { error } = await supabase.from('meetings').update({ meet_link: fixed }).eq('id', row.id);
+      if (error) { meetFailed++; errors.push(error.message); }
+      else {
+        logger.info(`fix-links: meetings[${row.id}] ${row.meet_link} → ${fixed}`);
+        meetFixed++;
+      }
+    }
+
+    // ── Fix leads table ─────────────────────────────────────────────
+    const { data: leads } = await supabase
+      .from('leads')
+      .select('id, meeting')
+      .not('meeting', 'is', null);
+
+    for (const row of leads || []) {
+      const mtg = row.meeting;
+      if (!mtg || (!mtg.meetLink && !mtg.hostMeetLink)) { leadSkipped++; continue; }
+      let changed = false;
+      const updated = { ...mtg };
+
+      if (mtg.meetLink && _isBadMeetLink(mtg.meetLink)) {
+        const f = _rewriteMeetLink(mtg.meetLink, targetBase);
+        if (f) { updated.meetLink = f; changed = true; }
+      }
+      if (mtg.hostMeetLink && _isBadMeetLink(mtg.hostMeetLink)) {
+        const f = _rewriteMeetLink(mtg.hostMeetLink, targetBase);
+        if (f) { updated.hostMeetLink = f; changed = true; }
+      }
+
+      if (!changed) { leadSkipped++; continue; }
+
+      const { error } = await supabase.from('leads').update({ meeting: updated }).eq('id', row.id);
+      if (error) { errors.push(error.message); }
+      else { leadFixed++; }
+    }
+
+    logger.info(`fix-links complete: meetings ${meetFixed} fixed / ${meetSkipped} ok | leads ${leadFixed} fixed / ${leadSkipped} ok`);
+
+    res.json({
+      ok: true,
+      targetBase,
+      meetings: { fixed: meetFixed, alreadyOk: meetSkipped, failed: meetFailed },
+      leads:    { fixed: leadFixed,  alreadyOk: leadSkipped },
+      errors:   errors.length ? errors : undefined,
+    });
+  } catch(e) {
+    logger.error('fix-links error', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 module.exports = router;
