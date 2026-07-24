@@ -220,7 +220,7 @@ router.get('/leads/export', async (req, res) => {
 
 router.get('/leads/:id', async (req, res) => {
   try {
-    const id = req.params.id;
+    const id = req.params.id.trim();
     // Validate UUID format to avoid unnecessary DB calls
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
       return res.status(400).json({ error: `Invalid lead ID format: "${id}"` });
@@ -228,6 +228,7 @@ router.get('/leads/:id', async (req, res) => {
 
     // Fetch directly from Supabase with full diagnostics
     const { data: row, error: dbErr } = await supabase.from('leads').select('*').eq('id', id).single();
+
     if (dbErr) {
       logger.error('GET /leads/:id — Supabase error', { id, code: dbErr.code, msg: dbErr.message });
       if (dbErr.code === 'PGRST116') return res.status(404).json({ error: 'Lead not found', id });
