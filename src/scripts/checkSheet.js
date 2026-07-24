@@ -1,4 +1,4 @@
-﻿require('dotenv').config();
+require('dotenv').config();
 const { google } = require('googleapis');
 const cfg = require('../config');
 
@@ -12,9 +12,12 @@ async function run() {
   const sheets = google.sheets({ version: 'v4', auth });
 
   // Read first 5 rows
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: cfg.google.sheetsId });
+  const tabName = meta.data.sheets[0].properties.title;
+
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: cfg.google.sheetsId,
-    range: 'Sheet1!A1:L6',
+    range: `'${tabName}'!A1:L6`,
   });
 
   const rows = res.data.values || [];

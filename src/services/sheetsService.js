@@ -22,6 +22,17 @@ class SheetsService {
     this.cols          = cfg.sheets.cols;
   }
 
+  async getTabName() {
+    if (this._tabName) return this._tabName;
+    try {
+      const meta = await this.sheets.spreadsheets.get({ spreadsheetId: this.spreadsheetId });
+      this._tabName = meta.data.sheets[0].properties.title;
+      return this._tabName;
+    } catch(e) {
+      return 'Sheet1';
+    }
+  }
+
   /**
    * Read ALL rows from the sheet every poll.
    * Deduplication is done in the poller against MongoDB.
@@ -29,9 +40,10 @@ class SheetsService {
    */
   async getAllLeads() {
     try {
+      const tabName = await this.getTabName();
       const res = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'Sheet1!A:L',
+        range: `'${tabName}'!A:L`,
       });
 
       const rows = res.data.values || [];
@@ -95,18 +107,19 @@ class SheetsService {
     } = opts;
 
     try {
+      const tabName = await this.getTabName();
       await this.sheets.spreadsheets.values.batchUpdate({
         spreadsheetId: this.spreadsheetId,
         requestBody: {
           valueInputOption: 'USER_ENTERED',
           data: [
-            { range: `Sheet1!I${rowIndex}`, values: [[status]] },
-            { range: `Sheet1!J${rowIndex}`, values: [[score]] },
-            { range: `Sheet1!K${rowIndex}`, values: [[summary]] },
-            ...(meetingDate ? [{ range: `Sheet1!L${rowIndex}`, values: [[meetingDate]] }] : []),
-            ...(meetingTime ? [{ range: `Sheet1!M${rowIndex}`, values: [[meetingTime]] }] : []),
-            ...(meetLink    ? [{ range: `Sheet1!N${rowIndex}`, values: [[meetLink]] }]    : []),
-            { range: `Sheet1!O${rowIndex}`, values: [[new Date().toLocaleString()]] },
+            { range: `'${tabName}'!I${rowIndex}`, values: [[status]] },
+            { range: `'${tabName}'!J${rowIndex}`, values: [[score]] },
+            { range: `'${tabName}'!K${rowIndex}`, values: [[summary]] },
+            ...(meetingDate ? [{ range: `'${tabName}'!L${rowIndex}`, values: [[meetingDate]] }] : []),
+            ...(meetingTime ? [{ range: `'${tabName}'!M${rowIndex}`, values: [[meetingTime]] }] : []),
+            ...(meetLink    ? [{ range: `'${tabName}'!N${rowIndex}`, values: [[meetLink]] }]    : []),
+            { range: `'${tabName}'!O${rowIndex}`, values: [[new Date().toLocaleString()]] },
           ],
         },
       });
@@ -119,9 +132,10 @@ class SheetsService {
   /** Ensure header row has AI columns labelled */
   async ensureHeaders() {
     try {
+      const tabName = await this.getTabName();
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
-        range: 'Sheet1!I1:O1',
+        range: `'${tabName}'!I1:O1`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [['AI Status', 'Lead Score', 'AI Summary', 'Meeting Date', 'Meeting Time', 'Meet Link', 'Last Updated']] },
       });
