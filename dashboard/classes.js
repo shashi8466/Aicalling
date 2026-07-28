@@ -202,8 +202,12 @@ function renderClassStudentsTable() {
                 <td style="font-weight:600">${s.full_name}</td>
                 <td>${s.email || '-'}</td>
                 <td>${s.phone || '-'}</td>
-                <td><span class="score-badge">${s.status}</span></td>
+                <td><span class="score-badge">${s.status || '-'}</span></td>
                 <td style="text-align:right">
+                    ${s.status === 'calling'
+                      ? `<button class="btn btn-sm" style="background:var(--hot);color:#fff" onclick="event.stopPropagation(); stopCall('${s.id}')">⏹ Stop</button>`
+                      : `<button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); callLead('${s.id}')">📞 Call</button>`
+                    }
                     <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); removeStudentFromClass('${s.id}')">Remove</button>
                 </td>
             </tr>
