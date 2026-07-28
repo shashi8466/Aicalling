@@ -16,7 +16,7 @@ const anthropic = cfg.anthropic?.apiKey ? new Anthropic({ apiKey: cfg.anthropic.
 // `campaign` (optional) is a registry entry whose systemContext(lead) returns a
 // framing block for a specific outreach campaign. The default Demo Test
 // Follow-up campaign returns an empty context, so the prompt below is unchanged.
-function buildSystem(lead, campaign) {
+function buildSystem(lead, campaign, campaignVars = {}) {
   const campaignType = (campaign && campaign.type) || 'demo-test-followup';
   const studentFirst = lead.fullName.split(' ')[0];
   const companyName = campaignType === 'business-partner' ? 'HGI' : 'Test Prep Pundits';
@@ -174,7 +174,8 @@ If you don't know: "Great question — let me have one of our senior advisors co
   // ── Campaign-Specific System Prompt ──
   const campaignName = campaign.name || 'Outreach Program';
   const program = campaign.program || 'our program';
-  const context = typeof campaign.systemContext === 'function' ? (campaign.systemContext(lead) || '') : '';
+  const context = typeof campaign.systemContext === 'function' ? (campaign.systemContext(lead, campaignVars) || '') : '';
+
 
   // ── Parent Notification Campaigns — completely different prompt ──────────────
   // These calls are NOT about booking meetings. They inform parents about their

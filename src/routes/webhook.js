@@ -205,18 +205,31 @@ router.post('/call/start', async (req, res) => {
     
     const qCampaignId = req.query.campaignId || null;
     if (qCampaignId) {
-      campaignRow = await campaignSvc.getById(qCampaignId);
-      if (campaignRow) campaignType = campaignRow.type;
+      // Check if it's a known built-in registry type (e.g. 'parent-homework', 'parent-absent', 'parent-flt')
+      // These are NOT DB UUIDs — resolve directly from the registry.
+      if (campaignReg.CAMPAIGNS[qCampaignId]) {
+        campaignType = qCampaignId;
+        campaignRow = null;
+      } else {
+        // Treat as a DB UUID — look up in campaigns table
+        campaignRow = await campaignSvc.getById(qCampaignId);
+        if (campaignRow) campaignType = campaignRow.type;
+      }
     } else if (lead.campaignId) {
       campaignRow = await campaignSvc.getById(lead.campaignId);
       if (campaignRow) campaignType = campaignRow.type;
     }
 
     campaign = campaignReg.getCampaign(campaignType, campaignRow);
-    logger.info(`Campaign resolved from DB: ${campaignType} for lead ${lead.fullName}`);
+    logger.info(`Campaign resolved: ${campaignType} for lead ${lead.fullName}`);
     
+    const campaignVars = {
+      homeworkTopic: req.query.homeworkTopic,
+      testName: req.query.testName,
+      className: req.query.className
+    };
 
-    const sessionObj = { history: [], turnCount: 0, isFollowUp, campaignType: campaign.type, campaign };
+    const sessionObj = { history: [], turnCount: 0, isFollowUp, campaignType: campaign.type, campaign, campaignVars };
     sessions.set(leadId, sessionObj);
 
     // Asynchronously fetch available slots so the AI has them for scheduling.
@@ -348,7 +361,7 @@ router.post('/call/respond', async (req, res) => {
       if (confirmed) {
         session.history.push({ role: 'user', content: speech });
         // Campaign-specific opening line (Demo Test Follow-up = original wording).
-        const followUp = campaign.turn0Line(lead);
+        const followUp = campaign.turn0Line(lead, session.campaignVars);
         session.history.push({ role: 'assistant', content: followUp });
         session.turnCount++;
         sessions.set(leadId, session);
@@ -376,7 +389,7 @@ router.post('/call/respond', async (req, res) => {
           // After 3 failed attempts, move forward anyway
           session.history.push({ role: 'user', content: speech });
           const followUp = (session.campaignType && session.campaignType !== campaignReg.DEFAULT_TYPE)
-            ? `I understand. ${campaign.turn0Line(lead)}`
+            ? `I understand. ${campaign.turn0Line(lead, session.campaignVars)}`
             : `I understand. I'm calling to help you learn more about our SAT, ACT, AP, and College Admissions programs. Which program are you interested in?`;
           session.history.push({ role: 'assistant', content: followUp });
           session.turnCount++;
@@ -432,7 +445,7 @@ router.post('/call/respond', async (req, res) => {
         lead,
         history: session.history.slice(-10),
         userMessage: speech,
-        systemOverride: aiSvc.buildSystem(lead, session.campaign)
+        systemOverride: aiSvc.buildSystem(lead, session.campaign, session.campaignVars)
       });
 
       session.activeStream = parentStream;
@@ -633,7 +646,7 @@ router.post('/call/respond', async (req, res) => {
 
     // Get AI response — stream response for low latency
     let stream;
-    let baseSys = session.isFollowUp ? aiSvc.buildFollowUpSystem(lead) : aiSvc.buildSystem(lead, session.campaign);
+    let baseSys = session.isFollowUp ? aiSvc.buildFollowUpSystem(lead) : aiSvc.buildSystem(lead, session.campaign, session.campaignVars);
     
     if (!session.meetingBooked && session.slots && session.slots.length) {
       const slotStrings = session.slots.map(s => `- ${s.displayTime}`).join('\n');

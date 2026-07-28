@@ -24,6 +24,7 @@ const crmRouter        = require('./routes/crm');
 const authRouter       = require('./routes/auth');
 const counselorsRouter = require('./routes/counselors');
 const campaignsRouter  = require('./routes/campaigns');
+const classesRouter    = require('./routes/classes');
 const { requireAuth, requireAdmin, requireAuthQuery } = require('./middleware/auth');
 const billingRouter    = require('./routes/billing');
 const followUpEngine   = require('./jobs/followUpEngine');
@@ -93,6 +94,7 @@ app.use('/api', requireAuth);
 app.use('/api', apiRouter);
 app.use('/api/crm', crmRouter);
 app.use('/api/campaigns', campaignsRouter);
+app.use('/api/classes', classesRouter);
 app.use('/api/billing', billingRouter);
 app.use('/api/counselors', requireAdmin, counselorsRouter);
 

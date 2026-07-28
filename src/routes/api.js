@@ -388,6 +388,7 @@ router.post('/leads/:id/call', async (req, res) => {
     const campaignSvc = require('../services/campaignService');
     const campaignReg = require('../campaigns/registry');
     let campaignId = (req.body && req.body.campaignId) || null;
+    let campaignVars = (req.body && req.body.campaignVars) || null;
     // If not supplied by caller, try to resolve from the lead's stored campaignId
     if (!campaignId && lead.campaignId) {
       campaignId = lead.campaignId;
@@ -409,7 +410,7 @@ router.post('/leads/:id/call', async (req, res) => {
 
     let callSid;
     try {
-      const result = await twilioSvc.call(lead, baseUrl, campaignId);
+      const result = await twilioSvc.call(lead, baseUrl, campaignId, campaignVars);
       callSid = result.callSid;
     } catch (twilioErr) {
       lead.status = 'queued';
@@ -431,7 +432,7 @@ router.post('/leads/:id/call', async (req, res) => {
 
 router.post('/leads/bulk-call', async (req, res) => {
   try {
-    const { leadIds, campaignId } = req.body;
+    const { leadIds, campaignId, campaignVars } = req.body;
     if (!Array.isArray(leadIds) || !leadIds.length) {
       return res.status(400).json({ error: 'leadIds array is required' });
     }
@@ -456,7 +457,7 @@ router.post('/leads/bulk-call', async (req, res) => {
             lead.callAttempts = lead.callAttempts || [];
             lead.callAttempts.push({ attemptNumber: lead.totalCallAttempts, startTime: new Date().toISOString(), status: 'initiated' });
             await lead.save();
-            const result = await twilioSvc.call(lead, baseUrl, campaignId || lead.campaignId);
+            const result = await twilioSvc.call(lead, baseUrl, campaignId || lead.campaignId, campaignVars);
             lead.callAttempts[lead.callAttempts.length - 1].callSid = result.callSid;
             await lead.save();
 

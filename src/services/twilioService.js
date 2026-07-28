@@ -16,11 +16,15 @@ const LANG   = 'en-US';
 
 class TwilioService {
 
-  /** Place an outbound call to `lead.phone` */
-  async call(lead, baseUrl, campaignId) {
+  async call(lead, baseUrl, campaignId, campaignVars = null) {
     const leadId = lead._id.toString();
     const params = new URLSearchParams({ leadId });
     if (campaignId) params.set('campaignId', campaignId);
+    if (campaignVars) {
+      for (const [k, v] of Object.entries(campaignVars)) {
+        if (v) params.set(k, v);
+      }
+    }
 
     const call = await client.calls.create({
       to:   lead.phone,

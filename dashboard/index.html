@@ -3384,6 +3384,7 @@
         <a data-view="callbacks"><span class="icon">🤙</span> Callback Requests <span class="nav-badge"
             id="navCallbackCount">0</span></a>
         <a data-view="campaigns"><span class="icon">📣</span> Campaigns</a>
+        <a data-view="classes"><span class="icon">🏫</span> Classes / Groups</a>
         <a data-view="parents"><span class="icon">👨‍👩‍👧</span> Parents</a>
         <a data-view="counselors"><span class="icon">👤</span> Counselors</a>
         <a data-view="settings"><span class="icon">⚙️</span> Settings</a>
@@ -4157,6 +4158,54 @@
 
         </section>
 
+        
+        <!-- ─── CLASSES / GROUPS ─── -->
+        <section class="view" id="view-classes">
+          <div id="classesOverview">
+            <div class="card">
+              <div class="card-header">
+                <h3>🏫 Classes / Groups</h3>
+                <div class="filters">
+                  <button class="btn btn-secondary btn-sm" onclick="loadClasses()">↻ Refresh</button>
+                  <button class="btn btn-primary btn-sm" onclick="openClassForm()">➕ Create Class</button>
+                </div>
+              </div>
+              <div id="classesTable"></div>
+            </div>
+          </div>
+          <div class="camp-leads-panel" id="classDetailsPanel" style="display:none">
+            <div class="camp-back-bar">
+              <button class="camp-back-btn" onclick="closeClassDetails()">← Back to Classes</button>
+              <div>
+                <span class="camp-back-title" id="cdpTitle">Class Details</span>
+                <span class="camp-back-badge" id="cdpBadge">Loading…</span>
+              </div>
+              <div style="margin-left:auto;display:flex;gap:8px">
+                <button class="btn btn-secondary btn-sm" onclick="refreshClassDetails()">↻ Refresh</button>
+                <button class="btn btn-primary btn-sm" onclick="openAddStudentsToClassModal()">➕ Add Students</button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3 id="cdpTableTitle">Students in Class</h3>
+                <div class="filters">
+                  <input type="text" id="cdpSearch" placeholder="Search students…" oninput="filterClassStudents()">
+                </div>
+              </div>
+              <div class="bulk-bar" id="cdpBulkBar">
+                <span><span class="bulk-count" id="cdpBulkCount">0</span> students selected</span>
+                <button class="btn btn-secondary btn-sm" style="margin-left:8px;background:#f59e0b;color:#fff;border:none;" onclick="openLaunchCampaignModal('selected')">📞 Launch Campaign (Selected)</button>
+                <button class="btn btn-sm admin-only-btn" style="margin-left:8px;background:#ef4444;color:#fff;border:none;font-weight:600;" onclick="removeSelectedStudentsFromClass()">✕ Remove Selected</button>
+                <button class="bulk-clear" onclick="clearCdpBulkSelect()">✕ Clear</button>
+              </div>
+              <div style="padding: 10px 20px; border-bottom: 1px solid var(--border);">
+                 <button class="btn btn-primary btn-sm" onclick="openLaunchCampaignModal('all')">📞 Launch Campaign for Entire Class</button>
+              </div>
+              <div id="classStudentsTable"></div>
+            </div>
+          </div>
+        </section>
+
         <!-- ─── PARENTS CAMPAIGNS ─── -->
         <section class="view" id="view-parents">
 
@@ -4585,6 +4634,78 @@
         </section>
       </div>
     </main>
+
+    <!-- Create / Edit Class Modal -->
+    <div class="modal-bg" id="classModal" onclick="if(event.target===this)closeClassModal()">
+      <div class="modal">
+        <div class="modal-header">
+          <h2 id="classModalTitle">Create Class</h2>
+          <button class="modal-close" onclick="closeClassModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="classModalId">
+          <div class="form-group" style="margin-bottom:12px;">
+            <label style="display:block;margin-bottom:4px;font-size:12px;color:var(--muted)">Class Name</label>
+            <input type="text" id="classModalName" placeholder="e.g. SAT Morning Batch" style="width:100%">
+          </div>
+          <div class="form-group" style="margin-bottom:12px;">
+            <label style="display:block;margin-bottom:4px;font-size:12px;color:var(--muted)">Description</label>
+            <textarea id="classModalDesc" rows="3" placeholder="Optional notes..." style="width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:8px 12px;border-radius:6px;"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding-top:12px;display:flex;justify-content:flex-end;gap:12px;">
+          <button class="btn btn-secondary" onclick="closeClassModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveClass()">Save Class</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Students Modal -->
+    <div class="modal-bg" id="addStudentsModal" onclick="if(event.target===this)closeAddStudentsModal()">
+      <div class="modal" style="max-width:800px; max-height: 90vh; display: flex; flex-direction: column;">
+        <div class="modal-header">
+          <h2>Add Students to Class</h2>
+          <button class="modal-close" onclick="closeAddStudentsModal()">✕</button>
+        </div>
+        <div class="modal-body" style="overflow-y: auto; flex: 1;">
+          <div class="filters" style="margin-bottom: 12px; display: flex; gap: 8px;">
+            <input type="text" id="addStudentsSearch" placeholder="Search available leads..." style="flex:1" oninput="filterAddStudentsList()">
+          </div>
+          <div id="addStudentsTableContainer"></div>
+        </div>
+        <div class="modal-footer" style="padding-top:12px;display:flex;justify-content:flex-end;gap:12px;">
+          <button class="btn btn-secondary" onclick="closeAddStudentsModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="confirmAddStudents()">Add Selected Students</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Launch Campaign Modal -->
+    <div class="modal-bg" id="launchCampaignModal" onclick="if(event.target===this)closeLaunchCampaignModal()">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Launch AI Campaign</h2>
+          <button class="modal-close" onclick="closeLaunchCampaignModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <p id="launchCampaignInfo" style="margin-bottom: 15px; font-weight: 500; color: var(--brand);"></p>
+          <div class="form-group" style="margin-bottom:12px;">
+            <label style="display:block;margin-bottom:4px;font-size:12px;color:var(--muted)">Campaign Type</label>
+            <select id="launchCampaignType" style="width:100%" onchange="updateLaunchCampaignFields()">
+              <option value="parent-homework">Homework Campaign (Student)</option>
+              <option value="parent-absent">Absent Campaign (Student)</option>
+              <option value="parent-flt">Full Length Test Campaign (Student)</option>
+            </select>
+          </div>
+          <div id="launchCampaignVarsFields" style="margin-top:16px;"></div>
+        </div>
+        <div class="modal-footer" style="padding-top:12px;display:flex;justify-content:flex-end;gap:12px;">
+          <button class="btn btn-secondary" onclick="closeLaunchCampaignModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="confirmLaunchCampaign()">Launch Calls</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <!-- ─── Add / Edit Counselor Modal ─── -->
@@ -5799,6 +5920,7 @@
         billing: 'Billing & Cost Analytics',
         counselor: 'Counselor Dashboard', pipeline: 'Enrollment Pipeline',
         enrollments: 'Enrollments', campaigns: 'Campaign Management',
+        classes: 'Classes / Groups',
         parents: 'Parent Campaigns', counselors: 'Counselor Management', settings: 'Settings',
         callbacks: 'Callback Requests',
       };
@@ -5813,6 +5935,7 @@
       if (name === 'pipeline') loadPipeline();
       if (name === 'enrollments') loadEnrollments();
       if (name === 'campaigns') loadCampaigns();
+      if (name === 'classes') loadClasses();
       if (name === 'parents') loadParentCampaigns();
       if (name === 'counselors') loadCounselors();
       if (name === 'settings') showSettingsPanel('profile');
@@ -10259,6 +10382,7 @@
   });
 
   </script>
+  <script src="/classes.js?v=3"></script>
 </body>
 
 </html>
