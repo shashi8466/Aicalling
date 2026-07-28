@@ -1598,6 +1598,9 @@ function attachMedia(p,track){
   } else if(track.kind===LK.Track.Kind.Audio){
     var aud=document.createElement('audio');
     aud.autoplay=true; aud.playsInline=true;
+    if (room && room.localParticipant && p.sid === room.localParticipant.sid) {
+      aud.muted = true;
+    }
     track.attach(aud); document.body.appendChild(aud);
   }
 }

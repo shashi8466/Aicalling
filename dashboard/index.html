@@ -4671,6 +4671,21 @@
           <div class="filters" style="margin-bottom: 12px; display: flex; gap: 8px;">
             <input type="text" id="addStudentsSearch" placeholder="Search available leads..." style="flex:1" oninput="filterAddStudentsList()">
           </div>
+          <div style="margin-bottom: 12px; display: flex; gap: 8px;">
+            <button class="btn btn-secondary" onclick="openAddLeadForClass()">+ Add New Lead</button>
+            <button class="btn btn-secondary" onclick="openImportLeadsForClass()">Import Leads</button>
+          </div>
+          <script>
+            let leadTargetClassId = null;
+            function openAddLeadForClass() {
+              if (typeof currentClassId !== 'undefined') leadTargetClassId = currentClassId;
+              openAddLead();
+            }
+            function openImportLeadsForClass() {
+              if (typeof currentClassId !== 'undefined') leadTargetClassId = currentClassId;
+              openImportLeadsModal();
+            }
+          </script>
           <div id="addStudentsTableContainer"></div>
         </div>
         <div class="modal-footer" style="padding-top:12px;display:flex;justify-content:flex-end;gap:12px;">
@@ -8822,8 +8837,21 @@
           toast('✅ Lead updated successfully', 'success');
         } else {
           // Create new
-          await api('/leads', { method: 'POST', body: JSON.stringify(payload) });
+          const createdLead = await api('/leads', { method: 'POST', body: JSON.stringify(payload) });
           toast('✅ Lead added successfully', 'success');
+          
+          if (typeof leadTargetClassId !== 'undefined' && leadTargetClassId) {
+             try {
+                 await api('/classes/' + leadTargetClassId + '/students', {
+                    method: 'POST',
+                    body: JSON.stringify({ leadIds: [createdLead._id || createdLead.id] })
+                 });
+                 if (typeof loadClassStudents === 'function') await loadClassStudents();
+             } catch(err) {
+                 toast('❌ Could not assign to class: ' + err.message, 'error');
+             }
+             leadTargetClassId = null;
+          }
         }
         closeLeadForm();
         await loadLeads();
@@ -9316,6 +9344,19 @@
         toast(msg, data.failedCount === 0 ? 'success' : 'warn');
         closeImportLeadsModal();
         
+        if (data.createdLeadIds && data.createdLeadIds.length > 0 && typeof leadTargetClassId !== \'undefined\' && leadTargetClassId) {
+             try {
+                 await api('/classes/' + leadTargetClassId + '/students', {
+                    method: 'POST',
+                    body: JSON.stringify({ leadIds: data.createdLeadIds })
+                 });
+                 if (typeof loadClassStudents === 'function') await loadClassStudents();
+             } catch(err) {
+                 toast('❌ Could not assign to class: ' + err.message, 'error');
+             }
+             leadTargetClassId = null;
+        }
+
         // Refresh grids
         if (campaignId && typeof refreshCampaignLeads === 'function') {
           refreshCampaignLeads();

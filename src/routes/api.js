@@ -815,7 +815,7 @@ router.post('/leads/bulk', async (req, res) => {
           throw new Error(`A lead with email "${email}" already exists`);
         }
 
-        await Lead.create({
+        const newLead = await Lead.create({
           fullName: data.fullName?.trim() || '',
           email:    email,
           phone:    data.phone?.trim() || '',
@@ -833,6 +833,8 @@ router.post('/leads/bulk', async (req, res) => {
           ...(campaignId ? { campaignId } : {}),
         });
         results.successCount++;
+        results.createdLeadIds = results.createdLeadIds || [];
+        results.createdLeadIds.push(newLead._id);
       } catch (e) {
         results.failedCount++;
         results.errors.push({ email: data.email, error: e.message });
