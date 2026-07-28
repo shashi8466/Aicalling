@@ -229,7 +229,15 @@ router.post('/call/start', async (req, res) => {
       className: req.query.className
     };
 
-    const sessionObj = { history: [], turnCount: 0, isFollowUp, campaignType: campaign.type, campaign, campaignVars };
+    const sessionObj = {
+      history: [],
+      turnCount: campaign.skipIdentityCheck ? 1 : 0,
+      silenceCount: 0,
+      isFollowUp,
+      campaignType,
+      campaign,
+      campaignVars
+    };
     sessions.set(leadId, sessionObj);
 
     // Asynchronously fetch available slots so the AI has them for scheduling.
@@ -246,7 +254,7 @@ router.post('/call/start', async (req, res) => {
     // Check if the campaign has a custom opener defined
     let opener = '';
     if (campaign.opener) {
-      opener = campaign.opener(lead, isFollowUp);
+      opener = campaign.opener(lead, isFollowUp, campaignVars);
     } else {
       opener = isFollowUp
         ? `Hello, this is Antra calling from Test Prep Pundits. May I please speak with ${studentFirst} or their parent?`
