@@ -9344,7 +9344,7 @@
         toast(msg, data.failedCount === 0 ? 'success' : 'warn');
         closeImportLeadsModal();
         
-        if (data.createdLeadIds && data.createdLeadIds.length > 0 && typeof leadTargetClassId !== \'undefined\' && leadTargetClassId) {
+        if (data.createdLeadIds && data.createdLeadIds.length > 0 && typeof leadTargetClassId !== 'undefined' && leadTargetClassId) {
              try {
                  await api('/classes/' + leadTargetClassId + '/students', {
                     method: 'POST',
