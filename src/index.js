@@ -243,6 +243,7 @@ async function boot() {
     followUpEngine.start();
     tzScheduler.start();
     emailCallbackPoller.start();
+    require('./services/imapService').connect();
     meetingReminderPoller.start();
     billingPoller.start();
     transcriptionProcessor.start();

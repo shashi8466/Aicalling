@@ -4383,18 +4383,22 @@
                   <thead>
                     <tr>
                       <th>Student Name</th>
+                      <th>Parent Name</th>
                       <th>Email</th>
                       <th>Phone</th>
+                      <th>Lead</th>
+                      <th>Requested Date</th>
                       <th>Requested Time</th>
                       <th>Time Zone</th>
-                      <th>Scheduled UTC</th>
-                      <th>Retry Count</th>
                       <th>Status</th>
+                      <th>Assigned Counselor</th>
+                      <th>Created Time</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody id="callbackRequestsTableBody">
                     <tr>
-                      <td colspan="8" style="text-align:center;color:var(--muted);padding:32px">Loading callback
+                      <td colspan="12" style="text-align:center;color:var(--muted);padding:32px">Loading callback
                         requests…</td>
                     </tr>
                   </tbody>
@@ -5965,29 +5969,71 @@
     // ─── Callback Requests View Logic ───
     async function loadCallbacks() {
       const el = document.getElementById('callbackRequestsTableBody');
-      el.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:32px">Loading callback requests…</td></tr>';
+      el.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:32px">Loading callback requests…</td></tr>';
       try {
         const list = await api('/crm/callbacks');
         document.getElementById('navCallbackCount').textContent = list.length;
         if (!list.length) {
-          el.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:32px">No callback requests found</td></tr>';
+          el.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:32px">No callback requests found</td></tr>';
           return;
         }
         el.innerHTML = list.map(c => `
       <tr>
         <td data-label="Student Name"><strong>${esc(c.studentName)}</strong></td>
+        <td data-label="Parent Name">${esc(c.parentName || '—')}</td>
         <td data-label="Email">${esc(c.email)}</td>
         <td data-label="Phone" style="font-family:monospace">${esc(c.phone || '—')}</td>
+        <td data-label="Lead">${c.leadId ? `<a href="#" onclick="viewLead('${c.leadId}')">View Lead</a>` : '—'}</td>
+        <td data-label="Requested Date">${esc(c.requestedDate || '—')}</td>
         <td data-label="Requested Time">${esc(c.requestedTime)}</td>
         <td data-label="Time Zone">${esc(c.timezone)}</td>
-        <td data-label="Scheduled UTC">${new Date(c.scheduledAt).toLocaleString()}</td>
-        <td data-label="Retry Count">${c.retryCount || 0}</td>
         <td data-label="Status"><span class="status-badge ${getCallbackStatusClass(c.status)}">${esc(c.status)}</span></td>
+        <td data-label="Assigned Counselor">${esc(c.assignedCounselor || '—')}</td>
+        <td data-label="Created Time">${new Date(c.createdAt || c.scheduledAt).toLocaleString()}</td>
+        <td data-label="Actions" style="white-space: nowrap;">
+          <button class="btn btn-sm btn-primary" onclick="actionCallNow('${c.id}')">Call Now</button>
+          <button class="btn btn-sm" onclick="actionViewEmail('${c.id}')">Original Email</button>
+          <button class="btn btn-sm" style="color:var(--danger)" onclick="actionUpdateStatus('${c.id}', 'Cancelled')">Cancel</button>
+          <button class="btn btn-sm" style="color:var(--success)" onclick="actionUpdateStatus('${c.id}', 'Completed')">Complete</button>
+          <div style="display:none" id="orig_email_${c.id}">${esc(c.originalEmail || '')}</div>
+        </td>
       </tr>
     `).join('');
       } catch (e) {
-        el.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--danger);padding:32px">${esc(e.message)}</td></tr>`;
+        el.innerHTML = `<tr><td colspan="12" style="text-align:center;color:var(--danger);padding:32px">${esc(e.message)}</td></tr>`;
       }
+    }
+
+    async function actionCallNow(id) {
+      if(!confirm('This will trigger the AI to call this lead immediately. Proceed?')) return;
+      try {
+        await api('/crm/callbacks/' + id + '/call', {}, 'POST');
+        toast('Call triggered successfully');
+        loadCallbacks();
+      } catch(e) {
+        toast('Failed to trigger call: ' + e.message);
+      }
+    }
+
+    async function actionUpdateStatus(id, status) {
+      if(!confirm('Update status to ' + status + '?')) return;
+      try {
+        await api('/crm/callbacks/' + id + '/status', { status }, 'PUT');
+        toast('Status updated');
+        loadCallbacks();
+      } catch(e) {
+        toast('Failed: ' + e.message);
+      }
+    }
+
+    function actionViewEmail(id) {
+      const emailContent = document.getElementById('orig_email_' + id).innerText;
+      alert('Original Email Content:\\n\\n' + emailContent);
+    }
+
+    function viewLead(leadId) {
+      // Switch view to leads and search for this lead or open modal
+      alert('This would open lead details for ' + leadId);
     }
 
     function getCallbackStatusClass(status) {
@@ -9904,6 +9950,11 @@
             if (msg.type === 'billing-updated') {
               // Live-refresh billing wherever it's visible
               if (activeView === 'view-billing') loadBilling();
+              return;
+            }
+            if (msg.type === 'callback_new') {
+              toast('New Callback Request Received!');
+              if (activeView === 'view-callbacks') loadCallbacks();
               return;
             }
             // Default: targeted refresh for lead/meeting updates

@@ -643,6 +643,49 @@ router.post('/callbacks/mock-receive', async (req, res) => {
   }
 });
 
+router.put('/callbacks/:id/status', async (req, res) => {
+  try {
+    const CallbackRequest = require('../models/CallbackRequest');
+    const updated = await CallbackRequest.findByIdAndUpdate(req.params.id, { status: req.body.status });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/callbacks/:id/call', async (req, res) => {
+  try {
+    const CallbackRequest = require('../models/CallbackRequest');
+    const Lead = require('../models/Lead');
+    const reqObj = await CallbackRequest.findById(req.params.id);
+    if (!reqObj) return res.status(404).json({ error: 'Not found' });
+    
+    const twilioService = require('../services/twilioService');
+    const lead = await Lead.findById(reqObj.leadId);
+    if (lead && lead.phone) {
+      await twilioService.makeOutboundCall(lead.phone, lead._id);
+      lead.status = 'calling';
+      lead.callAttempts = (lead.callAttempts || 0) + 1;
+      await lead.save();
+    }
+    
+    await CallbackRequest.findByIdAndUpdate(req.params.id, { status: 'Calling' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/callbacks/:id/assign', async (req, res) => {
+  try {
+    const CallbackRequest = require('../models/CallbackRequest');
+    const updated = await CallbackRequest.findByIdAndUpdate(req.params.id, { assignedCounselor: req.body.email });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════════════
 //   REAL-TIME UPDATES (SSE)
 // ═══════════════════════════════════════════════════════════════════════
