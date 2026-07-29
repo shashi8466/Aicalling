@@ -5346,11 +5346,13 @@
       const res = await fetch('/api' + path, { ...opts, headers });
       if (res.status === 401) {
         // Session expired — clear and redirect to login
-        if (window._sbClient) window._sbClient.auth.signOut().catch(() => { });
+        if (window._sbClient) {
+          try { await window._sbClient.auth.signOut(); } catch (e) {}
+        }
         localStorage.removeItem('testpreppundits_auth');
         localStorage.removeItem('sb_pub_config');
         window.location.href = '/login';
-        return;
+        return new Promise(() => {}); // Pause execution until navigation completes
       }
       if (!res.ok) {
         const e = await res.json().catch(() => ({ error: res.statusText }));
