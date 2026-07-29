@@ -18,14 +18,14 @@ const ENVFILE = path.join(__dirname, '.env');
 
 async function main() {
   console.log('\n╔══════════════════════════════════════════════════╗');
-  console.log('║   Aiprep365 — AI Admissions Agent        ║');
+  console.log('║   Test Prep Pundits — AI Admissions Agent        ║');
   console.log('╚══════════════════════════════════════════════════╝\n');
 
   // 1. Open localtunnel
   console.log('🌐 Opening public tunnel on port', PORT, '…');
   let tunnel;
   try {
-    tunnel = await lt({ port: PORT, subdomain: 'Aiprep365' });
+    tunnel = await lt({ port: PORT, subdomain: 'Test Prep Pundits' });
   } catch(e) {
     // Random subdomain if preferred one is taken
     tunnel = await lt({ port: PORT });

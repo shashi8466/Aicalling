@@ -255,7 +255,7 @@ class CalendarService {
   _description(lead, meetLink) {
     const q = lead.qualification || {};
     return [
-      `📚 Aiprep365 – Admissions Consultation`,
+      `📚 Test Prep Pundits – Admissions Consultation`,
       ``,
       `Student : ${lead.fullName}  |  Grade: ${lead.grade || 'N/A'}`,
       `Program : ${lead.courseInterest || 'N/A'}`,
@@ -270,7 +270,7 @@ class CalendarService {
       `🎥 Video Meeting Link: ${meetLink}`,
       `   (No login required — just enter your name and join)`,
       ``,
-      `Booked by Antra Kumar, AI Admissions Counselor.`,
+      `Booked by Admissions Team, AI Admissions Counselor.`,
     ].join('\n');
   }
 }

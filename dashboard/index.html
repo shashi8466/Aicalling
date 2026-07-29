@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aiprep365 — Admin Dashboard</title>
+  <title>Test Prep Pundits — Admin Dashboard</title>
   <link rel="icon" type="image/png" href="/favicon.png?v=2">
   <link rel="apple-touch-icon" href="/favicon.png?v=2">
 
@@ -3362,7 +3362,7 @@
     <!-- ─── SIDEBAR ─── -->
     <aside class="sidebar">
       <div class="brand">
-        <img src="/assets/hg_logo1.png" alt="Aiprep365" class="logo">
+        <img src="/assets/hg_logo1.png" alt="Test Prep Pundits" class="logo">
         <div class="brand-text">
           <div class="title">Admin Dashboard</div>
           <div class="sub">AI Admissions Agent</div>
@@ -3647,7 +3647,7 @@
           <div class="card">
             <div class="card-header">
               <h3>📋 Meeting Outcomes</h3>
-              <button class="btn btn-secondary btn-sm" onclick="loadMeetingOutcomes()">↻ Refresh</button>
+              <button class="btn btn-secondary btn-sm" onclick="loadMeetingOutcomes().then(() => { if(typeof toast==='function') toast('Refreshed', 'success'); }).catch(()=>{})">↻ Refresh</button>
             </div>
             <div id="meetingOutcomesList"></div>
           </div>
@@ -3747,7 +3747,7 @@
             <div class="ov-card" id="emailAnalyticsCard">
               <div class="ov-card-hdr">
                 <h4>&#128231; Email Analytics</h4>
-                <button class="btn btn-secondary btn-sm" onclick="loadEmailAnalytics()">&#8635; Refresh</button>
+                <button class="btn btn-secondary btn-sm" onclick="loadEmailAnalytics().then(() => { if(typeof toast==='function') toast('Refreshed', 'success'); }).catch(()=>{})">&#8635; Refresh</button>
               </div>
               <div class="ov-card-body">
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;">
@@ -3788,7 +3788,7 @@
                 <p class="an-sub" style="margin:2px 0 0;color:var(--muted);font-size:13px">Actual Twilio charges for every AI call — never estimated.</p>
               </div>
               <div class="an-header-right" style="flex-wrap:wrap;gap:8px">
-                <button class="btn btn-secondary btn-sm" onclick="loadBilling()">↻ Refresh</button>
+                <button class="btn btn-secondary btn-sm" onclick="loadBilling().then(() => { if(typeof toast==='function') toast('Refreshed', 'success'); }).catch(()=>{})">↻ Refresh</button>
                 <button class="btn btn-secondary btn-sm" onclick="exportBilling('csv')">⬇ CSV</button>
                 <button class="btn btn-secondary btn-sm" onclick="exportBilling('xlsx')">⬇ Excel</button>
                 <button class="btn btn-secondary btn-sm" onclick="exportBilling('pdf')">⬇ PDF</button>
@@ -4082,7 +4082,7 @@
               <div class="card-header">
                 <h3>AI Outreach Campaigns</h3>
                 <div class="filters">
-                  <button class="btn btn-secondary btn-sm" onclick="loadCampaigns()">↻ Refresh</button>
+                  <button class="btn btn-secondary btn-sm" onclick="loadCampaigns().then(() => { if(typeof toast==='function') toast('Refreshed', 'success'); }).catch(()=>{})">↻ Refresh</button>
                   <button class="btn btn-primary btn-sm" onclick="openCampaignForm()">➕ New Campaign</button>
                 </div>
               </div>
@@ -4100,7 +4100,7 @@
                 <span class="camp-back-badge" id="clpBadge">Loading…</span>
               </div>
               <div style="margin-left:auto;display:flex;gap:8px">
-                <button class="btn btn-secondary btn-sm" onclick="refreshCampaignLeads()">↻ Refresh</button>
+                <button class="btn btn-secondary btn-sm" onclick="refreshCampaignLeads().then(() => { if(typeof toast==='function') toast('Refreshed', 'success'); }).catch(()=>{})">↻ Refresh</button>
                 <button class="btn btn-primary btn-sm" onclick="openAddLeadForCampaign()">➕ Add Lead</button>
                 <button class="btn btn-secondary btn-sm" onclick="openImportLeadsModal(true)">⬆ Import Leads</button>
               </div>
@@ -4166,7 +4166,7 @@
               <div class="card-header">
                 <h3>🏫 Classes / Groups</h3>
                 <div class="filters">
-                  <button class="btn btn-secondary btn-sm" onclick="loadClasses()">↻ Refresh</button>
+                  <button class="btn btn-secondary btn-sm" onclick="loadClasses(); if(typeof toast==='function') toast('Refreshed', 'success');">↻ Refresh</button>
                   <button class="btn btn-primary btn-sm" onclick="openClassForm()">➕ Create Class</button>
                 </div>
               </div>
@@ -4181,7 +4181,7 @@
                 <span class="camp-back-badge" id="cdpBadge">Loading…</span>
               </div>
               <div style="margin-left:auto;display:flex;gap:8px">
-                <button class="btn btn-secondary btn-sm" onclick="refreshClassDetails()">↻ Refresh</button>
+                <button class="btn btn-secondary btn-sm" onclick="refreshClassDetails(); if(typeof toast==='function') toast('Refreshed', 'success');">↻ Refresh</button>
                 <button class="btn btn-primary btn-sm" onclick="openAddStudentsToClassModal()">➕ Add Students</button>
               </div>
             </div>
@@ -4216,7 +4216,7 @@
               <div class="card-header">
                 <h3>👨‍👩‍👧 Parent Outreach Campaigns</h3>
                 <div class="filters">
-                  <button class="btn btn-secondary btn-sm" onclick="loadParentCampaigns()">↻ Refresh</button>
+                  <button class="btn btn-secondary btn-sm" onclick="loadParentCampaigns().then(() => { if(typeof toast==='function') toast('Refreshed', 'success'); }).catch(()=>{})">↻ Refresh</button>
                 </div>
               </div>
               <div id="parentCampaignsTable"></div>
@@ -4233,7 +4233,7 @@
                 <span class="camp-back-badge" id="pclpBadge">Loading…</span>
               </div>
               <div style="margin-left:auto;display:flex;gap:8px">
-                <button class="btn btn-secondary btn-sm" onclick="refreshParentCampaignLeads()">↻ Refresh</button>
+                <button class="btn btn-secondary btn-sm" onclick="refreshParentCampaignLeads().then(() => { if(typeof toast==='function') toast('Refreshed', 'success'); }).catch(()=>{})">↻ Refresh</button>
                 <button class="btn btn-primary btn-sm" onclick="openAddLeadForParentCampaign()">➕ Add Parent</button>
               </div>
             </div>
@@ -4742,7 +4742,7 @@
           </div>
           <div class="form-row">
             <label>Email *</label>
-            <input type="email" id="cf_email" placeholder="jane@aiprep365.com">
+            <input type="email" id="cf_email" placeholder="jane@testpreppundits.com">
           </div>
           <div class="form-row" id="cf_passwordRow">
             <label>Password *</label>
@@ -5320,7 +5320,7 @@
       setTimeout(() => el.classList.remove('show'), 3000);
     }
 
-    // ── Auto-inject auth token into every /api/* and /auth/* fetch ────────────
+    // ── Auto-inject auth token and disable cache for every /api/* and /auth/* fetch ────────────
     (function () {
       const _orig = window.fetch.bind(window);
       window.fetch = function (url, opts = {}) {
@@ -5328,6 +5328,9 @@
           const token = window._authToken;
           if (token) {
             opts = { ...opts, headers: { ...(opts.headers || {}), 'Authorization': 'Bearer ' + token } };
+          }
+          if (!opts.method || opts.method.toUpperCase() === 'GET') {
+            opts = { ...opts, cache: 'no-store' };
           }
         }
         return _orig(url, opts);
@@ -5344,7 +5347,7 @@
       if (res.status === 401) {
         // Session expired — clear and redirect to login
         if (window._sbClient) window._sbClient.auth.signOut().catch(() => { });
-        localStorage.removeItem('aiprep365_auth');
+        localStorage.removeItem('testpreppundits_auth');
         localStorage.removeItem('sb_pub_config');
         window.location.href = '/login';
         return;
@@ -5369,7 +5372,7 @@
         }
 
         window._sbClient = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
-          auth: { storageKey: 'aiprep365_auth', autoRefreshToken: true, persistSession: true }
+          auth: { storageKey: 'testpreppundits_auth', autoRefreshToken: true, persistSession: true }
         });
 
         const { data: { session } } = await window._sbClient.auth.getSession();
@@ -5525,7 +5528,7 @@
 
     async function doLogout() {
       if (window._sbClient) await window._sbClient.auth.signOut().catch(() => { });
-      localStorage.removeItem('aiprep365_auth');
+      localStorage.removeItem('testpreppundits_auth');
       localStorage.removeItem('sb_pub_config');
       window.location.href = '/login';
     }

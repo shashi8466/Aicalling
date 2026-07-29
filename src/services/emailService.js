@@ -49,9 +49,9 @@ class EmailService {
   // avoids depending on resolveForLead(lead), which can fall back to the
   // default brand when the lead's campaignId isn't persisted in the DB.
   async _getBrand(lead, overrideType = null) {
-    let companyName = 'Aiprep365';
-    let logoPath = 'logos/new/logo.png';
-    let website = 'https://aiprep365.com';
+    let companyName = 'Test Prep Pundits';
+    let logoPath = 'logos/logo1.png';
+    let website = 'https://testpreppundits.com';
     let companyDesc = 'AI Admissions Agent · Your Path to Academic Excellence';
 
     if (lead || overrideType) {
@@ -103,12 +103,12 @@ class EmailService {
       const ics = [
         'BEGIN:VCALENDAR',
         'VERSION:2.0',
-        'PRODID:-//Aiprep365//NONSGML Event//EN',
+        'PRODID:-//Test Prep Pundits//NONSGML Event//EN',
         'CALSCALE:GREGORIAN',
         'BEGIN:VEVENT',
         `DTSTART:${formatDate(start)}`,
         `DTEND:${formatDate(end)}`,
-        `SUMMARY:Aiprep365 Free Admissions Consultation - ${lead.fullName}`,
+        `SUMMARY:Test Prep Pundits Free Admissions Consultation - ${lead.fullName}`,
         `DESCRIPTION:Join your admissions consultation using this link: ${meetLink}. Join instructions: Please join from a quiet room with a working microphone and camera.`,
         `LOCATION:${meetLink}`,
         `URL:${meetLink}`,
@@ -284,8 +284,10 @@ class EmailService {
 ${t.help ? `<p>${t.help}</p>` : ''}
 <p>Thank you.</p>
 <div class="sig">
-  <strong>Test Prep Pundits</strong>
-  ${c.counselorPhone ? `📞 ${c.counselorPhone}` : ''}
+  <strong>Regards,</strong><br><br>
+  <strong>Test Prep Pundits Team</strong><br>
+  📧 <strong><a href="mailto:Info@testpreppundits.com" style="color:inherit;text-decoration:none;">Info@testpreppundits.com</a></strong><br>
+  🌐 <strong><a href="http://www.testpreppundits.com" style="color:inherit;text-decoration:none;">www.testpreppundits.com</a></strong>
 </div>`;
   }
 
@@ -303,8 +305,10 @@ ${t.help ? `<p>${t.help}</p>` : ''}
 <p>Please review the above reminder and contact us if you have any questions.</p>
 <p>Thank you.</p>
 <div class="sig">
-  <strong>Test Prep Pundits</strong>
-  ${c.counselorPhone ? `📞 ${c.counselorPhone}` : ''}
+  <strong>Regards,</strong><br><br>
+  <strong>Test Prep Pundits Team</strong><br>
+  📧 <strong><a href="mailto:Info@testpreppundits.com" style="color:inherit;text-decoration:none;">Info@testpreppundits.com</a></strong><br>
+  🌐 <strong><a href="http://www.testpreppundits.com" style="color:inherit;text-decoration:none;">www.testpreppundits.com</a></strong>
 </div>`;
   }
 
@@ -536,10 +540,10 @@ ${t.help ? `<p>${t.help}</p>` : ''}
 
     // Adapt the inner HTML content to match the resolved company brand
     let adaptedInner = inner;
-    if (brand.companyName !== 'Aiprep365') {
+    if (brand.companyName !== 'Test Prep Pundits') {
       adaptedInner = adaptedInner
-        .replace(/Aiprep365/g, brand.companyName)
-        .replace(/aiprep365\.com/gi, 'testpreppundits.com');
+        .replace(/Test Prep Pundits/g, brand.companyName)
+        .replace(/testpreppundits\.com/gi, 'testpreppundits.com');
     }
 
     return `<!DOCTYPE html>
@@ -622,9 +626,12 @@ td{border-collapse:collapse}
   </div>
   <div class="body">${adaptedInner}</div>
   <div class="ftr">
-    © ${year} ${brand.companyName} &nbsp;|&nbsp;
-    <a href="${brand.website}">${brand.website}</a><br>
-    Questions? Call or text ${phone}
+    <strong>Need Assistance?</strong><br>
+    📧 <a href="mailto:Info@testpreppundits.com" style="color:inherit;text-decoration:none;">Info@testpreppundits.com</a><br>
+    📞 +1 844-383-7844<br>
+    📞 +1 210-457-1021<br>
+    🌐 <a href="http://www.testpreppundits.com" style="color:inherit;text-decoration:none;">www.testpreppundits.com</a><br><br>
+    <strong>Test Prep Pundits Team</strong>
   </div>
 </div>
 </body>
@@ -637,7 +644,7 @@ td{border-collapse:collapse}
     const c = cfg.company;
     return `
 <h2>Hi ${l.parentName || l.fullName}! 👋</h2>
-<p>Thank you for reaching out to <strong>Aiprep365</strong>! I'm <strong>Antra Kumar</strong>, your dedicated Admissions Counselor, and I'm genuinely excited to help <strong>${l.fullName}</strong> reach their academic goals.</p>
+<p>Thank you for reaching out to <strong>Test Prep Pundits</strong>! I am an AI Representative from Test Prep Pundits, and I'm genuinely excited to help <strong>${l.fullName}</strong> reach their academic goals.</p>
 
 <div class="box">
   📞 <strong>We'll be calling you shortly</strong> at <strong>${l.phone}</strong> to learn more and answer any questions.<br>
@@ -648,7 +655,7 @@ td{border-collapse:collapse}
   <div class="cell"><div class="lbl">Student</div><div class="val">${l.fullName}</div></div>
   <div class="cell"><div class="lbl">Grade</div><div class="val">${l.grade || 'To confirm'}</div></div>
   <div class="cell"><div class="lbl">Program</div><div class="val">${l.courseInterest || 'To discuss'}</div></div>
-  <div class="cell"><div class="lbl">Counselor</div><div class="val">Antra Kumar</div></div>
+  <div class="cell"><div class="lbl">Counselor</div><div class="val">Admissions Team</div></div>
 </div>
 
 ${this._programCards(l.courseInterest)}
@@ -656,10 +663,10 @@ ${this._programCards(l.courseInterest)}
 <a href="${c.website}" class="btn">Explore All Programs</a>
 
 <div class="sig">
-  <strong>Antra Kumar</strong>
-  Admissions Counselor | Aiprep365<br>
-  📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}<br>
-  🌐 <a href="${c.website}">${c.website}</a>
+  <strong>Regards,</strong><br><br>
+  <strong>Test Prep Pundits Team</strong><br>
+  📧 <strong><a href="mailto:Info@testpreppundits.com" style="color:inherit;text-decoration:none;">Info@testpreppundits.com</a></strong><br>
+  🌐 <strong><a href="http://www.testpreppundits.com" style="color:inherit;text-decoration:none;">www.testpreppundits.com</a></strong>
 </div>`;
   }
 
@@ -772,7 +779,7 @@ ${this._programCards(l.courseInterest)}
   <li><strong>AP Course Support</strong> — 10–16 week intensives from $749</li>
   <li><strong>College Admissions Counseling</strong> — Complete package from $2,999</li>
 </ul>
-<p>Students see an average of <strong>150–200 SAT point</strong> improvement or <strong>4–6 ACT composite points</strong> with our programs.</p>`;
+`;
   }
 
   _businessMeetingConfBody(l, t) {
@@ -790,7 +797,7 @@ ${this._programCards(l.courseInterest)}
   <strong>Time Zone:</strong> Eastern Time (ET)<br>
   <strong>Meeting Link:</strong> <a href="${meetLink}">${meetLink}</a><br>
   <strong>Business Development Manager:</strong> Business Partnership Team<br>
-  <strong>Support Contact:</strong> partner@aiprep365.com | ${c.counselorPhone}
+  <strong>Support Contact:</strong> Info@testpreppundits.com | ${c.counselorPhone}
 </div>
 
 <p><strong>Discussion Agenda:</strong></p>
@@ -804,9 +811,10 @@ ${this._programCards(l.courseInterest)}
 <p>Join instructions: Click the meeting link above at the scheduled time. Please join from a quiet environment with a working microphone and camera.</p>
 
 <div class="sig">
-  <strong>Business Partnership Team</strong><br>
-  Aiprep365 Business Development<br>
-  📧 partner@aiprep365.com &nbsp;|&nbsp; 📞 ${c.counselorPhone || ''}
+  <strong>Regards,</strong><br><br>
+  <strong>Test Prep Pundits Team</strong><br>
+  📧 <strong><a href="mailto:Info@testpreppundits.com" style="color:inherit;text-decoration:none;">Info@testpreppundits.com</a></strong><br>
+  🌐 <strong><a href="http://www.testpreppundits.com" style="color:inherit;text-decoration:none;">www.testpreppundits.com</a></strong>
 </div>`;
   }
 
@@ -838,9 +846,10 @@ ${this._programCards(l.courseInterest)}
 ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">Join Video Meeting</a>` : ''}
 
 <div class="sig">
-  <strong>Antra Kumar</strong>
-  Admissions Counselor | Aiprep365<br>
-  📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
+  <strong>Regards,</strong><br><br>
+  <strong>Test Prep Pundits Team</strong><br>
+  📧 <strong><a href="mailto:Info@testpreppundits.com" style="color:inherit;text-decoration:none;">Info@testpreppundits.com</a></strong><br>
+  🌐 <strong><a href="http://www.testpreppundits.com" style="color:inherit;text-decoration:none;">www.testpreppundits.com</a></strong>
 </div>`;
   }
 
@@ -848,7 +857,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
     const c = cfg.company;
     return `
 <h2>We tried to reach you! 📞</h2>
-<p>Hi ${l.parentName || l.fullName}! I'm <strong>Antra Kumar</strong> from Aiprep365. I recently called regarding <strong>${l.courseInterest || 'our test prep programs'}</strong> for ${l.fullName} but wasn't able to connect.</p>
+<p>Hello, I am an AI Representative from Test Prep Pundits. I recently called regarding <strong>${l.courseInterest || 'our test prep programs'}</strong> for ${l.fullName} but wasn't able to connect.</p>
 
 <div class="box">
   📌 <strong>Let's find a time that works for you!</strong><br>
@@ -858,7 +867,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 <p>Here's a quick snapshot of what we offer:</p>
 <ul>
   <li>✅ <strong>Free 45-min consultation</strong> — zero obligation</li>
-  <li>📈 Average <strong>150–200 SAT point</strong> improvement</li>
+  
   <li>💳 <strong>Flexible payment plans</strong> — 3 to 6 monthly installments</li>
   <li>🕐 Sessions available <strong>7 days/week, 7 AM – 10 PM</strong></li>
   <li>💻 Online or in-person options available</li>
@@ -867,9 +876,10 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 <a href="mailto:${c.counselorEmail}?subject=Callback Request – ${l.fullName}" class="btn">Request a Callback</a>
 
 <div class="sig">
-  <strong>Antra Kumar</strong>
-  Admissions Counselor | Aiprep365<br>
-  📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
+  <strong>Regards,</strong><br><br>
+  <strong>Test Prep Pundits Team</strong><br>
+  📧 <strong><a href="mailto:Info@testpreppundits.com" style="color:inherit;text-decoration:none;">Info@testpreppundits.com</a></strong><br>
+  🌐 <strong><a href="http://www.testpreppundits.com" style="color:inherit;text-decoration:none;">www.testpreppundits.com</a></strong>
 </div>`;
   }
 
@@ -890,17 +900,18 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">Join Tomorrow's Video Meeting</a>` : ''}
 
 <div class="sig">
-  <strong>Antra Kumar</strong>
-  Admissions Counselor | Aiprep365<br>
-  📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
+  <strong>Regards,</strong><br><br>
+  <strong>Test Prep Pundits Team</strong><br>
+  📧 <strong><a href="mailto:Info@testpreppundits.com" style="color:inherit;text-decoration:none;">Info@testpreppundits.com</a></strong><br>
+  🌐 <strong><a href="http://www.testpreppundits.com" style="color:inherit;text-decoration:none;">www.testpreppundits.com</a></strong>
 </div>`;
   }
 
   _successStoriesBody(l) {
     const c = cfg.company;
-    const site = c.website || 'https://Aiprep365.com';
+    const site = c.website || 'https://Test Prep Pundits.com';
 
-    // SAT Top 1% Scorers — exact names & scores from Aiprep365.com
+    // SAT Top 1% Scorers — exact names & scores from Test Prep Pundits.com
     const satScorers = [
       { name: 'Shiva Sai Teja Kalva',   score: 1590, school: 'Academy for Math, Science, and Engineering, Rockaway, NJ' },
       { name: 'Keshif Rahiman Shaik',   score: 1580, school: 'Sri Chaitanya Techno School Hyderabad, India' },
@@ -958,7 +969,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
     return `
 <!-- ══ Header greeting ═══════════════════════════════════════════════════ -->
 <h2 style="color:#1a3c6e;font-size:22px;font-weight:900;margin:0 0 6px">🏆 Real Students. Real Results.</h2>
-<p style="color:#374151;font-size:15px;margin:0 0 20px">Hi ${l.parentName || l.fullName}! We wanted to share what Aiprep365 students have achieved — because these aren't just numbers, they're futures changed.</p>
+<p style="color:#374151;font-size:15px;margin:0 0 20px">Hi ${l.parentName || l.fullName}! We wanted to share what Test Prep Pundits students have achieved — because these aren't just numbers, they're futures changed.</p>
 
 <!-- ══ Latest SAT Stories banner ════════════════════════════════════════ -->
 <table cellpadding="0" cellspacing="0" border="0" width="100%" class="ss-card" style="background:linear-gradient(135deg,#f97316 0%,#1a3c6e 100%);border-radius:14px;margin:0 0 16px">
@@ -1027,10 +1038,10 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 </table>
 
 <div class="sig">
-  <strong>Antra Kumar</strong>
-  Admissions Counselor | Aiprep365<br>
-  📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}<br>
-  🌐 <a href="${site}">${site}</a>
+  <strong>Regards,</strong><br><br>
+  <strong>Test Prep Pundits Team</strong><br>
+  📧 <strong><a href="mailto:Info@testpreppundits.com" style="color:inherit;text-decoration:none;">Info@testpreppundits.com</a></strong><br>
+  🌐 <strong><a href="http://www.testpreppundits.com" style="color:inherit;text-decoration:none;">www.testpreppundits.com</a></strong>
 </div>`;
   }
 
@@ -1043,7 +1054,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 <div class="box">
   💬 <strong>Common questions from parents:</strong><br><br>
   ❓ <em>"How do I know this program will actually improve scores?"</em><br>
-  → Our students average a <strong>150–200 point SAT improvement</strong> with personalized weekly progress reports you can track.<br><br>
+  
   ❓ <em>"My child already has a tutor — do they need this?"</em><br>
   → Our structured program complements existing tutors. Many of our top scorers used both.<br><br>
   ❓ <em>"Is the investment worth it?"</em><br>
@@ -1055,9 +1066,10 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 <a href="mailto:${c.counselorEmail}?subject=Parent Discussion – ${l.fullName}" class="btn">Schedule a Parent Discussion →</a>
 
 <div class="sig">
-  <strong>Antra Kumar</strong>
-  Admissions Counselor | Aiprep365<br>
-  📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
+  <strong>Regards,</strong><br><br>
+  <strong>Test Prep Pundits Team</strong><br>
+  📧 <strong><a href="mailto:Info@testpreppundits.com" style="color:inherit;text-decoration:none;">Info@testpreppundits.com</a></strong><br>
+  🌐 <strong><a href="http://www.testpreppundits.com" style="color:inherit;text-decoration:none;">www.testpreppundits.com</a></strong>
 </div>`;
   }
 
@@ -1066,10 +1078,10 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
     const prog = (l.courseInterest || 'Test Prep');
     return `
 <h2>Why ${l.fullName}'s ${prog} Program Works 📈</h2>
-<p>Hi ${l.parentName || l.fullName}! We know you're evaluating your options — here's a clear breakdown of what makes Aiprep365 different.</p>
+<p>Hi ${l.parentName || l.fullName}! We know you're evaluating your options — here's a clear breakdown of what makes Test Prep Pundits different.</p>
 
 <div class="grid">
-  <div class="cell"><div class="lbl">Average Score Gain</div><div class="val">150–200 pts SAT / 4–6 pts ACT</div></div>
+  
   <div class="cell"><div class="lbl">Class Size</div><div class="val">12–15 students (small group)</div></div>
   <div class="cell"><div class="lbl">Schedule</div><div class="val">7 days/week, 7 AM–10 PM</div></div>
   <div class="cell"><div class="lbl">Duration</div><div class="val">8–12 weeks</div></div>
@@ -1093,9 +1105,10 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 <a href="${c.website}" class="btn">See All Programs & Pricing →</a>
 
 <div class="sig">
-  <strong>Antra Kumar</strong>
-  Admissions Counselor | Aiprep365<br>
-  📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
+  <strong>Regards,</strong><br><br>
+  <strong>Test Prep Pundits Team</strong><br>
+  📧 <strong><a href="mailto:Info@testpreppundits.com" style="color:inherit;text-decoration:none;">Info@testpreppundits.com</a></strong><br>
+  🌐 <strong><a href="http://www.testpreppundits.com" style="color:inherit;text-decoration:none;">www.testpreppundits.com</a></strong>
 </div>`;
   }
 
@@ -1124,9 +1137,10 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 <a href="mailto:${c.counselorEmail}?subject=Reserve Spot – ${l.fullName}" class="btn">Reserve ${l.fullName}'s Spot →</a>
 
 <div class="sig">
-  <strong>Antra Kumar</strong>
-  Admissions Counselor | Aiprep365<br>
-  📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
+  <strong>Regards,</strong><br><br>
+  <strong>Test Prep Pundits Team</strong><br>
+  📧 <strong><a href="mailto:Info@testpreppundits.com" style="color:inherit;text-decoration:none;">Info@testpreppundits.com</a></strong><br>
+  🌐 <strong><a href="http://www.testpreppundits.com" style="color:inherit;text-decoration:none;">www.testpreppundits.com</a></strong>
 </div>`;
   }
 
@@ -1154,9 +1168,10 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 <a href="mailto:${c.counselorEmail}?subject=Enrollment – ${l.fullName}" class="btn">Confirm Enrollment →</a>
 
 <div class="sig">
-  <strong>Antra Kumar</strong>
-  Admissions Counselor | Aiprep365<br>
-  📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
+  <strong>Regards,</strong><br><br>
+  <strong>Test Prep Pundits Team</strong><br>
+  📧 <strong><a href="mailto:Info@testpreppundits.com" style="color:inherit;text-decoration:none;">Info@testpreppundits.com</a></strong><br>
+  🌐 <strong><a href="http://www.testpreppundits.com" style="color:inherit;text-decoration:none;">www.testpreppundits.com</a></strong>
 </div>`;
   }
 
@@ -1164,13 +1179,13 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
     const c = cfg.company;
     return `
 <h2>Hi ${l.parentName || l.fullName}! I wanted to check in 👋</h2>
-<p>This is <strong>Antra Kumar</strong> from Aiprep365. I've been following up because I genuinely believe ${l.fullName} has what it takes to hit an incredible score — and I don't want them to miss the window.</p>
+<p>Hello, I am an AI Representative from Test Prep Pundits. I've been following up because I genuinely believe ${l.fullName} has what it takes to hit an incredible score — and I don't want them to miss the window.</p>
 
 <div class="box">
   📌 <strong>Where ${l.fullName} stands right now:</strong><br><br>
   Program of Interest: <strong>${l.courseInterest || 'Test Prep'}</strong><br>
   Grade: <strong>${l.grade || 'To confirm'}</strong><br><br>
-  Our students at this stage see an average <strong>150–200 point SAT</strong> or <strong>4–6 point ACT</strong> improvement with the right program.
+  
 </div>
 
 <p>I know you're busy — so here are the three most common questions I get at this stage:</p>
@@ -1183,13 +1198,13 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 
 <p>I'd love to hop on a quick 15-minute call to answer any remaining questions. Just reply to this email or call me directly.</p>
 
-<a href="mailto:${c.counselorEmail}?subject=Quick Question – ${l.fullName}" class="btn">Reply to Antra →</a>
+<a href="mailto:${c.counselorEmail}?subject=Quick Question – ${l.fullName}" class="btn">Reply to AI representative →</a>
 
 <div class="sig">
-  <strong>Antra Kumar</strong>
-  Admissions Counselor | Aiprep365<br>
-  📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}<br>
-  🌐 <a href="${c.website}">${c.website}</a>
+  <strong>Regards,</strong><br><br>
+  <strong>Test Prep Pundits Team</strong><br>
+  📧 <strong><a href="mailto:Info@testpreppundits.com" style="color:inherit;text-decoration:none;">Info@testpreppundits.com</a></strong><br>
+  🌐 <strong><a href="http://www.testpreppundits.com" style="color:inherit;text-decoration:none;">www.testpreppundits.com</a></strong>
 </div>`;
   }
 
@@ -1216,10 +1231,10 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 <a href="mailto:${c.counselorEmail}?subject=Re: ${l.fullName} – Checking In" class="btn">Reconnect With Us →</a>
 
 <div class="sig">
-  <strong>Antra Kumar</strong>
-  Admissions Counselor | Aiprep365<br>
-  📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}<br>
-  🌐 <a href="${c.website}">${c.website}</a>
+  <strong>Regards,</strong><br><br>
+  <strong>Test Prep Pundits Team</strong><br>
+  📧 <strong><a href="mailto:Info@testpreppundits.com" style="color:inherit;text-decoration:none;">Info@testpreppundits.com</a></strong><br>
+  🌐 <strong><a href="http://www.testpreppundits.com" style="color:inherit;text-decoration:none;">www.testpreppundits.com</a></strong>
 </div>`;
   }
 
@@ -1227,7 +1242,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
     const c = cfg.company;
     return `
 <h2>Ready to take the next step? 🚀</h2>
-<p>Hi ${l.parentName || l.fullName}! It was wonderful speaking with you about ${l.fullName}'s academic goals. I hope our consultation gave you a clear picture of how Aiprep365 can make a difference.</p>
+<p>Hi ${l.parentName || l.fullName}! It was wonderful speaking with you about ${l.fullName}'s academic goals. I hope our consultation gave you a clear picture of how Test Prep Pundits can make a difference.</p>
 
 <div class="box">
   🎯 <strong>Recommended Program for ${l.fullName}:</strong><br>
@@ -1247,20 +1262,21 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 <a href="${c.website}" class="btn">Enroll Now →</a>
 
 <div class="sig">
-  <strong>Antra Kumar</strong>
-  Admissions Counselor | Aiprep365<br>
-  📧 ${c.counselorEmail} &nbsp;|&nbsp; 📞 ${c.counselorPhone}
+  <strong>Regards,</strong><br><br>
+  <strong>Test Prep Pundits Team</strong><br>
+  📧 <strong><a href="mailto:Info@testpreppundits.com" style="color:inherit;text-decoration:none;">Info@testpreppundits.com</a></strong><br>
+  🌐 <strong><a href="http://www.testpreppundits.com" style="color:inherit;text-decoration:none;">www.testpreppundits.com</a></strong>
 </div>`;
   }
 
   async sendAdminNotification(subject, content) {
-    const adminEmail = cfg.adminEmail || 'admin@aiprep365.com';
+    const adminEmail = cfg.adminEmail || 'Info@testpreppundits.com';
     return this._send({
       to: adminEmail,
       subject,
       html: `
         <div style="font-family:sans-serif;padding:20px;color:#333;">
-          <h2 style="color:#ef4444;">AIPrep365 Notification</h2>
+          <h2 style="color:#ef4444;">Test Prep Pundits Notification</h2>
           <p>${content}</p>
           <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;">
           <p style="font-size:12px;color:#888;">This is an automated message sent from your AI Admissions Agent Platform.</p>

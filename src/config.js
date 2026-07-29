@@ -29,8 +29,8 @@ module.exports = {
   // Brevo transactional email (no SMTP needed — REST API only)
   brevo: {
     apiKey:    process.env.BREVO_API_KEY,
-    fromEmail: process.env.BREVO_FROM_EMAIL || 'admissions@Aiprep365.com',
-    fromName:  process.env.BREVO_FROM_NAME  || 'Antra Kumar – Aiprep365',
+    fromEmail: process.env.BREVO_FROM_EMAIL || 'Info@testpreppundits.com',
+    fromName:  process.env.BREVO_FROM_NAME  || 'Admissions Team – Test Prep Pundits',
   },
 
   google: {
@@ -75,10 +75,10 @@ module.exports = {
   },
 
   company: {
-    counselorName:  process.env.COUNSELOR_NAME  || 'Antra Kumar',
+    counselorName:  process.env.COUNSELOR_NAME  || 'Admissions Team',
     counselorEmail: process.env.COUNSELOR_EMAIL || process.env.BREVO_FROM_EMAIL || '',
     counselorPhone: process.env.COUNSELOR_PHONE || '',
-    website:        process.env.COMPANY_WEBSITE || 'https://Aiprep365.com',
+    website:        process.env.COMPANY_WEBSITE || 'https://testpreppundits.com',
   },
 
   call: {

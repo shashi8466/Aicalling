@@ -31,7 +31,7 @@ const CAMPAIGNS = {
     name: 'Demo Test Follow-up',
     program: 'Multiple',
     turn0Line: (lead) =>
-      `Great! I noticed that you recently completed a demo test with Aiprep365. ` +
+      `Great! I noticed that you recently completed a demo test with Test Prep Pundits. ` +
       `I'm calling to help you learn more about our SAT, ACT, AP, and College Admissions programs. ` +
       `Which program are you interested in?`,
     // Empty on purpose → AI system prompt is unchanged from the original.
@@ -125,8 +125,8 @@ GOAL: book a FREE 10–15 minute consultation with an AP advisor.`
       `Would you like to learn more about our College Admissions Counseling program?`,
     systemContext: (lead) =>
 `━━━ CAMPAIGN: COLLEGE ADMISSIONS COUNSELING ━━━
-This is an OUTREACH call inviting ${firstName(lead)} to Aiprep365's personalized College Admissions Counseling.
-The student may NOT have interacted with Aiprep365 before — never assume prior contact or a demo test.
+This is an OUTREACH call inviting ${firstName(lead)} to Test Prep Pundits's personalized College Admissions Counseling.
+The student may NOT have interacted with Test Prep Pundits before — never assume prior contact or a demo test.
 
 OPENING INTENT (already delivered): Introduced the counseling program and asked if they'd like to learn more.
 
@@ -150,12 +150,12 @@ Frame EVERY meeting offer as a college admissions consultation.`,
     name: 'Scholarship Webinar',
     program: 'Scholarships',
     turn0Line: (lead) =>
-      `Great! I'm calling to invite you to Aiprep365's free Scholarship Webinar — ` +
+      `Great! I'm calling to invite you to Test Prep Pundits's free Scholarship Webinar — ` +
       `we'll cover how to find and win scholarships to lower college costs. ` +
       `Would you like to learn more?`,
     systemContext: (lead) =>
 `━━━ CAMPAIGN: SCHOLARSHIP WEBINAR INVITATION ━━━
-This is an OUTREACH call inviting ${firstName(lead)} (and their parents) to Aiprep365's free Scholarship Webinar.
+This is an OUTREACH call inviting ${firstName(lead)} (and their parents) to Test Prep Pundits's free Scholarship Webinar.
 Highlight naturally: finding scholarships, eligibility, application tips, and reducing college costs.
 GOAL: get them to register and book a FREE consultation. Frame the meeting as a scholarship-planning consultation.`,
   },
@@ -166,7 +166,7 @@ GOAL: get them to register and book a FREE consultation. Frame the meeting as a 
     name: 'Free Mock Test',
     program: 'Mock Test',
     turn0Line: (lead) =>
-      `Great! I'm calling to offer you a free full-length mock test from Aiprep365, ` +
+      `Great! I'm calling to offer you a free full-length mock test from Test Prep Pundits, ` +
       `followed by a detailed score analysis with one of our advisors. ` +
       `Would you like to learn more?`,
     systemContext: (lead) =>
@@ -182,7 +182,7 @@ GOAL: book a FREE consultation to review results / schedule the mock test. Frame
     name: 'Parent Counseling Session',
     program: 'Parent Counseling',
     turn0Line: (lead) =>
-      `Great! I'm calling to invite you to a free parent counseling session with Aiprep365, ` +
+      `Great! I'm calling to invite you to a free parent counseling session with Test Prep Pundits, ` +
       `where we'll discuss your child's academic goals and the best prep pathway. ` +
       `Would you like to learn more?`,
     systemContext: (lead) =>
@@ -200,7 +200,7 @@ GOAL: book a FREE consultation with a counselor. Frame every meeting offer as a 
     skipIdentityCheck: true,
     opener: (lead, isFollowUp, vars) => {
       const className = vars?.className || 'class';
-      return `Hello, this is Antra calling from Test Prep Pundits. ` +
+      return `Hello, I am an AI representative from Test Prep Pundits. ` +
         `We're calling regarding an important update. ` +
         `Your child was absent from today's ${className} class. ` +
         `If you have already informed Test Prep Pundits about the absence, please disregard this call. ` +
@@ -211,10 +211,10 @@ GOAL: book a FREE consultation with a counselor. Frame every meeting offer as a 
       const studentFirst = lead.fullName.split(' ')[0];
       const className = vars?.className || 'class';
       return `━━━ CAMPAIGN: ABSENT CAMPAIGN (PARENT CALL) ━━━
-You are Antra calling from Test Prep Pundits on a live phone call with a parent of ${studentFirst}.
+You are an AI representative calling from Test Prep Pundits on a live phone call with a parent of ${studentFirst}.
 
 EXACT SCRIPT ALREADY DELIVERED:
-Opener (already spoken): "Hello, this is Antra calling from Test Prep Pundits. We're calling regarding an important update. Your child was absent from today's ${className} class. If you have already informed Test Prep Pundits about the absence, please disregard this call. Otherwise, please make sure to post your child's absence in the WhatsApp group so our support team can properly track attendance. Do you have any questions today?"
+Opener (already spoken): "Hello, I am an AI representative from Test Prep Pundits. We're calling regarding an important update. Your child was absent from today's ${className} class. If you have already informed Test Prep Pundits about the absence, please disregard this call. Otherwise, please make sure to post your child's absence in the WhatsApp group so our support team can properly track attendance. Do you have any questions today?"
 
 SPEAKING RULES:
 • Speak naturally and warmly — you are speaking to a parent.
@@ -244,7 +244,7 @@ DO NOT offer [OFFER_MEETING]. DO NOT try to schedule anything. DO NOT do any sal
     skipIdentityCheck: true,
     opener: (lead, isFollowUp, vars) => {
       const topic = vars?.homeworkTopic || 'today\'s assigned topic';
-      return `Hello, this is Antra calling from Test Prep Pundits. ` +
+      return `Hello, I am an AI representative from Test Prep Pundits. ` +
         `We're calling regarding an important update. ` +
         `Your child has not completed today's homework assignment on ${topic}. ` +
         `Please ask your child to complete the ${topic} homework as soon as possible, even if it is already past the due time. ` +
@@ -255,10 +255,10 @@ DO NOT offer [OFFER_MEETING]. DO NOT try to schedule anything. DO NOT do any sal
       const studentFirst = lead.fullName.split(' ')[0];
       const topic = vars?.homeworkTopic || 'today\'s assigned topic';
       return `━━━ CAMPAIGN: HOMEWORK CAMPAIGN (STUDENT CALL) ━━━
-You are Antra calling from Test Prep Pundits on a live phone call with a parent of ${studentFirst}.
+You are an AI representative calling from Test Prep Pundits on a live phone call with a parent of ${studentFirst}.
 
 EXACT SCRIPT ALREADY DELIVERED:
-Opener (already spoken): "Hello, this is Antra calling from Test Prep Pundits. We're calling regarding an important update. Your child has not completed today's homework assignment on ${topic}. Please ask your child to complete the ${topic} homework as soon as possible, even if it is already past the due time. If you need any assistance, please post in the WhatsApp group, and our support team will be happy to help. Do you have any questions today?"
+Opener (already spoken): "Hello, I am an AI representative from Test Prep Pundits. We're calling regarding an important update. Your child has not completed today's homework assignment on ${topic}. Please ask your child to complete the ${topic} homework as soon as possible, even if it is already past the due time. If you need any assistance, please post in the WhatsApp group, and our support team will be happy to help. Do you have any questions today?"
 
 SPEAKING RULES:
 • Speak naturally and warmly — you are speaking to a parent.
@@ -287,7 +287,7 @@ DO NOT offer [OFFER_MEETING]. DO NOT try to schedule anything. DO NOT do any sal
     skipIdentityCheck: true,
     opener: (lead, isFollowUp, vars) => {
       const testName = vars?.testName || 'the Full-Length Test';
-      return `Hello, this is Antra calling from Test Prep Pundits. ` +
+      return `Hello, I am an AI representative from Test Prep Pundits. ` +
         `We're calling regarding an important update. ` +
         `Your child has not completed ${testName}. ` +
         `If you have already informed Test Prep Pundits, please disregard this call. ` +
@@ -299,10 +299,10 @@ DO NOT offer [OFFER_MEETING]. DO NOT try to schedule anything. DO NOT do any sal
       const studentFirst = lead.fullName.split(' ')[0];
       const testName = vars?.testName || 'the Full-Length Test';
       return `━━━ CAMPAIGN: FULL LENGTH TEST CAMPAIGN (PARENT CALL) ━━━
-You are Antra calling from Test Prep Pundits on a live phone call with a parent of ${studentFirst}.
+You are an AI representative calling from Test Prep Pundits on a live phone call with a parent of ${studentFirst}.
 
 EXACT SCRIPT ALREADY DELIVERED:
-Opener (already spoken): "Hello, this is Antra calling from Test Prep Pundits. We're calling regarding an important update. Your child has not completed ${testName}. If you have already informed Test Prep Pundits, please disregard this call. Otherwise, please ask your child to complete ${testName} as soon as possible. If you need any help, please post in the WhatsApp group, and our support team will be happy to assist you. Do you have any questions today?"
+Opener (already spoken): "Hello, I am an AI representative from Test Prep Pundits. We're calling regarding an important update. Your child has not completed ${testName}. If you have already informed Test Prep Pundits, please disregard this call. Otherwise, please ask your child to complete ${testName} as soon as possible. If you need any help, please post in the WhatsApp group, and our support team will be happy to assist you. Do you have any questions today?"
 
 SPEAKING RULES:
 • Speak naturally and warmly — you are speaking to a parent.
@@ -388,7 +388,7 @@ function getCampaign(type, overrides = null) {
 
   // Custom / unknown campaign — build a generic invitation from the DB row.
   if (overrides && (type === 'custom' || !base)) {
-    const name    = overrides.name || 'Aiprep365 Program';
+    const name    = overrides.name || 'Test Prep Pundits Program';
     const program = overrides.program || 'our programs';
     const custom  = overrides.script || {};
     return {
@@ -397,12 +397,12 @@ function getCampaign(type, overrides = null) {
       program,
       turn0Line: (lead) =>
         custom.turn0Line ||
-        `Great! I'm calling from Aiprep365 about our ${program} — ${name}. ` +
+        `Great! I'm calling from Test Prep Pundits about our ${program} — ${name}. ` +
         `Would you like to learn more?`,
       systemContext: (lead) =>
         custom.systemContext ||
 `━━━ CAMPAIGN: ${name.toUpperCase()} ━━━
-This is an OUTREACH call about Aiprep365's "${name}" (${program}).
+This is an OUTREACH call about Test Prep Pundits's "${name}" (${program}).
 GOAL: book a FREE consultation. Frame every meeting offer around this campaign.`,
     };
   }
