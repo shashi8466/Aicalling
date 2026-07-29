@@ -418,7 +418,7 @@ async function initSupabase() {
     }
     sbClient = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
       auth: {
-        storageKey:       'aiprep365_auth',
+        storageKey:       'testpreppundits_auth',
         autoRefreshToken: true,
         persistSession:   true,
       }
