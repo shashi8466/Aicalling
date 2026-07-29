@@ -6193,7 +6193,7 @@
       if (!el) return;
       const items = LEADS.slice(0, 8).flatMap(l => {
         const evts = [];
-        const last = l.callAttempts?.[l.callAttempts.length - 1];
+        const last = l.callAttempts ? l.callAttempts[l.callAttempts.length - 1] : undefined;
         if (last?.status === 'completed' && last.endTime)
           evts.push({
             icon: '📞', bg: 'rgba(59,130,246,.15)', color: '#3b82f6',
