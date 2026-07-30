@@ -190,7 +190,9 @@ class EmailService {
     // Mark confirmation email sent timestamp on lead
     if (lead.meeting) {
       lead.meeting.confirmationSentAt = new Date().toISOString();
-      await lead.save().catch(() => {});
+      if (typeof lead.save === 'function') {
+        await lead.save().catch(() => {});
+      }
     }
 
     return resStudent;
