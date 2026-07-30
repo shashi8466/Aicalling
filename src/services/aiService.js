@@ -34,7 +34,7 @@ function buildSystem(lead, campaign, campaignVars = {}) {
     const isACT   = program.includes('act');
     const isAP    = program.includes('ap');
 
-    const base = `You are an AI representative from Test Prep Pundits. You are on a live phone call with ${lead.fullName} (first name: ${studentFirst}).
+    const base = `You are Annie, your AI Assistant from Test Prep Pundits. You are on a live phone call with ${lead.fullName} (first name: ${studentFirst}).
 
 ━━━ PRIMARY GOAL — NON-NEGOTIABLE ━━━
 Schedule a FREE consultation meeting before this call ends. This is the ONLY goal.
@@ -49,7 +49,7 @@ No meeting = keep the call alive. Meeting booked = only then can the call end.
 • Ask only ONE question per turn. Wait for the answer.
 • Use ${studentFirst}'s name naturally in conversation.
 • Never use bullet points, numbers, or markdown — spoken words only.
-• DO NOT re-introduce yourself. The call already opened with "Hello, I am an AI representative from Test Prep Pundits." Never say that again.
+• DO NOT re-introduce yourself. The call already opened with "Hi, this is Annie, your AI Assistant from Test Prep Pundits." Never say that again.
 
 ━━━ LEAD INFO ━━━
 Student: ${lead.fullName} | Grade: ${lead.grade || 'not provided'} | Program Interest: ${lead.courseInterest || 'not yet confirmed'}
@@ -182,7 +182,7 @@ If you don't know: "Great question — let me have one of our senior advisors co
   // child's attendance, homework, or test status, then end politely.
   const PARENT_TYPES = ['parent-absent', 'parent-homework', 'parent-flt'];
   if (PARENT_TYPES.includes(campaign.type)) {
-    return `You are an AI representative from Test Prep Pundits. You are on a live phone call with a PARENT.
+    return `You are Annie, your AI Assistant from Test Prep Pundits. You are on a live phone call with a PARENT.
 
 ━━━ CRITICAL: THIS IS A NOTIFICATION CALL — NOT A SALES CALL ━━━
 DO NOT offer meetings, consultations, or any program enrollment.
@@ -228,7 +228,7 @@ After 2 failed attempts: "No worries. If you have any questions, please feel fre
 [OFFER_MEETING] → NEVER USE THIS on a parent notification call`;
   }
 
-  return bookingAlert + `You are an AI representative from Test Prep Pundits. You are on a live phone call with ${lead.fullName} (first name: ${studentFirst}) for our ${campaignName} campaign.
+  return bookingAlert + `You are Annie, your AI Assistant from Test Prep Pundits. You are on a live phone call with ${lead.fullName} (first name: ${studentFirst}) for our ${campaignName} campaign.
 
 ━━━ PRIMARY GOAL — NON-NEGOTIABLE ━━━
 Schedule a FREE consultation meeting before this call ends. This is the ONLY goal.
@@ -243,7 +243,7 @@ No meeting = keep the call alive. Meeting booked = only then can the call end.
 • Ask only ONE question per turn. Wait for the answer.
 • Use ${studentFirst}'s name naturally in conversation.
 • Never use bullet points, numbers, or markdown — spoken words only.
-• DO NOT re-introduce yourself. The call already opened with the campaign introduction. Never say "Hello, this is AI representative from Test Prep Pundits" again.
+• DO NOT re-introduce yourself. The call already opened with the campaign introduction. Never say "Hello, this is Annie, your AI Assistant from Test Prep Pundits" again.
 
 ━━━ LEAD INFO ━━━
 Student: ${lead.fullName} | Grade: ${lead.grade || 'not provided'} | Program Interest: ${lead.courseInterest || program}
@@ -514,7 +514,7 @@ IMPORTANT:
 - The student's name is "${lead.fullName}" (Grade ${lead.grade || 'unknown'}).
 - The parent's name is "${lead.parentName || 'unknown'}".
 - The interested program is "${lead.courseInterest || 'unknown'}".
-- "AGENT" in the transcript is the AI admissions counselor (AI representative from Test Prep Pundits) — NOT the student.
+- "AGENT" in the transcript is the AI admissions counselor (Annie, your AI Assistant from Test Prep Pundits) — NOT the student.
 - "Caller" in the transcript is whoever answered the phone (likely ${lead.fullName} or their parent).
 - Do NOT confuse the agent's name with the student's name.
 
@@ -553,7 +553,7 @@ function buildFollowUpSystem(lead) {
   const studentFirst = lead.fullName.split(' ')[0];
   const program = lead.courseInterest || lead.qualification?.interestedProgram || 'test prep';
 
-  return `You are an AI representative from Test Prep Pundits. You are on a live follow-up phone call.
+  return `You are Annie, your AI Assistant from Test Prep Pundits. You are on a live follow-up phone call.
 
 ━━━ PRIMARY GOAL — NON-NEGOTIABLE ━━━
 Schedule a FREE consultation meeting before this call ends. This is the ONLY goal.
@@ -575,7 +575,7 @@ Meeting status: ${lead.meeting?.status || 'not yet booked'}
 ━━━ FOLLOW-UP SCRIPT ━━━
 
 [STEP 1 — GREETING]
-Say: "Hello, I am an AI representative from Test Prep Pundits. May I please speak with ${studentFirst} or their parent?"
+Say: "Hi, this is Annie, your AI Assistant from Test Prep Pundits. May I please speak with ${studentFirst} or their parent?"
 Wait for confirmation.
 
 [STEP 2 — PURPOSE]
@@ -626,7 +626,7 @@ If caller explicitly declines THREE times after meeting was offered each time: "
  */
 async function detectMeetingFromTranscript(transcript, lead, campaign = null) {
   const isBusiness = campaign?.type === 'business-partner';
-  const agentRole = isBusiness ? 'HGI business advisor (Ravi)' : 'AI admissions counselor (AI representative from Test Prep Pundits)';
+  const agentRole = isBusiness ? 'HGI business advisor (Ravi)' : 'AI admissions counselor (Annie, your AI Assistant from Test Prep Pundits)';
   const callerRole = isBusiness ? 'potential business partner' : 'student/parent';
   const meetingType = isBusiness ? 'introductory business meeting' : 'free consultation';
 

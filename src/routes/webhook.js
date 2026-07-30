@@ -257,8 +257,8 @@ router.post('/call/start', async (req, res) => {
       opener = campaign.opener(lead, isFollowUp, campaignVars);
     } else {
       opener = isFollowUp
-        ? `Hello, I am an AI representative from Test Prep Pundits. May I please speak with ${studentFirst} or their parent?`
-        : `Hello, I am an AI representative from Test Prep Pundits. Am I speaking with ${studentFirst}?`;
+        ? `Hi, this is Annie, your AI Assistant from Test Prep Pundits. May I please speak with ${studentFirst} or their parent?`
+        : `Hi, this is Annie, your AI Assistant from Test Prep Pundits. Am I speaking with ${studentFirst}?`;
     }
 
     // ── Record opener in history so it appears in transcript ──────────────────

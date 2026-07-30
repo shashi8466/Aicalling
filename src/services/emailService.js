@@ -96,7 +96,7 @@ class EmailService {
   _buildIcsAttachment(lead, tStr) {
     try {
       const start = moment(lead.meeting.scheduledAt);
-      const end = start.clone().add(45, 'minutes'); // 45 mins
+      const end = start.clone().add(10, 'minutes'); // 10 mins
       const formatDate = (m) => m.utc().format('YYYYMMDDTHHmmss[Z]');
       const meetLink = lead.meeting.meetLink || '';
 
@@ -109,9 +109,8 @@ class EmailService {
         `DTSTART:${formatDate(start)}`,
         `DTEND:${formatDate(end)}`,
         `SUMMARY:Test Prep Pundits Free Admissions Consultation - ${lead.fullName}`,
-        `DESCRIPTION:Join your admissions consultation using this link: ${meetLink}. Join instructions: Please join from a quiet room with a working microphone and camera.`,
-        `LOCATION:${meetLink}`,
-        `URL:${meetLink}`,
+        `DESCRIPTION:Our Admissions Team will call you at ${lead.phone}. Format: Phone Call. Duration: 10 minutes.`,
+        `LOCATION:Phone Call`,
         'STATUS:CONFIRMED',
         'END:VEVENT',
         'END:VCALENDAR'
@@ -298,11 +297,11 @@ ${t.help ? `<p>${t.help}</p>` : ''}
         <h2>See you in 1 Hour! ⏰</h2>
         <p>Hi ${lead.parentName || lead.fullName}! This is a friendly reminder that your free admissions consultation is starting in 1 hour.</p>
         <div class="box">
-          📅 <strong>${t}</strong><br>
-          🎥 Format: Video Meeting (no signup required)<br><br>
-          ${lead.meeting?.meetLink ? `<a href="${lead.meeting.meetLink}#config.prejoinPageEnabled=true" style="color:#2563eb;font-weight:700">🔗 Click to Join Video Meeting</a>` : ''}
+          📞 Format: Phone Call<br>
+          ⏱️ Duration: 10 minutes<br><br>
+          📱 Our Admissions Team will call you at your scheduled consultation time using the phone number you provided during registration.<br>
+          Please keep your phone nearby and available during your scheduled consultation.
         </div>
-        <p>Join instructions: Please make sure you are in a quiet room with a working internet connection and microphone/camera.</p>
       `;
     } else if (reminderType === '10m') {
       subject = `🚨 Starting in 10 Mins: Join Your Consultation – ${t}`;
@@ -310,11 +309,11 @@ ${t.help ? `<p>${t.help}</p>` : ''}
         <h2>Starting in 10 Minutes! 🚨</h2>
         <p>Hi ${lead.parentName || lead.fullName}! We are ready for you. Your free admissions consultation is starting in 10 minutes.</p>
         <div class="box">
-          📅 <strong>${t}</strong><br>
-          🎥 Format: Video Meeting<br><br>
-          ${lead.meeting?.meetLink ? `<a href="${lead.meeting.meetLink}#config.prejoinPageEnabled=true" style="color:#2563eb;font-weight:700">🔗 Click to Join Video Meeting Now</a>` : ''}
+          📞 Format: Phone Call<br>
+          ⏱️ Duration: 10 minutes<br><br>
+          📱 Our Admissions Team will call you at your scheduled consultation time using the phone number you provided during registration.<br>
+          Please keep your phone nearby and available during your scheduled consultation.
         </div>
-        <p>Join instructions: Click the link above to join the LiveKit room. Please ensure your camera and microphone are enabled.</p>
       `;
     }
 
@@ -359,8 +358,11 @@ ${t.help ? `<p>${t.help}</p>` : ''}
       <p>Your free admissions consultation has been successfully rescheduled${oldTimeStr ? ' from ' + oldTimeStr : ''}. Here are the updated details:</p>
       <div class="box" style="background:#eff6ff;padding:15px;border-radius:8px;border-left:4px solid #2563eb;margin:15px 0;line-height:1.6;">
         📅 <strong>Updated Date & Time:</strong> ${t}<br>
-        🎥 Format: Video Meeting<br><br>
-        ${lead.meeting?.meetLink ? `<a href="${lead.meeting.meetLink}#config.prejoinPageEnabled=true" style="color:#2563eb;font-weight:700">🔗 Click to Join Video Meeting</a>` : ''}
+        📞 Format: Phone Call<br>
+        ⏱️ Duration: 10 minutes<br>
+        👨‍🏫 Counselor: Admissions Team<br><br>
+        📱 Our Admissions Team will call you at your scheduled consultation time using the phone number you provided during registration.<br>
+        Please keep your phone nearby and available during your scheduled consultation.
       </div>
       <p>Need to reschedule again? Just reply to this email at least 24 hours in advance.</p>
     `;
@@ -679,7 +681,7 @@ td{border-collapse:collapse}
     const c = cfg.company;
     return `
 <h2>Hi ${l.parentName || l.fullName}! 👋</h2>
-<p>Thank you for reaching out to <strong>Test Prep Pundits</strong>! I am an AI Representative from Test Prep Pundits, and I'm genuinely excited to help <strong>${l.fullName}</strong> reach their academic goals.</p>
+<p>Thank you for reaching out to <strong>Test Prep Pundits</strong>! I am Annie, your AI Assistant from Test Prep Pundits, and I'm genuinely excited to help <strong>${l.fullName}</strong> reach their academic goals.</p>
 
 <div class="box">
   📞 <strong>We'll be calling you shortly</strong> at <strong>${l.phone}</strong> to learn more and answer any questions.<br>
@@ -861,11 +863,11 @@ ${this._programCards(l.courseInterest)}
 <p>Hi ${l.parentName || l.fullName}! Great news — your free admissions consultation is all set. We can't wait to connect with you!</p>
 
 <div class="box">
-  📅 <strong>${t}</strong><br>
-  🎥 Format: Video Meeting (no signup required)<br>
-  ⏱ Duration: 45–60 minutes<br>
-  👩‍💼 Counselor: ${c.counselorName}<br><br>
-  ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" style="color:#2563eb;font-weight:700">🔗 Click to Join Video Meeting</a>` : 'A Video Meeting link will be sent shortly.'}
+  📞 Format: Phone Call<br>
+  ⏱️ Duration: 10 minutes<br>
+  👨‍🏫 Counselor: Admissions Team<br><br>
+  📱 Our Admissions Team will call you at your scheduled consultation time using the phone number you provided during registration.<br>
+  Please keep your phone nearby and available during your scheduled consultation.
 </div>
 
 <p><strong>Please bring to the meeting:</strong></p>
@@ -878,7 +880,7 @@ ${this._programCards(l.courseInterest)}
 
 <p>Need to reschedule? Just reply at least <strong>24 hours in advance</strong> and we'll find a new time that works.</p>
 
-${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">Join Video Meeting</a>` : ''}
+
 
 <div class="sig">
   <strong>Regards,</strong><br><br>
@@ -892,7 +894,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
     const c = cfg.company;
     return `
 <h2>We tried to reach you! 📞</h2>
-<p>Hello, I am an AI Representative from Test Prep Pundits. I recently called regarding <strong>${l.courseInterest || 'our test prep programs'}</strong> for ${l.fullName} but wasn't able to connect.</p>
+<p>Hi, this is Annie, your AI Assistant from Test Prep Pundits. I recently called regarding <strong>${l.courseInterest || 'our test prep programs'}</strong> for ${l.fullName} but wasn't able to connect.</p>
 
 <div class="box">
   📌 <strong>Let's find a time that works for you!</strong><br>
@@ -901,7 +903,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 
 <p>Here's a quick snapshot of what we offer:</p>
 <ul>
-  <li>✅ <strong>Free 45-min consultation</strong> — zero obligation</li>
+  <li>✅ <strong>Free 10-min consultation</strong> — zero obligation</li>
   
   <li>💳 <strong>Flexible payment plans</strong> — 3 to 6 monthly installments</li>
   <li>🕐 Sessions available <strong>7 days/week, 7 AM – 10 PM</strong></li>
@@ -927,12 +929,15 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 
 <div class="box">
   📅 <strong>Tomorrow: ${t}</strong><br>
-  ${meetLink ? `🔗 <a href="${meetLink}#config.prejoinPageEnabled=true" style="color:#2563eb;font-weight:700">Join Video Meeting</a>` : ''}
+  📞 Format: Phone Call<br>
+  ⏱️ Duration: 10 minutes<br>
+  📱 Our Admissions Team will call you at your scheduled consultation time using the phone number you provided during registration.<br>
+  Please keep your phone nearby and available during your scheduled consultation.
 </div>
 
 <p>We're looking forward to discussing the best path for ${l.fullName}'s goals. If anything comes up, please let us know at least <strong>2 hours in advance</strong>.</p>
 
-${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">Join Tomorrow's Video Meeting</a>` : ''}
+
 
 <div class="sig">
   <strong>Regards,</strong><br><br>
@@ -1195,7 +1200,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
   <li>✅ Personalized study plan tailored to ${l.fullName}'s goals</li>
   <li>📊 Score improvement guarantee</li>
   <li>💳 Flexible payment plans starting at 3 monthly installments</li>
-  <li>🆓 Free 45-minute kick-off consultation included</li>
+  <li>🆓 Free 10-minute kick-off consultation included</li>
 </ul>
 
 <p>To lock in ${l.fullName}'s spot at the current pricing, simply reply to this email or call us directly.</p>
@@ -1214,7 +1219,7 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
     const c = cfg.company;
     return `
 <h2>Hi ${l.parentName || l.fullName}! I wanted to check in 👋</h2>
-<p>Hello, I am an AI Representative from Test Prep Pundits. I've been following up because I genuinely believe ${l.fullName} has what it takes to hit an incredible score — and I don't want them to miss the window.</p>
+<p>Hi, this is Annie, your AI Assistant from Test Prep Pundits. I've been following up because I genuinely believe ${l.fullName} has what it takes to hit an incredible score — and I don't want them to miss the window.</p>
 
 <div class="box">
   📌 <strong>Where ${l.fullName} stands right now:</strong><br><br>
@@ -1227,13 +1232,13 @@ ${meetLink ? `<a href="${meetLink}#config.prejoinPageEnabled=true" class="btn">J
 
 <ul>
   <li>❓ <em>"When does the next session start?"</em> → We start new cohorts every 2–3 weeks. The next one is filling up.</li>
-  <li>❓ <em>"Can we try before committing?"</em> → Yes! We offer a <strong>free 45-min consultation</strong> — zero obligation.</li>
+  <li>❓ <em>"Can we try before committing?"</em> → Yes! We offer a <strong>free 10-min consultation</strong> — zero obligation.</li>
   <li>❓ <em>"What if it doesn't work?"</em> → We extend the program at no charge if ${l.fullName} follows the plan and doesn't see improvement.</li>
 </ul>
 
 <p>I'd love to hop on a quick 15-minute call to answer any remaining questions. Just reply to this email or call me directly.</p>
 
-<a href="mailto:${c.counselorEmail}?subject=Quick Question – ${l.fullName}" class="btn">Reply to AI representative →</a>
+<a href="mailto:${c.counselorEmail}?subject=Quick Question – ${l.fullName}" class="btn">Reply to Annie, your AI Assistant →</a>
 
 <div class="sig">
   <strong>Regards,</strong><br><br>

@@ -1,0 +1,4619 @@
+
+    let LEADS = [];
+    let CALLS = [];
+    let MEETINGS = { upcoming: [], past: [] };
+
+    function toast(msg, kind = 'info') {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = 'toast show ' + kind;
+      setTimeout(() => el.classList.remove('show'), 3000);
+    }
+
+    // ── Auto-inject auth token into every /api/* and /auth/* fetch ────────────
+    (function () {
+      const _orig = window.fetch.bind(window);
+      window.fetch = function (url, opts = {}) {
+        if (typeof url === 'string' && (url.startsWith('/api') || url.startsWith('/auth'))) {
+          const token = window._authToken;
+          if (token) {
+            opts = { ...opts, headers: { ...(opts.headers || {}), 'Authorization': 'Bearer ' + token } };
+          }
+        }
+        return _orig(url, opts);
+      };
+    })();
+
+    async function api(path, opts = {}) {
+      const headers = {
+        ...(opts.body ? { 'Content-Type': 'application/json' } : {}),
+        'Authorization': 'Bearer ' + (window._authToken || ''),
+        ...(opts.headers || {}),
+      };
+      const res = await fetch('/api' + path, { ...opts, headers });
+      if (res.status === 401) {
+        // Session expired — clear and redirect to login
+        if (window._sbClient) window._sbClient.auth.signOut().catch(() => { });
+        localStorage.removeItem('aiprep365_auth');
+        localStorage.removeItem('sb_pub_config');
+        window.location.href = '/login';
+        return;
+      }
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(e.error || res.statusText);
+      }
+      return res.json();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //   AUTH BOOTSTRAP
+    // ═══════════════════════════════════════════════════════════════════════
+    async function initAuth() {
+      try {
+        // Init Supabase client (use cached config or fetch fresh)
+        let cfg = JSON.parse(localStorage.getItem('sb_pub_config') || 'null');
+        if (!cfg?.supabaseUrl) {
+          cfg = await fetch('/auth/config').then(r => r.json());
+          localStorage.setItem('sb_pub_config', JSON.stringify(cfg));
+        }
+
+        window._sbClient = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
+          auth: { storageKey: 'aiprep365_auth', autoRefreshToken: true, persistSession: true }
+        });
+
+        const { data: { session } } = await window._sbClient.auth.getSession();
+        if (!session) {
+          window.location.href = '/login';
+          return;
+        }
+
+        window._authToken = session.access_token;
+
+        // Token refresh listener
+        window._sbClient.auth.onAuthStateChange((event, sess) => {
+          if (event === 'SIGNED_OUT' || !sess) {
+            window.location.href = '/login';
+          } else if (sess) {
+            window._authToken = sess.access_token;
+          }
+        });
+
+        // Load profile
+        const profile = await fetch('/auth/me').then(r => r.ok ? r.json() : null);
+        if (!profile) { window.location.href = '/login'; return; }
+
+        window._currentUser = profile;
+
+        // Update header
+        const initials = (profile.fullName || profile.email || '?')
+          .split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+        document.getElementById('headerAvatar').textContent = initials;
+        document.getElementById('headerUserShort').textContent = profile.fullName?.split(' ')[0] || 'User';
+        document.getElementById('headerUserName').textContent = profile.fullName || profile.email;
+        const rb = document.getElementById('headerRoleBadge');
+        rb.textContent = profile.role;
+        rb.className = `user-role-badge ${profile.role}`;
+
+        // Pre-fill settings profile tab
+        prefillProfileTab(profile);
+
+        // Show Counselors nav only to admins
+        if (profile.role === 'admin') {
+          document.querySelectorAll('.nav a[data-view="counselors"]').forEach(el => {
+            el.style.display = '';
+          });
+          document.querySelectorAll('.admin-only-btn').forEach(el => el.style.display = 'inline-block');
+        }
+
+        // Update sidebar brand
+        document.querySelector('.brand-text .title').textContent =
+          profile.role === 'admin' ? 'Admin Dashboard' : 'Counselor Dashboard';
+
+      } catch (e) {
+        console.error('initAuth failed', e);
+        window.location.href = '/login';
+      }
+    }
+
+    function prefillProfileTab(p) {
+      if (!p) return;
+      const initials = (p.fullName || p.email || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+      const setT = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '—'; };
+      setT('profileDisplayName', p.fullName);
+      setT('profileDisplayEmail', p.email);
+      setT('profileName', p.fullName);
+      setT('profileEmail', p.email);
+      setT('profilePhone', p.phone || 'Not set');
+      setT('profileRole', p.role === 'admin' ? 'Administrator' : 'Admissions Counselor');
+      setT('profileCreated', p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '—');
+
+      const av = document.getElementById('profileAvatarLg');
+      if (av) av.textContent = initials;
+      const rb = document.getElementById('profileRoleBadge');
+      if (rb) { rb.textContent = p.role; rb.className = `user-role-badge ${p.role}`; }
+
+      // Pre-fill edit form
+      const fn = document.getElementById('ep_fullName'); if (fn) fn.value = p.fullName || '';
+      const ph = document.getElementById('ep_phone'); if (ph) ph.value = p.phone || '';
+      const em = document.getElementById('ep_email'); if (em) em.value = p.email || '';
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //   SETTINGS FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════════════
+    function showSettingsPanel(id) {
+      document.querySelectorAll('.settings-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.settings-sidenav a').forEach(a => a.classList.remove('active'));
+      const panel = document.getElementById('sp-' + id);
+      if (panel) panel.classList.add('active');
+      // Highlight matching nav item
+      const links = document.querySelectorAll('.settings-sidenav a:not(.logout-link)');
+      const map = { profile: 0, editProfile: 1, changePassword: 2, account: 3, notifications: 4 };
+      if (map[id] !== undefined && links[map[id]]) links[map[id]].classList.add('active');
+    }
+
+    async function saveProfile() {
+      const fullName = document.getElementById('ep_fullName').value.trim();
+      const phone = document.getElementById('ep_phone').value.trim();
+      if (!fullName) { toast('Full name is required', 'error'); return; }
+      const btn = document.querySelector('[onclick="saveProfile()"]');
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+      try {
+        const res = await fetch('/auth/profile', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._authToken || '') },
+          body: JSON.stringify({ fullName, phone }),
+        });
+        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || res.statusText); }
+        // Reload profile
+        const updated = await fetch('/auth/me', { headers: { 'Authorization': 'Bearer ' + (window._authToken || '') } }).then(r => r.json());
+        window._currentUser = updated;
+        prefillProfileTab(updated);
+        document.getElementById('headerUserShort').textContent = updated.fullName?.split(' ')[0] || 'User';
+        document.getElementById('headerUserName').textContent = updated.fullName;
+        toast('✅ Profile updated successfully', 'success');
+        showSettingsPanel('profile');
+      } catch (e) {
+        toast('❌ ' + e.message, 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '💾 Save Changes'; }
+      }
+    }
+
+    async function changePassword() {
+      const current = document.getElementById('cp_current').value;
+      const nw = document.getElementById('cp_new').value;
+      const conf = document.getElementById('cp_confirm').value;
+      if (!current || !nw) { toast('All fields are required', 'error'); return; }
+      if (nw.length < 8) { toast('New password must be at least 8 characters', 'error'); return; }
+      if (nw !== conf) { toast('Passwords do not match', 'error'); return; }
+      const btn = document.querySelector('[onclick="changePassword()"]');
+      if (btn) { btn.disabled = true; btn.textContent = 'Updating…'; }
+      try {
+        const res = await fetch('/auth/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._authToken || '') },
+          body: JSON.stringify({ currentPassword: current, newPassword: nw }),
+        });
+        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || res.statusText); }
+        document.getElementById('cp_current').value = '';
+        document.getElementById('cp_new').value = '';
+        document.getElementById('cp_confirm').value = '';
+        toast('✅ Password updated! Please log in again.', 'success');
+        setTimeout(() => confirmLogout(), 2500);
+      } catch (e) {
+        toast('❌ ' + e.message, 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '🔑 Update Password'; }
+      }
+    }
+
+    function confirmLogout() {
+      if (confirm('Are you sure you want to log out?')) doLogout();
+    }
+
+    async function doLogout() {
+      if (window._sbClient) await window._sbClient.auth.signOut().catch(() => { });
+      localStorage.removeItem('aiprep365_auth');
+      localStorage.removeItem('sb_pub_config');
+      window.location.href = '/login';
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //   COUNSELORS FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════════════
+    let _allCounselors = [];
+    let _assignTarget = null; // { id, name }
+    let _allLeads = [];
+
+    async function loadCounselors() {
+      try {
+        const data = await fetch('/api/counselors').then(r => r.json());
+        _allCounselors = Array.isArray(data) ? data : [];
+        renderCounselorStats(_allCounselors);
+        renderCounselorTable(_allCounselors);
+      } catch (e) {
+        toast('Failed to load counselors: ' + e.message, 'error');
+      }
+    }
+
+    function renderCounselorStats(list) {
+      const total = list.length;
+      const active = list.filter(c => c.isActive).length;
+      const leads = list.reduce((s, c) => s + (c.leadsCount || 0), 0);
+      document.getElementById('cst_total').textContent = total;
+      document.getElementById('cst_active').textContent = active;
+      document.getElementById('cst_leads').textContent = leads;
+      // enrolled this month (not tracked per-counselor yet, show dashes)
+      document.getElementById('cst_enrolled').textContent = '—';
+    }
+
+    function renderCounselorTable(list) {
+      const tbody = document.getElementById('counselorTableBody');
+      if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:32px">No counselors found</td></tr>';
+        return;
+      }
+      tbody.innerHTML = list.map(c => {
+        const initials = (c.fullName || c.email).split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+        const roleLbl = c.role === 'admin' ? '<span class="user-role-badge admin">Admin</span>' : '<span class="user-role-badge counselor">Counselor</span>';
+        const statusLbl = c.isActive ? '<span class="status-active">Active</span>' : '<span class="status-inactive">Inactive</span>';
+        const toggleLbl = c.isActive ? 'Deactivate' : 'Activate';
+        return `<tr>
+      <td><span class="c-avatar">${esc(initials)}</span><div style="display:inline-block;vertical-align:middle"><div style="font-weight:600">${esc(c.fullName)}</div><div style="color:var(--muted);font-size:12px">${esc(c.email)}</div></div></td>
+      <td>${roleLbl}</td>
+      <td style="color:var(--muted)">${esc(c.phone || '—')}</td>
+      <td><strong>${c.leadsCount || 0}</strong></td>
+      <td>${statusLbl}</td>
+      <td><div class="c-actions">
+        <button class="c-btn c-btn-edit"   onclick="openCounselorForm('${c.id}')">✏️ Edit</button>
+        <button class="c-btn c-btn-stats"  onclick="viewCounselorStats('${c.id}','${esc(c.fullName)}','${esc(c.email)}')">📊 Stats</button>
+        <button class="c-btn c-btn-assign" onclick="openAssignLeads('${c.id}','${esc(c.fullName)}')">📋 Assign</button>
+        <button class="c-btn c-btn-toggle" onclick="toggleCounselorActive('${c.id}',${c.isActive})">${toggleLbl}</button>
+        <button class="c-btn c-btn-del"    onclick="deleteCounselor('${c.id}','${esc(c.fullName)}')">🗑️</button>
+      </div></td>
+    </tr>`;
+      }).join('');
+    }
+
+    function filterCounselors() {
+      const search = document.getElementById('counselorSearch').value.toLowerCase();
+      const active = document.getElementById('counselorFilter').value;
+      const role = document.getElementById('counselorRoleFilter').value;
+      const filtered = _allCounselors.filter(c => {
+        const matchSearch = !search || c.fullName.toLowerCase().includes(search) || c.email.toLowerCase().includes(search);
+        const matchActive = !active ||
+          (active === 'active' && c.isActive) ||
+          (active === 'inactive' && !c.isActive);
+        const matchRole = !role || c.role === role;
+        return matchSearch && matchActive && matchRole;
+      });
+      renderCounselorTable(filtered);
+    }
+
+    function openCounselorForm(id = null) {
+      const modal = document.getElementById('counselorFormModal');
+      document.getElementById('cf_id').value = id || '';
+      document.getElementById('cf_fullName').value = '';
+      document.getElementById('cf_email').value = '';
+      document.getElementById('cf_password').value = '';
+      document.getElementById('cf_phone').value = '';
+      document.getElementById('cf_role').value = 'counselor';
+
+      if (id) {
+        const c = _allCounselors.find(x => x.id === id);
+        if (c) {
+          document.getElementById('cf_fullName').value = c.fullName || '';
+          document.getElementById('cf_email').value = c.email || '';
+          document.getElementById('cf_phone').value = c.phone || '';
+          document.getElementById('cf_role').value = c.role || 'counselor';
+          document.getElementById('cf_email').disabled = true;
+        }
+        document.getElementById('counselorFormTitle').textContent = '✏️ Edit Counselor';
+        document.getElementById('cf_passwordRow').style.display = 'none';
+        document.getElementById('counselorFormSaveBtn').textContent = '💾 Save Changes';
+      } else {
+        document.getElementById('counselorFormTitle').textContent = '➕ Add Counselor';
+        document.getElementById('cf_passwordRow').style.display = '';
+        document.getElementById('cf_email').disabled = false;
+        document.getElementById('counselorFormSaveBtn').textContent = '💾 Create Counselor';
+      }
+      modal.classList.add('active');
+    }
+
+    function closeCounselorForm() {
+      document.getElementById('counselorFormModal').classList.remove('active');
+    }
+
+    async function saveCounselorForm() {
+      const id = document.getElementById('cf_id').value;
+      const fullName = document.getElementById('cf_fullName').value.trim();
+      const email = document.getElementById('cf_email').value.trim();
+      const password = document.getElementById('cf_password').value;
+      const phone = document.getElementById('cf_phone').value.trim();
+      const role = document.getElementById('cf_role').value;
+
+      if (!fullName) { toast('Full name is required', 'error'); return; }
+
+      const btn = document.getElementById('counselorFormSaveBtn');
+      btn.disabled = true; btn.textContent = 'Saving…';
+
+      try {
+        if (id) {
+          await fetch(`/api/counselors/${id}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fullName, phone, role }),
+          });
+          toast('✅ Counselor updated', 'success');
+        } else {
+          if (!email) { toast('Email is required', 'error'); btn.disabled = false; btn.textContent = '💾 Create Counselor'; return; }
+          if (password.length < 8) { toast('Password min 8 chars', 'error'); btn.disabled = false; btn.textContent = '💾 Create Counselor'; return; }
+          await fetch('/api/counselors', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fullName, email, password, phone, role }),
+          });
+          toast('✅ Counselor created', 'success');
+        }
+        closeCounselorForm();
+        loadCounselors();
+      } catch (e) {
+        toast('❌ ' + e.message, 'error');
+        btn.disabled = false; btn.textContent = id ? '💾 Save Changes' : '💾 Create Counselor';
+      }
+    }
+
+    async function deleteCounselor(id, name) {
+      if (!confirm(`Delete counselor "${name}"? This cannot be undone.`)) return;
+      try {
+        await fetch(`/api/counselors/${id}`, { method: 'DELETE' });
+        toast(`✅ ${name} deleted`, 'success');
+        loadCounselors();
+      } catch (e) { toast('❌ ' + e.message, 'error'); }
+    }
+
+    async function toggleCounselorActive(id, currentlyActive) {
+      try {
+        await fetch(`/api/counselors/${id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isActive: !currentlyActive }),
+        });
+        toast(currentlyActive ? 'Counselor deactivated' : 'Counselor activated', 'success');
+        loadCounselors();
+      } catch (e) { toast('❌ ' + e.message, 'error'); }
+    }
+
+    let _currentCounselorLeads = [];
+
+    function switchCounselorTab(tabId) {
+      document.querySelectorAll('.cd-tab').forEach(b => b.classList.remove('active'));
+      const activeBtn = document.getElementById('ctab-' + tabId);
+      if (activeBtn) activeBtn.classList.add('active');
+
+      document.querySelectorAll('.csm-tab-content').forEach(div => div.style.display = 'none');
+      const activeContent = document.getElementById('csm-' + tabId + '-content');
+      if (activeContent) activeContent.style.display = 'block';
+    }
+
+    async function viewCounselorStats(id, name, email) {
+      const modal = document.getElementById('counselorStatsModal');
+      document.getElementById('csm_name').textContent = name;
+      document.getElementById('csm_email').textContent = email;
+
+      switchCounselorTab('perf');
+
+      document.getElementById('counselorStatsBody').innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted)">Loading performance metrics…</div>';
+      document.getElementById('csm-leads-table-body').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">Loading assigned leads…</td></tr>';
+      document.getElementById('csm-meetings-table-body').innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">Loading meetings…</td></tr>';
+      document.getElementById('csm-calls-table-body').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">Loading call statistics…</td></tr>';
+      document.getElementById('csm-followups-table-body').innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px;">Loading follow-ups…</td></tr>';
+      document.getElementById('csm-enrollments-table-body').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">Loading enrollments…</td></tr>';
+
+      modal.classList.add('active');
+
+      try {
+        const s = await fetch(`/api/counselors/${id}/stats`).then(r => r.json());
+        document.getElementById('counselorStatsBody').innerHTML = `
+      <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+        ${kpiChip('👥', s.totalLeads, 'Total Leads Assigned', '#3b82f6')}
+        ${kpiChip('🔥', s.hotLeads, 'Hot Leads', '#ef4444')}
+        ${kpiChip('⭐', s.qualifiedLeads, 'Qualified Leads', '#8b5cf6')}
+        ${kpiChip('📅', s.meetingsBooked, 'Meetings Booked', '#06b6d4')}
+        ${kpiChip('🎓', s.enrolled, 'Enrolled Students', '#ec4899')}
+        ${kpiChip('📞', s.callsMade, 'Total Calls Made', '#f59e0b')}
+        ${kpiChip('📈', s.conversionRate + '%', 'Conversion Rate', '#3b82f6')}
+        ${kpiChip('💰', '$' + (s.totalRevenue || 0).toLocaleString(), 'Revenue Collected', '#10b981')}
+        ${kpiChip('📊', s.avgScore + '/100', 'Avg Lead Score', '#8b5cf6')}
+      </div>
+    `;
+
+        const [leads, enrollments, followups] = await Promise.all([
+          fetch(`/api/counselors/${id}/leads`).then(r => r.json()),
+          fetch(`/api/counselors/${id}/enrollments`).then(r => r.json()),
+          fetch(`/api/counselors/${id}/followups`).then(r => r.json())
+        ]);
+
+        _currentCounselorLeads = Array.isArray(leads) ? leads : [];
+
+        const tbodyLeads = document.getElementById('csm-leads-table-body');
+        if (!_currentCounselorLeads.length) {
+          tbodyLeads.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">No leads assigned.</td></tr>';
+        } else {
+          tbodyLeads.innerHTML = _currentCounselorLeads.map(l => {
+            const lastCall = l.lastCallAt ? new Date(l.lastCallAt).toLocaleString() : '—';
+            const created = l.createdAt ? new Date(l.createdAt).toLocaleDateString() : '—';
+            return `<tr onclick="closeCounselorStats(); openLead('${l.id || l._id}')" style="cursor:pointer">
+          <td><strong>${esc(l.fullName)}</strong><br><span style="color:var(--muted);font-size:11px">${esc(l.email)}</span></td>
+          <td><span class="status-badge ${l.status}">${fmtStatus(l.status)}</span></td>
+          <td><span class="score-badge ${l.leadCategory}">${l.leadCategory}</span></td>
+          <td><strong>${l.leadScore || 0}</strong></td>
+          <td>${lastCall}</td>
+          <td>${created}</td>
+        </tr>`;
+          }).join('');
+        }
+
+        const meetings = _currentCounselorLeads.filter(l => l.meeting && l.meeting.scheduledAt);
+        const tbodyMeetings = document.getElementById('csm-meetings-table-body');
+        if (!meetings.length) {
+          tbodyMeetings.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">No meetings scheduled.</td></tr>';
+        } else {
+          tbodyMeetings.innerHTML = meetings.map(l => {
+            return `<tr onclick="closeCounselorStats(); openLead('${l.id || l._id}')" style="cursor:pointer">
+          <td><strong>${esc(l.fullName)}</strong><br><span style="color:var(--muted);font-size:11px">${esc(l.email)}</span></td>
+          <td>${new Date(l.meeting.scheduledAt).toLocaleString()}</td>
+          <td>${l.meeting.meetLink ? `<a href="${l.meeting.hostMeetLink || l.meeting.meetLink}" target="_blank" onclick="event.stopPropagation()" style="color:var(--brand)">🎥 Join</a>` : '—'}</td>
+          <td><span class="status-badge ${(l.status || '').replace(/\s/g, '-')}">${fmtStatus(l.meeting.status || l.status)}</span></td>
+          <td>${esc(l.meeting.outcome || '—')}</td>
+        </tr>`;
+          }).join('');
+        }
+
+        let allCalls = [];
+        _currentCounselorLeads.forEach(l => {
+          if (l.callAttempts && Array.isArray(l.callAttempts)) {
+            l.callAttempts.forEach((c, idx) => {
+              allCalls.push({
+                leadId: l.id || l._id,
+                leadName: l.fullName,
+                startTime: c.startTime,
+                duration: c.duration,
+                status: c.status,
+                sentiment: c.sentiment,
+                aiSummary: c.aiSummary
+              });
+            });
+          }
+        });
+        allCalls.sort((a, b) => new Date(b.startTime || 0) - new Date(a.startTime || 0));
+
+        document.getElementById('csm-call-total').textContent = allCalls.length;
+        document.getElementById('csm-call-completed').textContent = allCalls.filter(c => c.status === 'completed').length;
+        document.getElementById('csm-call-failed').textContent = allCalls.filter(c => ['no-answer', 'busy', 'failed'].includes(c.status)).length;
+
+        const tbodyCalls = document.getElementById('csm-calls-table-body');
+        if (!allCalls.length) {
+          tbodyCalls.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">No call activity.</td></tr>';
+        } else {
+          tbodyCalls.innerHTML = allCalls.map(c => {
+            return `<tr onclick="closeCounselorStats(); openLead('${c.leadId}')" style="cursor:pointer">
+          <td><strong>${esc(c.leadName)}</strong></td>
+          <td>${c.startTime ? new Date(c.startTime).toLocaleString() : '—'}</td>
+          <td>${c.duration ? c.duration + 's' : '—'}</td>
+          <td><span class="status-badge">${c.status || '—'}</span></td>
+          <td>${sentEmoji(c.sentiment)} ${c.sentiment || '—'}</td>
+          <td style="max-width:240px; white-space:normal; font-size:11px; color:var(--muted)">${esc(c.aiSummary || '—')}</td>
+        </tr>`;
+          }).join('');
+        }
+
+        // Render Follow-ups from DB
+        const tbodyFollowups = document.getElementById('csm-followups-table-body');
+        if (!followups || !followups.length) {
+          tbodyFollowups.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px;">No follow-up activities.</td></tr>';
+        } else {
+          tbodyFollowups.innerHTML = followups.map(f => {
+            const sched = f.scheduled_date ? new Date(f.scheduled_date).toLocaleString() : '—';
+            const status = f.completed ? '<span class="status-badge meeting-completed">✓ Done</span>' : '<span class="status-badge queued">⏳ Pending</span>';
+            const notes = f.notes || f.result || 'No details logged';
+            return `<tr onclick="closeCounselorStats(); openLead('${f.lead_id}')" style="cursor:pointer">
+          <td><strong>${esc(f.leadName)}</strong><br><span style="color:var(--muted);font-size:11px">${esc(f.leadEmail)}</span></td>
+          <td>${sched}</td>
+          <td>${status}</td>
+          <td style="max-width:300px; white-space:normal; color:var(--muted)"><strong>${fmtFollowupType(f.followup_type)}</strong><br>${esc(notes)}</td>
+        </tr>`;
+          }).join('');
+        }
+
+        // Render Enrollments
+        const tbodyEnrollments = document.getElementById('csm-enrollments-table-body');
+        if (!enrollments || !enrollments.length) {
+          tbodyEnrollments.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">No enrollments.</td></tr>';
+        } else {
+          tbodyEnrollments.innerHTML = enrollments.map(e => {
+            const created = e.createdAt ? new Date(e.createdAt).toLocaleDateString() : '—';
+            return `<tr onclick="closeCounselorStats(); openEnrollment('${e.id || e._id}')" style="cursor:pointer">
+          <td><strong>${esc(e.studentName)}</strong><br><span style="color:var(--muted);font-size:11px">Grade ${esc(e.grade || '—')}</span></td>
+          <td>${esc(e.program)}</td>
+          <td>${esc(e.learningMode || '—')}</td>
+          <td>${esc(e.paymentPlan || '—')}</td>
+          <td>$${(e.programFee || 0).toLocaleString()}</td>
+          <td><span class="status-badge">${fmtStatus(e.enrollmentStatus)}</span></td>
+          <td>${created}</td>
+        </tr>`;
+          }).join('');
+        }
+
+      } catch (e) {
+        document.getElementById('counselorStatsBody').innerHTML = `<div style="color:var(--danger);padding:16px">${e.message}</div>`;
+      }
+    }
+
+    function closeCounselorStats() {
+      document.getElementById('counselorStatsModal').classList.remove('active');
+    }
+
+    async function openAssignLeads(counselorId, counselorName) {
+      _assignTarget = { id: counselorId, name: counselorName };
+      const modal = document.getElementById('assignLeadsModal');
+      document.getElementById('assignModalSub').textContent = `Assign leads to ${counselorName}`;
+      document.getElementById('assignLeadList').innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted)">Loading leads…</div>';
+      document.getElementById('assignLeadSearch').value = '';
+      modal.classList.add('active');
+
+      try {
+        _allLeads = await fetch('/api/leads?limit=500').then(r => r.json());
+        renderAssignLeadList(_allLeads);
+      } catch (e) {
+        document.getElementById('assignLeadList').innerHTML = `<div style="color:var(--danger)">${e.message}</div>`;
+      }
+    }
+
+    function renderAssignLeadList(leads) {
+      const container = document.getElementById('assignLeadList');
+      if (!leads.length) { container.innerHTML = '<div style="text-align:center;color:var(--muted);padding:16px">No leads found</div>'; return; }
+      container.innerHTML = leads.map(l => `
+    <label style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;transition:background .1s" onmouseover="this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.background=''">
+      <input type="checkbox" value="${l._id || l.id}" style="width:16px;height:16px;accent-color:var(--brand)">
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:500">${esc(l.fullName)}</div>
+        <div style="font-size:11px;color:var(--muted)">${esc(l.email)} · ${esc(l.status)}</div>
+      </div>
+      <span style="font-size:11px;color:var(--muted)">${l.leadScore || 0}/100</span>
+    </label>
+  `).join('');
+    }
+
+    function filterAssignLeads() {
+      const q = document.getElementById('assignLeadSearch').value.toLowerCase();
+      renderAssignLeadList(_allLeads.filter(l =>
+        !q || l.fullName.toLowerCase().includes(q) || l.email.toLowerCase().includes(q)
+      ));
+    }
+
+    async function confirmAssignLeads() {
+      const checked = [...document.querySelectorAll('#assignLeadList input[type=checkbox]:checked')].map(cb => cb.value);
+      if (!checked.length) { toast('Select at least one lead', 'error'); return; }
+      try {
+        await fetch(`/api/counselors/${_assignTarget.id}/assign`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ leadIds: checked }),
+        });
+        toast(`✅ ${checked.length} lead(s) assigned to ${_assignTarget.name}`, 'success');
+        closeAssignLeads();
+        loadCounselors();
+      } catch (e) { toast('❌ ' + e.message, 'error'); }
+    }
+
+    function closeAssignLeads() {
+      document.getElementById('assignLeadsModal').classList.remove('active');
+    }
+
+    // Navigation
+    document.querySelectorAll('[data-view]').forEach(el => {
+      el.addEventListener('click', e => { e.preventDefault(); showView(el.dataset.view); });
+    });
+
+    function showView(name) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.nav a').forEach(a => a.classList.remove('active'));
+      document.getElementById('view-' + name).classList.add('active');
+      document.querySelectorAll(`[data-view="${name}"]`).forEach(a => a.classList.add('active'));
+      const titles = {
+        overview: 'Overview', leads: 'All Leads', calls: 'Call Activity',
+        meetings: 'Scheduled Meetings', analytics: 'Reports & Analytics',
+        billing: 'Billing & Cost Analytics',
+        counselor: 'Counselor Dashboard', pipeline: 'Enrollment Pipeline',
+        enrollments: 'Enrollments', campaigns: 'Campaign Management',
+        classes: 'Classes / Groups',
+        parents: 'Parent Campaigns', counselors: 'Counselor Management', settings: 'Settings',
+        callbacks: 'Callback Requests',
+      };
+      document.getElementById('pageTitle').textContent = titles[name] || name;
+      if (name === 'overview') loadOverview();
+      if (name === 'leads') renderLeadsTable();
+      if (name === 'calls') loadCalls();
+      if (name === 'meetings') loadMeetings();
+      if (name === 'analytics') loadAnalytics();
+      if (name === 'billing') loadBilling();
+      if (name === 'counselor') loadCounselor('today');
+      if (name === 'pipeline') loadPipeline();
+      if (name === 'enrollments') loadEnrollments();
+      if (name === 'campaigns') loadCampaigns();
+      if (name === 'classes') loadClasses();
+      if (name === 'parents') loadParentCampaigns();
+      if (name === 'counselors') loadCounselors();
+      if (name === 'settings') showSettingsPanel('profile');
+      if (name === 'callbacks') loadCallbacks();
+    }
+
+    // ─── Callback Requests View Logic ───
+    async function loadCallbacks() {
+      const el = document.getElementById('callbackRequestsTableBody');
+      el.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:32px">Loading callback requests…</td></tr>';
+      try {
+        const list = await api('/crm/callbacks');
+        document.getElementById('navCallbackCount').textContent = list.length;
+        if (!list.length) {
+          el.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:32px">No callback requests found</td></tr>';
+          return;
+        }
+        el.innerHTML = list.map(c => `
+      <tr>
+        <td data-label="Student Name"><strong>${esc(c.studentName)}</strong></td>
+        <td data-label="Email">${esc(c.email)}</td>
+        <td data-label="Phone" style="font-family:monospace">${esc(c.phone || '—')}</td>
+        <td data-label="Requested Time">${esc(c.requestedTime)}</td>
+        <td data-label="Time Zone">${esc(c.timezone)}</td>
+        <td data-label="Scheduled UTC">${new Date(c.scheduledAt).toLocaleString()}</td>
+        <td data-label="Retry Count">${c.retryCount || 0}</td>
+        <td data-label="Status"><span class="status-badge ${getCallbackStatusClass(c.status)}">${esc(c.status)}</span></td>
+      </tr>
+    `).join('');
+      } catch (e) {
+        el.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--danger);padding:32px">${esc(e.message)}</td></tr>`;
+      }
+    }
+
+    function getCallbackStatusClass(status) {
+      const map = {
+        'Pending': 'queued',
+        'Scheduled': 'meeting-scheduled',
+        'Calling': 'calling',
+        'Completed': 'meeting-completed',
+        'No Answer': 'lost',
+        'Failed': 'lost',
+        'Cancelled': 'cold'
+      };
+      return map[status] || 'cold';
+    }
+
+    function showMockCallbackModal() {
+      document.getElementById('me_name').value = '';
+      document.getElementById('me_email').value = '';
+      document.getElementById('me_phone').value = '';
+      document.getElementById('me_body').value = '';
+      document.getElementById('mockEmailModal').classList.add('active');
+    }
+
+    function closeMockEmailModal() {
+      document.getElementById('mockEmailModal').classList.remove('active');
+    }
+
+    async function submitMockEmail() {
+      const fromName = document.getElementById('me_name').value.trim();
+      const fromEmail = document.getElementById('me_email').value.trim();
+      const phone = document.getElementById('me_phone').value.trim();
+      const body = document.getElementById('me_body').value.trim();
+
+      if (!fromEmail || !body) {
+        toast('Email and Body are required', 'error');
+        return;
+      }
+
+      const payload = {
+        subject: 'Callback Request',
+        body: phone ? `${body} Phone: ${phone}` : body,
+        fromEmail,
+        fromName
+      };
+
+      try {
+        const res = await api('/crm/callbacks/mock-receive', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        toast('✅ Mock email sent successfully', 'success');
+        closeMockEmailModal();
+        loadCallbacks();
+      } catch (e) {
+        toast('❌ ' + e.message, 'error');
+      }
+    }
+
+    // ─── Overview ──────────────────────────────────────
+    async function loadOverview() {
+      try {
+        const s = await api('/stats');
+
+        // Stat chips
+        const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+        set('st_total', s.total);
+        set('st_new', s.new + s.queued);
+        set('st_contacted', s.contacted);
+        set('st_qualified', s.qualified);
+        set('st_hot', s.hot);
+        set('st_warm', s.warm);
+        set('st_cold', s.cold);
+        set('st_meetings', s.meetingsScheduled + s.meetingsCompleted);
+        set('st_enrolled', s.enrolled);
+        set('st_calls', s.callsCompleted);
+        set('st_score', s.avgScore || 0);
+        document.getElementById('navLeadCount').textContent = s.total;
+        document.getElementById('navMeetCount').textContent = s.meetingsScheduled;
+
+        // Trend labels
+        function trendHtml(val, label) {
+          const pct = val > 0 ? `↑ ${val}` : val < 0 ? `↓ ${Math.abs(val)}` : '—';
+          const cls = val > 0 ? 'up' : val < 0 ? 'down' : 'neu';
+          return `<span class="ov-stat-trend ${cls}">${pct}% vs last 30 days</span>`;
+        }
+        const trendEls = {
+          st_total_trend: s.total, st_new_trend: s.new, st_cont_trend: s.contacted,
+          st_qual_trend: s.qualified, st_hot_trend: s.hot, st_warm_trend: s.warm,
+          st_cold_trend: s.cold, st_meet_trend: s.meetingsScheduled,
+          st_enr_trend: s.enrolled, st_call_trend: s.callsCompleted,
+        };
+        Object.entries(trendEls).forEach(([id, v]) => {
+          const el = document.getElementById(id);
+          if (el) el.outerHTML = trendHtml(v, '').replace('class="ov-stat-trend', `id="${id}" class="ov-stat-trend`);
+        });
+
+        // Sparkline (fake smooth line based on score)
+        const base = s.avgScore || 41;
+        const pts = Array.from({ length: 10 }, (_, i) => Math.max(0, Math.min(100, base + Math.sin(i * 0.8) * 8)));
+        const sparkPts = pts.map((v, i) => `${i * (200 / 9)},${32 - (v / 100 * 28)}`).join(' ');
+        const sp = document.getElementById('sparkLine');
+        if (sp) sp.setAttribute('points', sparkPts);
+
+        renderFunnel(s);
+        renderDistribution(s);
+        renderActivity();
+        renderTable('recentLeadsTable', LEADS.slice(0, 8), false);
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    function renderFunnel(s) {
+      const stages = [
+        { label: 'Total Leads', dot: '#3b82f6', v: s.total, conv: 100 },
+        { label: 'Contacted', dot: '#f59e0b', v: s.contacted + s.qualified + s.meetingsScheduled + s.meetingsCompleted + s.enrolled },
+        { label: 'Qualified', dot: '#8b5cf6', v: s.qualified + s.meetingsScheduled + s.meetingsCompleted + s.enrolled },
+        { label: 'Meetings Scheduled', dot: '#10b981', v: s.meetingsScheduled + s.meetingsCompleted + s.enrolled },
+        { label: 'Proposal Sent', dot: '#a78bfa', v: s.proposalSent || 0 },
+        { label: 'Interested', dot: '#06b6d4', v: s.interested || 0 },
+        { label: 'Enrolled', dot: '#ec4899', v: s.enrolled },
+      ];
+      const total = stages[0].v || 1;
+      const convRate = total ? ((s.enrolled / total) * 100).toFixed(1) : '0.0';
+
+      document.getElementById('funnelView').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 36px 52px;gap:4px;margin-bottom:6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">
+      <div></div><div style="text-align:center">LEADS</div><div style="text-align:right">CONV</div>
+    </div>
+    ${stages.map(st => {
+        const pct = total ? ((st.v / total) * 100).toFixed(0) : 0;
+        return `
+      <div style="margin-bottom:9px">
+        <div class="funnel-row">
+          <div class="funnel-label"><span class="funnel-dot" style="background:${st.dot}"></span>${st.label}</div>
+          <div class="funnel-count">${st.v}</div>
+          <div class="funnel-pct">${pct}%</div>
+        </div>
+        <div class="funnel-bar-track">
+          <div class="funnel-bar-fill" style="width:${pct}%;background:${st.dot}"></div>
+        </div>
+      </div>`;
+      }).join('')}
+    <div class="funnel-footer">
+      <span style="color:var(--muted);font-size:12px">Overall Conversion Rate</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="funnel-footer-val">${convRate}%</span>
+        <span style="font-size:11px;color:var(--muted)">(${s.enrolled} / ${total})</span>
+      </div>
+    </div>`;
+    }
+
+    function renderDistribution(s) {
+      const total = (s.hot + s.warm + s.cold) || 1;
+      const hotPct = Math.round((s.hot / total) * 100);
+      const warmPct = Math.round((s.warm / total) * 100);
+      const coldPct = Math.round((s.cold / total) * 100);
+      const avg = s.avgScore || 0;
+
+      // SVG donut: circumference = 2π×46 ≈ 289
+      const C = 289;
+      function seg(pct, offset, color) {
+        const len = (pct / 100) * C;
+        return `<circle cx="60" cy="60" r="46" fill="none" stroke="${color}" stroke-width="12"
+      stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-offset}" stroke-linecap="round"/>`;
+      }
+      const hotLen = (hotPct / 100) * C;
+      const warmLen = (warmPct / 100) * C;
+
+      document.getElementById('distView').innerHTML = `
+    <div class="donut-wrap">
+      <svg class="donut-svg" viewBox="0 0 120 120">
+        <circle cx="60" cy="60" r="46" fill="none" stroke="var(--border)" stroke-width="12"/>
+        ${seg(hotPct, 0, '#ef4444')}
+        ${seg(warmPct, hotLen, '#f59e0b')}
+        ${seg(coldPct, hotLen + warmLen, '#64748b')}
+      </svg>
+      <div class="donut-center">
+        <div class="donut-center-val">${total}</div>
+        <div class="donut-center-label">Total Leads</div>
+      </div>
+    </div>
+    <div>
+      ${[
+          { label: 'Hot', color: '#ef4444', v: s.hot, pct: hotPct },
+          { label: 'Warm', color: '#f59e0b', v: s.warm, pct: warmPct },
+          { label: 'Cold', color: '#64748b', v: s.cold, pct: coldPct },
+        ].map(r => `
+        <div class="dist-row">
+          <div style="display:flex;align-items:center;gap:7px"><span class="dist-dot" style="background:${r.color}"></span>${r.label}</div>
+          <div style="color:var(--muted);font-size:11px">${r.v} (${r.pct}%)</div>
+        </div>`).join('')}
+    </div>
+    <div class="dist-score-bar-wrap">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+        <span style="color:var(--muted)">Avg Lead Score</span>
+        <strong style="color:#8b5cf6">${avg}/100</strong>
+      </div>
+      <div class="dist-score-bar-track">
+        <div class="dist-score-bar-fill" style="width:${avg}%"></div>
+      </div>
+    </div>`;
+    }
+
+    function renderActivity() {
+      const el = document.getElementById('activityFeed');
+      if (!el) return;
+      const items = LEADS.slice(0, 8).flatMap(l => {
+        const evts = [];
+        const last = l.callAttempts?.[l.callAttempts.length - 1];
+        if (last?.status === 'completed' && last.endTime)
+          evts.push({
+            icon: '📞', bg: 'rgba(59,130,246,.15)', color: '#3b82f6',
+            title: `Call completed with ${l.fullName}`,
+            sub: last.duration ? `Duration: ${Math.floor(last.duration / 60)}:${String(last.duration % 60).padStart(2, '0')}` : '',
+            time: last.endTime
+          });
+        if (l.status === 'meeting-scheduled' && l.meeting?.scheduledAt)
+          evts.push({
+            icon: '📅', bg: 'rgba(16,185,129,.15)', color: '#10b981',
+            title: `Meeting scheduled with ${l.fullName}`,
+            sub: l.courseInterest || '',
+            time: l.meeting.scheduledAt
+          });
+        if (l.createdAt)
+          evts.push({
+            icon: '✨', bg: 'rgba(6,182,212,.15)', color: '#06b6d4',
+            title: `New lead added`,
+            sub: l.fullName,
+            time: l.createdAt
+          });
+        if (l.leadCategory === 'warm' && l.updatedAt)
+          evts.push({
+            icon: '⚡', bg: 'rgba(245,158,11,.15)', color: '#f59e0b',
+            title: `Lead marked as Warm`,
+            sub: l.fullName,
+            time: l.updatedAt
+          });
+        return evts;
+      });
+
+      const completedFUs = (window.COMPLETED_FOLLOWUPS || []).map(f => {
+        let title = '';
+        let icon = '🔔';
+        let bg = 'rgba(139,92,246,.15)';
+        let color = '#8b5cf6';
+
+        if (f.followupType.includes('email')) {
+          title = `${f.followupType.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} completed automatically`;
+          if (f.followupType.includes('success-stories')) title = `Success Story Email sent successfully`;
+          icon = '✉️'; bg = 'rgba(16,185,129,.15)'; color = '#10b981';
+        } else if (f.followupType.includes('ai-call')) {
+          title = `AI Call Follow-up completed`;
+          icon = '🤖'; bg = 'rgba(59,130,246,.15)'; color = '#3b82f6';
+        } else if (f.followupType.includes('meeting') || f.result === 'completed-from-meeting') {
+          title = `Meeting Follow-up completed automatically`;
+          icon = '🤝'; bg = 'rgba(245,158,11,.15)'; color = '#f59e0b';
+        } else if (f.followupType.includes('whatsapp')) {
+          title = `WhatsApp Follow-up completed automatically`;
+          icon = '💬'; bg = 'rgba(34,197,94,.15)'; color = '#22c55e';
+        } else {
+          title = `${f.followupType} completed`;
+        }
+
+        return {
+          icon, bg, color,
+          title,
+          sub: '',
+          time: f.completedAt
+        };
+      });
+
+      const allItems = [...items, ...completedFUs]
+        .sort((a, b) => new Date(b.time) - new Date(a.time))
+        .slice(0, 15);
+
+      function ago(d) {
+        const m = Math.round((Date.now() - new Date(d)) / 60000);
+        if (m < 60) return m + 'm ago';
+        if (m < 1440) return Math.round(m / 60) + 'h ago';
+        return Math.round(m / 1440) + 'd ago';
+      }
+
+      el.innerHTML = allItems.length ? allItems.map(it => `
+    <div class="act-item">
+      <div class="act-icon" style="background:${it.bg};color:${it.color}">${it.icon}</div>
+      <div style="flex:1;min-width:0">
+        <div class="act-title">${esc(it.title)}</div>
+        ${it.sub ? `<div class="act-sub">${esc(it.sub)}</div>` : ''}
+      </div>
+      <div class="act-time">${ago(it.time)}</div>
+    </div>`).join('')
+        : '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">No recent activity</div>';
+    }
+
+    // ─── Reusable KPI chip ──────────────────────────────
+    function kpiChip(icon, val, label, color) {
+      return `<div class="kpi-chip" style="--kc:${color};--kcbg:${color}1f">
+    <div class="kpi-chip-icon">${icon}</div>
+    <div><div class="kpi-chip-val">${val}</div><div class="kpi-chip-label">${label}</div></div>
+  </div>`;
+    }
+
+    // ─── Leads ──────────────────────────────────────────
+    async function loadLeads() {
+      try {
+        LEADS = await api('/leads');
+        // Best-effort campaign cache so lead rows can show their campaign badge.
+        if (!CAMPAIGNS.length) { try { const d = await api('/campaigns'); CAMPAIGNS = d.campaigns || []; } catch (_) { } }
+        document.getElementById('navLeadCount').textContent = LEADS.length;
+        populateCampaignLeadFilter();
+        renderLeadsKpis();
+        renderLeadsTable();
+        loadOverview();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    function renderLeadsKpis() {
+      const el = document.getElementById('leadsKpis');
+      if (!el) return;
+      const total = LEADS.length;
+      const hot = LEADS.filter(l => l.leadCategory === 'hot').length;
+      const contacted = LEADS.filter(l => l.totalCallAttempts > 0).length;
+      const meetings = LEADS.filter(l => ['meeting-scheduled', 'meeting-completed'].includes(l.status)).length;
+      const enrolled = LEADS.filter(l => l.status === 'enrolled').length;
+      const avgScore = total ? Math.round(LEADS.reduce((s, l) => s + (l.leadScore || 0), 0) / total) : 0;
+      el.innerHTML =
+        kpiChip('👥', total, 'Total Leads', '#3b82f6') +
+        kpiChip('🔥', hot, 'Hot Leads', '#ef4444') +
+        kpiChip('📞', contacted, 'Contacted', '#f59e0b') +
+        kpiChip('📅', meetings, 'Meetings', '#10b981') +
+        kpiChip('🎓', enrolled, 'Enrolled', '#ec4899') +
+        kpiChip('⭐', avgScore, 'Avg Score', '#8b5cf6');
+    }
+
+    function filterLeads() {
+      const search = document.getElementById('leadSearch').value.toLowerCase();
+      const status = document.getElementById('leadStatusFilter').value;
+      const category = document.getElementById('leadCategoryFilter').value;
+      const campaign = (document.getElementById('leadCampaignFilter') || {}).value || '';
+      let filtered = LEADS;
+      if (search) filtered = filtered.filter(l => (l.fullName + l.email + l.phone).toLowerCase().includes(search));
+      if (status) filtered = filtered.filter(l => l.status === status);
+      if (category) filtered = filtered.filter(l => l.leadCategory === category);
+      if (campaign === '__none__') filtered = filtered.filter(l => !l.campaignId);
+      else if (campaign) filtered = filtered.filter(l => l.campaignId === campaign);
+      clearBulkSelect();
+      renderTable('leadsTable', filtered, true);
+    }
+
+    function renderLeadsTable() { clearBulkSelect(); renderTable('leadsTable', LEADS, true); }
+
+    // ─── Bulk-select helpers ─────────────────────────────
+    let _selectedLeads = new Set();
+
+    function toggleLeadSelect() {
+      _selectedLeads.clear();
+      document.querySelectorAll('.lead-chk:checked').forEach(el => _selectedLeads.add(el.dataset.id));
+      updateBulkBar();
+    }
+
+    function selectAllLeads(checked) {
+      _selectedLeads.clear();
+      document.querySelectorAll('.lead-chk').forEach(el => {
+        el.checked = checked;
+        if (checked) _selectedLeads.add(el.dataset.id);
+      });
+      updateBulkBar();
+    }
+
+    function updateBulkBar() {
+      const bar = document.getElementById('bulkBar');
+      if (!bar) return;
+      const n = _selectedLeads.size;
+      document.getElementById('bulkCount').textContent = n;
+      bar.classList.toggle('visible', n > 0);
+      // Populate campaign dropdown from cache
+      const sel = document.getElementById('bulkCampaignSel');
+      if (sel && sel.options.length <= 2 && CAMPAIGNS.length) {
+        CAMPAIGNS.forEach(c => {
+          const o = document.createElement('option');
+          o.value = c.id; o.textContent = c.name + (c.status !== 'active' ? ' (' + c.status + ')' : '');
+          sel.appendChild(o);
+        });
+      }
+    }
+
+    function clearBulkSelect() {
+      _selectedLeads.clear();
+      document.querySelectorAll('.lead-chk').forEach(el => el.checked = false);
+      const chkAll = document.getElementById('chkAll');
+      if (chkAll) chkAll.checked = false;
+      const bar = document.getElementById('bulkBar');
+      if (bar) bar.classList.remove('visible');
+    }
+
+    function openBulkDeleteModal(ctx) {
+      document.getElementById('bulkDeleteContext').value = ctx;
+      let set = _selectedLeads;
+      if (ctx === 'clp') set = window._clpSelectedLeads || new Set();
+      if (ctx === 'pclp') set = window._pclpSelectedLeads || new Set();
+      
+      const n = set.size;
+      if (!n) { toast('Select at least one lead', 'error'); return; }
+      
+      document.getElementById('bulkDeleteCount').textContent = n;
+      document.getElementById('bulkDeleteProgress').style.display = 'none';
+      document.getElementById('bulkDeleteButtons').style.display = 'flex';
+      document.getElementById('bulkDeleteModal').classList.add('active');
+    }
+
+    function closeBulkDeleteModal() {
+      document.getElementById('bulkDeleteModal').classList.remove('active');
+    }
+
+    async function bulkDeleteSelectedLeads() {
+      const ctx = document.getElementById('bulkDeleteContext').value;
+      let set = _selectedLeads;
+      if (ctx === 'clp') set = window._clpSelectedLeads || new Set();
+      if (ctx === 'pclp') set = window._pclpSelectedLeads || new Set();
+      
+      const n = set.size;
+      if (!n) return;
+      
+      const leadIds = [...set];
+      const prog = document.getElementById('bulkDeleteProgress');
+      const btns = document.getElementById('bulkDeleteButtons');
+      
+      btns.style.display = 'none';
+      prog.style.display = 'block';
+      prog.textContent = `Deleting ${n} leads...`;
+      prog.style.color = 'var(--text-color)';
+      
+      try {
+        const r = await api('/leads/bulk-delete', { method: 'POST', body: JSON.stringify({ leadIds }) });
+        prog.textContent = `✓ ${r.message || n + ' deleted'}`;
+        prog.style.color = 'var(--success)';
+        toast(`✅ ${r.message || n + ' deleted'}`, 'success');
+        
+        setTimeout(() => {
+          closeBulkDeleteModal();
+          if (ctx === 'clp' && typeof clearClpBulkSelect === 'function') clearClpBulkSelect();
+          else if (ctx === 'pclp' && typeof clearPclpBulkSelect === 'function') clearPclpBulkSelect();
+          else clearBulkSelect();
+          
+          loadLeads();
+          if (typeof refreshCampaignLeads === 'function' && CLP_CAMPAIGN_ID) refreshCampaignLeads();
+        }, 1500);
+      } catch (e) { 
+        prog.textContent = `❌ ${e.message}`;
+        prog.style.color = 'var(--danger)';
+        btns.style.display = 'flex';
+        toast('❌ ' + e.message, 'error'); 
+      }
+    }
+
+
+    async function bulkAssignCampaign() {
+      const sel = document.getElementById('bulkCampaignSel');
+      const val = sel ? sel.value : '';
+      if (!val) { toast('Choose a campaign first', 'error'); return; }
+      if (!_selectedLeads.size) { toast('Select at least one lead', 'error'); return; }
+      const leadIds = [..._selectedLeads];
+      const campaignId = val === '__none__' ? null : val;
+      const label = val === '__none__' ? 'removed' : 'assigned to campaign';
+      try {
+        await api('/campaigns/assign', { method: 'POST', body: JSON.stringify({ campaignId, leadIds }) });
+        toast(`✅ ${leadIds.length} lead(s) ${label}`, 'success');
+        clearBulkSelect();
+        await loadLeads();
+      } catch (e) { toast('❌ ' + e.message, 'error'); }
+    }
+
+    async function bulkAiCall() {
+      if (!_selectedLeads.size) { toast('Select at least one lead', 'error'); return; }
+      if (!confirm(`Are you sure you want to trigger AI calls for ${ _selectedLeads.size } selected leads?`)) return;
+      const leadIds = [..._selectedLeads];
+      try {
+        await api('/leads/bulk-call', { method: 'POST', body: JSON.stringify({ leadIds }) });
+        toast(`✅ Bulk AI calling initiated for ${leadIds.length} lead(s)`, 'success');
+        clearBulkSelect();
+        await loadLeads();
+      } catch (e) { toast('❌ ' + e.message, 'error'); }
+    }
+
+    async function bulkAiCallClp() {
+      if (!_selectedCampaignLeads.size) { toast('Select at least one lead', 'error'); return; }
+      if (!confirm(`Are you sure you want to trigger AI calls for ${ _selectedCampaignLeads.size } selected leads?`)) return;
+      const leadIds = [..._selectedCampaignLeads];
+      try {
+        await api('/leads/bulk-call', { method: 'POST', body: JSON.stringify({ leadIds, campaignId: _currentCampaignId }) });
+        toast(`✅ Bulk AI calling initiated for ${leadIds.length} lead(s)`, 'success');
+        clearBulkSelectClp();
+        openCampaign(_currentCampaignId);
+      } catch (e) { toast('❌ ' + e.message, 'error'); }
+    }
+
+    // ─── Populate campaign filter on leads page ──────────
+    function populateCampaignLeadFilter() {
+      const sel = document.getElementById('leadCampaignFilter');
+      if (!sel) return;
+      // Remove old dynamic options
+      while (sel.options.length > 1) sel.remove(1);
+      // Add 'No Campaign' option
+      const noneOpt = document.createElement('option');
+      noneOpt.value = '__none__'; noneOpt.textContent = '— No Campaign';
+      sel.appendChild(noneOpt);
+      CAMPAIGNS.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c.id; o.textContent = '📣 ' + c.name;
+        sel.appendChild(o);
+      });
+      sel.style.display = CAMPAIGNS.length ? '' : 'none';
+    }
+
+    function renderTable(elId, leads, full) {
+      const el = document.getElementById(elId);
+      if (!leads.length) { el.innerHTML = '<div class="empty"><div class="icon">📭</div>No leads yet. Click <strong>➕ Add Lead</strong> or <strong>⬆ Import Leads</strong> to get started.</div>'; return; }
+      const isLeadsView = elId === 'leadsTable';
+      el.innerHTML = `
+    <table>
+      <thead><tr>
+        ${isLeadsView ? `<th class="cb-col"><input type="checkbox" id="chkAll" title="Select all" onchange="selectAllLeads(this.checked)"></th>` : ''}
+        <th>Name</th><th>Grade</th><th>Phone</th><th>Program</th><th>Score</th><th>Status</th><th>Calls</th><th>Actions</th>
+      </tr></thead>
+      <tbody>${leads.map(l => {
+        const phoneValid = isValidPhone(l.phone);
+        return `
+        <tr onclick="openLead('${l._id}')" style="cursor:pointer" data-lead-id="${l._id}">
+          ${isLeadsView ? `<td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="lead-chk" data-id="${l._id}" onchange="toggleLeadSelect()"></td>` : ''}
+          <td data-label="Name"><strong>${esc(l.fullName)}</strong><br><span style="color:var(--muted);font-size:12px">${esc(l.email)}</span></td>
+          <td data-label="Grade">${esc(l.grade || '—')}</td>
+          <td data-label="Phone" style="font-family:monospace;font-size:12px;color:${phoneValid ? 'inherit' : 'var(--hot)'}" title="${phoneValid ? '' : 'Invalid phone'}">${phoneValid ? '' : '⚠️ '}${esc(l.phone)}</td>
+          <td data-label="Program">${esc(l.courseInterest || '—')}${l.campaignId ? `<br><span style="font-size:10px;color:var(--brand,#3b82f6)">📣 ${esc(campaignName(l.campaignId))}</span>` : ''}</td>
+          <td data-label="Score"><span class="score-badge ${l.leadCategory}">${l.leadScore} ${catEmoji(l.leadCategory)}</span></td>
+          <td data-label="Status"><span class="status-badge ${l.status}">${fmtStatus(l.status)}</span></td>
+          <td data-label="Calls">${l.totalCallAttempts || 0}</td>
+          <td data-label="Actions" style="white-space:nowrap" onclick="event.stopPropagation()">
+            <div style="display:flex;gap:4px;flex-wrap:wrap">
+              ${l.status === 'calling'
+            ? `<button class="btn btn-sm" style="background:var(--hot);color:#fff" onclick="stopCall('${l._id}')">🛑 Stop Call</button>`
+            : phoneValid
+              ? `<button class="btn btn-primary btn-sm" onclick="callLead('${l._id}')">📞 Call</button>`
+              : `<button class="btn btn-secondary btn-sm" style="opacity:.6" title="Invalid phone">⚠️ Bad #</button>`
+          }
+              <button class="btn btn-secondary btn-sm" onclick="openEditLead('${l._id}')">✏️ Edit</button>
+              <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="confirmDeleteLead('${l._id}','${esc(l.fullName)}')">🗑️</button>
+            </div>
+          </td>
+        </tr>
+      `;
+      }).join('')}</tbody>
+    </table>
+  `;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //   CAMPAIGN MANAGEMENT
+    // ═══════════════════════════════════════════════════════════════════════
+    let CAMPAIGNS = [];           // cache of campaigns (for lead-form selector)
+    const CAMPAIGN_STATUS_BADGE = {
+      active: { label: 'Active', color: 'var(--success, #10b981)' },
+      paused: { label: 'Paused', color: 'var(--warn, #f59e0b)' },
+      completed: { label: 'Completed', color: 'var(--muted, #94a3b8)' },
+    };
+
+    async function loadCampaigns() {
+      const el = document.getElementById('campaignsTable');
+      el.innerHTML = '<div style="text-align:center;color:var(--muted);padding:24px">Loading campaigns…</div>';
+      try {
+        const data = await api('/campaigns');
+        CAMPAIGNS = data.campaigns || [];
+        renderCampaignKpis(data);
+        renderCampaignsTable(data);
+      } catch (e) {
+        const setup = /set up|schema_campaigns/i.test(e.message);
+        el.innerHTML = `<div class="empty"><div class="icon">📣</div>${esc(e.message)}${setup ? '<br><br><span style="color:var(--muted);font-size:12px">Run <code>supabase/schema_campaigns.sql</code> in the Supabase SQL editor, then refresh.</span>' : ''
+          }</div>`;
+        document.getElementById('campaignKpis').innerHTML = '';
+      }
+    }
+
+    function renderCampaignKpis(data) {
+      const cs = data.campaigns || [];
+      const sum = (k) => cs.reduce((s, c) => s + (c.stats[k] || 0), 0);
+      const totalLeads = sum('totalLeads');
+      const totalEnroll = sum('enrollments');
+      const active = cs.filter(c => c.status === 'active').length;
+      const overall = totalLeads ? ((totalEnroll / totalLeads) * 100).toFixed(1) : '0.0';
+      document.getElementById('campaignKpis').innerHTML =
+        kpiChip('📣', cs.length, 'Campaigns', '#3b82f6') +
+        kpiChip('🟢', active, 'Active', '#10b981') +
+        kpiChip('👥', totalLeads, 'Total Students', '#6366f1') +
+        kpiChip('📞', sum('callsCompleted'), 'Calls Completed', '#f59e0b') +
+        kpiChip('📅', sum('meetingsBooked'), 'Meetings Booked', '#8b5cf6') +
+        kpiChip('🎓', totalEnroll, 'Enrollments', '#22c55e') +
+        kpiChip('📈', overall + '%', 'Overall Conv.', '#ec4899');
+    }
+
+    // Campaign-type icon map
+    const CAMP_ICONS = {
+      'demo-test-followup': '📝',
+      'sat-batch': '📘',
+      'act-batch': '📙',
+      'ap-course': '📗',
+      'college-admissions': '🎓',
+      'scholarship-webinar': '🏆',
+      'free-mock-test': '🧪',
+      'parent-counseling': '👨‍👩‍👧',
+      'parent-absent': '📅',
+      'parent-homework': '📚',
+      'parent-flt': '📝',
+      'custom': '⚙️',
+    };
+
+    function renderCampaignsTable(data) {
+      const cs = data.campaigns || [];
+      const el = document.getElementById('campaignsTable');
+      if (!cs.length) { el.innerHTML = '<div class="empty"><div class="icon">📣</div>No campaigns yet.</div>'; return; }
+      el.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Campaign</th><th>Program</th><th>Students</th><th>Calls</th>
+        <th>Meetings</th><th>Enrolled</th><th>Conv. Rate</th><th>Status</th><th>Action</th>
+      </tr></thead>
+      <tbody>${cs.map(c => {
+        const s = c.stats;
+        const icon = CAMP_ICONS[c.type] || CAMP_ICONS['custom'];
+        return `
+        <tr>
+          <td data-label="Campaign">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:22px">${icon}</span>
+              <div>
+                <strong>${esc(c.name)}</strong>${c.isDefault ? ' <span style="font-size:10px;color:var(--muted)">(built-in)</span>' : ''}<br>
+                <span style="color:var(--muted);font-size:12px">${esc(c.goal || c.description || '')}</span>
+              </div>
+            </div>
+          </td>
+          <td data-label="Program">${esc(c.program || '—')}</td>
+          <td data-label="Students"><strong>${s.totalLeads}</strong></td>
+          <td data-label="Calls">${s.callsCompleted}</td>
+          <td data-label="Meetings">${s.meetingsBooked}</td>
+          <td data-label="Enrolled">${s.enrollments}</td>
+          <td data-label="Conv. Rate"><strong>${s.conversionRate}%</strong></td>
+          <td data-label="Status" onclick="event.stopPropagation()">
+            <select onchange="setCampaignStatus('${c.id}', this.value)" style="padding:4px 6px;border-radius:6px;font-size:12px;font-weight:600;background:var(--panel2,#273449);color:${(CAMPAIGN_STATUS_BADGE[c.status] || {}).color || 'inherit'};border:1px solid var(--border,#334155)">
+              <option value="active"    ${c.status === 'active' ? 'selected' : ''}>🟢 Active</option>
+              <option value="paused"    ${c.status === 'paused' ? 'selected' : ''}>⏸ Paused</option>
+              <option value="completed" ${c.status === 'completed' ? 'selected' : ''}>✅ Completed</option>
+            </select>
+          </td>
+          <td data-label="Action" onclick="event.stopPropagation()">
+            <button class="btn-manage-leads" onclick="openCampaignLeads('${c.id}','${esc(c.name)}','${c.type}')">
+              📋 Manage Leads
+            </button>
+          </td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+    ${data.unassignedLeads ? `<div style="color:var(--muted);font-size:12px;margin-top:10px">ℹ️ ${data.unassignedLeads} lead(s) reference a removed campaign and are not counted above.</div>` : ''}
+  `;
+    }
+
+    async function setCampaignStatus(id, status) {
+      try {
+        await api('/campaigns/' + id, { method: 'PATCH', body: JSON.stringify({ status }) });
+        toast('✅ Campaign status updated', 'success');
+        loadCampaigns();
+      } catch (e) { toast('❌ ' + e.message, 'error'); loadCampaigns(); }
+    }
+
+    function openCampaignForm() {
+      const name = prompt('New campaign name (e.g. "Summer SAT Blitz"):');
+      if (!name || !name.trim()) return;
+      const program = prompt('Program / audience (e.g. SAT, ACT, Scholarships):', '') || '';
+      const goal = prompt('Goal (optional):', '') || '';
+      api('/campaigns', {
+        method: 'POST',
+        body: JSON.stringify({ name: name.trim(), type: 'custom', program: program.trim(), goal: goal.trim() }),
+      }).then(() => {
+        toast('✅ Campaign created', 'success');
+        loadCampaigns();
+      }).catch(e => toast('❌ ' + e.message, 'error'));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //   PARENT CAMPAIGNS MODULE
+    // ═══════════════════════════════════════════════════════════════════════
+    // Parent campaign types (filtered from CAMPAIGNS cache)
+    const PARENT_CAMPAIGN_TYPES = ['parent-absent', 'parent-homework', 'parent-flt'];
+
+    let PCLP_CAMPAIGN_ID = null;
+    let PCLP_CAMPAIGN_NAME = '';
+    let PCLP_ALL_LEADS = [];
+
+    async function loadParentCampaigns() {
+      const el = document.getElementById('parentCampaignsTable');
+      el.innerHTML = '<div style="text-align:center;color:var(--muted);padding:24px">Loading parent campaigns…</div>';
+      try {
+        const data = await api('/campaigns');
+        // Filter to parent campaign types only
+        const allCamps = data.campaigns || [];
+        CAMPAIGNS = allCamps; // keep global cache updated
+        const parentCamps = allCamps.filter(c => PARENT_CAMPAIGN_TYPES.includes(c.type));
+        const parentData = { campaigns: parentCamps, unassignedLeads: 0 };
+        renderParentCampaignKpis(parentData);
+        renderParentCampaignsTable(parentData);
+      } catch (e) {
+        const setup = /set up|schema_campaigns/i.test(e.message);
+        el.innerHTML = `<div class="empty"><div class="icon">👨‍👩‍👧</div>${esc(e.message)}${setup ? '<br><br><span style="color:var(--muted);font-size:12px">Run <code>supabase/schema_campaigns.sql</code> in the Supabase SQL editor, then refresh.</span>' : ''}</div>`;
+        document.getElementById('parentCampaignKpis').innerHTML = '';
+      }
+    }
+
+    function renderParentCampaignKpis(data) {
+      const cs = data.campaigns || [];
+      const sum = (k) => cs.reduce((s, c) => s + (c.stats[k] || 0), 0);
+      const totalLeads = sum('totalLeads');
+      const active = cs.filter(c => c.status === 'active').length;
+      document.getElementById('parentCampaignKpis').innerHTML =
+        kpiChip('👨‍👩‍👧', cs.length, 'Parent Campaigns', '#8b5cf6') +
+        kpiChip('🟢', active, 'Active', '#10b981') +
+        kpiChip('👥', totalLeads, 'Total Parents', '#3b82f6') +
+        kpiChip('📞', sum('callsCompleted'), 'Calls Completed', '#f59e0b') +
+        kpiChip('✅', sum('meetingsBooked'), 'Completed Calls', '#06b6d4');
+    }
+
+    function renderParentCampaignsTable(data) {
+      const cs = data.campaigns || [];
+      const el = document.getElementById('parentCampaignsTable');
+      if (!cs.length) {
+        el.innerHTML = `<div class="empty"><div class="icon">👨‍👩‍👧</div>No parent campaigns found.<br><br><span style="color:var(--muted);font-size:13px">The three parent campaigns (Absent, Homework, Full Length Test) are seeded automatically when the campaigns schema is applied. If you do not see them, open the Campaigns view and they will be created on first load.</span></div>`;
+        return;
+      }
+      el.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Campaign</th><th>Program</th><th>Parents</th><th>Calls</th>
+        <th>Status</th><th>Action</th>
+      </tr></thead>
+      <tbody>${cs.map(c => {
+        const s = c.stats;
+        const icon = CAMP_ICONS[c.type] || '👨‍👩‍👧';
+        return `
+        <tr>
+          <td data-label="Campaign">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:22px">${icon}</span>
+              <div>
+                <strong>${esc(c.name)}</strong>${c.isDefault ? ' <span style="font-size:10px;color:var(--muted)">(built-in)</span>' : ''}<br>
+                <span style="color:var(--muted);font-size:12px">${esc(c.goal || c.description || 'Parent outreach campaign')}</span>
+              </div>
+            </div>
+          </td>
+          <td data-label="Program">${esc(c.program || '—')}</td>
+          <td data-label="Parents"><strong>${s.totalLeads}</strong></td>
+          <td data-label="Calls">${s.callsCompleted}</td>
+          <td data-label="Status" onclick="event.stopPropagation()">
+            <select onchange="setParentCampaignStatus('${c.id}', this.value)" style="padding:4px 6px;border-radius:6px;font-size:12px;font-weight:600;background:var(--panel2,#273449);color:${(CAMPAIGN_STATUS_BADGE[c.status] || {}).color || 'inherit'};border:1px solid var(--border,#334155)">
+              <option value="active"    ${c.status === 'active' ? 'selected' : ''}>🟢 Active</option>
+              <option value="paused"    ${c.status === 'paused' ? 'selected' : ''}>⏸ Paused</option>
+              <option value="completed" ${c.status === 'completed' ? 'selected' : ''}>✅ Completed</option>
+            </select>
+          </td>
+          <td data-label="Action" onclick="event.stopPropagation()">
+            <button class="btn-manage-leads" onclick="openParentCampaignLeads('${c.id}','${esc(c.name)}','${c.type}')">
+              📋 Manage Parents
+            </button>
+          </td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+  `;
+    }
+
+    async function setParentCampaignStatus(id, status) {
+      try {
+        await api('/campaigns/' + id, { method: 'PATCH', body: JSON.stringify({ status }) });
+        toast('✅ Campaign status updated', 'success');
+        loadParentCampaigns();
+      } catch (e) { toast('❌ ' + e.message, 'error'); loadParentCampaigns(); }
+    }
+
+    async function openParentCampaignLeads(campaignId, campaignName, campaignType) {
+      PCLP_CAMPAIGN_ID = campaignId;
+      PCLP_CAMPAIGN_NAME = campaignName;
+      PCLP_ALL_LEADS = [];
+
+      document.getElementById('parentCampaignOverview').style.display = 'none';
+      const panel = document.getElementById('parentCampaignLeadsPanel');
+      panel.classList.add('visible');
+
+      document.getElementById('pclpTitle').textContent = campaignName;
+      document.getElementById('pclpBadge').textContent = 'Loading…';
+      document.getElementById('pclpTableTitle').textContent = campaignName + ' — Parents';
+
+      document.getElementById('pclpSearch').value = '';
+      document.getElementById('pclpStatusFilter').value = '';
+      document.getElementById('pclpCategoryFilter').value = '';
+      document.getElementById('pclpLeadsTable').innerHTML = '<div style="text-align:center;color:var(--muted);padding:24px">Loading parents…</div>';
+
+      // Populate bulk campaign selector
+      const bulkSel = document.getElementById('pclpBulkCampaignSel');
+      if (bulkSel && bulkSel.options.length <= 2 && CAMPAIGNS.length) {
+        CAMPAIGNS.filter(c => PARENT_CAMPAIGN_TYPES.includes(c.type)).forEach(c => {
+          const o = document.createElement('option');
+          o.value = c.id;
+          o.textContent = c.name + (c.status !== 'active' ? ' (' + c.status + ')' : '');
+          bulkSel.appendChild(o);
+        });
+      }
+
+      await refreshParentCampaignLeads();
+    }
+
+    async function refreshParentCampaignLeads() {
+      if (!PCLP_CAMPAIGN_ID) return;
+      try {
+        const leads = await api('/leads?campaignId=' + PCLP_CAMPAIGN_ID);
+        PCLP_ALL_LEADS = leads;
+        document.getElementById('pclpBadge').textContent = leads.length + ' parent' + (leads.length !== 1 ? 's' : '');
+        renderParentCampaignLeadsKpis(leads);
+        renderPclpTable(leads);
+      } catch (e) {
+        document.getElementById('pclpLeadsTable').innerHTML =
+          '<div class="empty"><div class="icon">⚠️</div>' + esc(e.message) + '</div>';
+      }
+    }
+
+    function closeParentCampaignLeads() {
+      PCLP_CAMPAIGN_ID = null;
+      PCLP_CAMPAIGN_NAME = '';
+      PCLP_ALL_LEADS = [];
+      clearPclpBulkSelect();
+      document.getElementById('parentCampaignLeadsPanel').classList.remove('visible');
+      document.getElementById('parentCampaignOverview').style.display = '';
+    }
+
+    function renderParentCampaignLeadsKpis(leads) {
+      const el = document.getElementById('pclpKpis');
+      if (!el) return;
+      const total = leads.length;
+      const contacted = leads.filter(l => l.totalCallAttempts > 0).length;
+      const calling = leads.filter(l => l.status === 'calling').length;
+      const avgScore = total ? Math.round(leads.reduce((s, l) => s + (l.leadScore || 0), 0) / total) : 0;
+      el.innerHTML =
+        kpiChip('👨‍👩‍👧', total, 'Total Parents', '#8b5cf6') +
+        kpiChip('📞', contacted, 'Called', '#f59e0b') +
+        kpiChip('📲', calling, 'In Call', '#ef4444') +
+        kpiChip('⭐', avgScore, 'Avg Score', '#3b82f6');
+    }
+
+    function filterParentCampaignLeads() {
+      const search = document.getElementById('pclpSearch').value.toLowerCase();
+      const status = document.getElementById('pclpStatusFilter').value;
+      const category = document.getElementById('pclpCategoryFilter').value;
+      let filtered = PCLP_ALL_LEADS;
+      if (search) filtered = filtered.filter(l => (l.fullName + l.email + l.phone).toLowerCase().includes(search));
+      if (status) filtered = filtered.filter(l => l.status === status);
+      if (category) filtered = filtered.filter(l => l.leadCategory === category);
+      clearPclpBulkSelect();
+      renderPclpTable(filtered);
+    }
+
+    function renderPclpTable(leads) {
+      const el = document.getElementById('pclpLeadsTable');
+      if (!leads || !leads.length) {
+        el.innerHTML = '<div class="empty"><div class="icon">📭</div>No parents in this campaign yet.<br><br><button class="btn btn-primary btn-sm" onclick="openAddLeadForParentCampaign()">➕ Add Parent to Campaign</button></div>';
+        return;
+      }
+      el.innerHTML = `
+    <table>
+      <thead><tr>
+        <th class="cb-col"><input type="checkbox" id="pclpChkAll" title="Select all" onchange="pclpSelectAll(this.checked)"></th>
+        <th>Name</th><th>Phone</th><th>Child Name</th><th>Score</th><th>Status</th><th>Calls</th><th>Actions</th>
+      </tr></thead>
+      <tbody>${leads.map(l => {
+        const phoneValid = isValidPhone(l.phone);
+        const childName = l.parentName || l.fullName;
+        return `
+        <tr onclick="openLead('${l._id}')" style="cursor:pointer" data-lead-id="${l._id}">
+          <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="pclp-chk" data-id="${l._id}" onchange="togglePclpSelect()"></td>
+          <td data-label="Name"><strong>${esc(l.fullName)}</strong><br><span style="color:var(--muted);font-size:12px">${esc(l.email)}</span></td>
+          <td data-label="Phone" style="font-family:monospace;font-size:12px;color:${phoneValid ? 'inherit' : 'var(--hot)'}">${phoneValid ? '' : '⚠️ '}${esc(l.phone)}</td>
+          <td data-label="Child">${esc(l.grade ? 'Grade ' + l.grade : '—')}</td>
+          <td data-label="Score"><span class="score-badge ${l.leadCategory}">${l.leadScore} ${catEmoji(l.leadCategory)}</span></td>
+          <td data-label="Status"><span class="status-badge ${l.status}">${fmtStatus(l.status)}</span></td>
+          <td data-label="Calls">${l.totalCallAttempts || 0}</td>
+          <td data-label="Actions" style="white-space:nowrap" onclick="event.stopPropagation()">
+            <div style="display:flex;gap:4px;flex-wrap:wrap">
+              ${l.status === 'calling'
+            ? `<button class="btn btn-sm" style="background:var(--hot);color:#fff" onclick="stopCall('${l._id}')">🛑 Stop</button>`
+            : phoneValid
+              ? `<button class="btn btn-primary btn-sm" onclick="callLead('${l._id}')">📞 Call</button>`
+              : `<button class="btn btn-secondary btn-sm" style="opacity:.6" title="Invalid phone">⚠️ Bad #</button>`
+          }
+              <button class="btn btn-secondary btn-sm" onclick="openEditLead('${l._id}')">✏️ Edit</button>
+              <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="confirmDeleteLead('${l._id}','${esc(l.fullName)}')">🗑️</button>
+            </div>
+          </td>
+        </tr>
+      `}).join('')}</tbody>
+    </table>`;
+    }
+
+    function openAddLeadForParentCampaign() {
+      openAddLead();
+      if (PCLP_CAMPAIGN_ID) {
+        setTimeout(() => {
+          const sel = document.getElementById('lf_campaign');
+          if (sel) sel.value = PCLP_CAMPAIGN_ID;
+        }, 300);
+      }
+    }
+
+    // ─── PCLP bulk-select helpers ────────────────────────
+    let _pclpSelected = new Set();
+
+    function togglePclpSelect() {
+      _pclpSelected.clear();
+      document.querySelectorAll('.pclp-chk:checked').forEach(el => _pclpSelected.add(el.dataset.id));
+      updatePclpBulkBar();
+    }
+
+    function pclpSelectAll(checked) {
+      _pclpSelected.clear();
+      document.querySelectorAll('.pclp-chk').forEach(el => {
+        el.checked = checked;
+        if (checked) _pclpSelected.add(el.dataset.id);
+      });
+      updatePclpBulkBar();
+    }
+
+    function updatePclpBulkBar() {
+      const bar = document.getElementById('pclpBulkBar');
+      if (!bar) return;
+      const n = _pclpSelected.size;
+      document.getElementById('pclpBulkCount').textContent = n;
+      bar.classList.toggle('visible', n > 0);
+    }
+
+    function clearPclpBulkSelect() {
+      _pclpSelected.clear();
+      document.querySelectorAll('.pclp-chk').forEach(el => el.checked = false);
+      const chk = document.getElementById('pclpChkAll');
+      if (chk) chk.checked = false;
+      const bar = document.getElementById('pclpBulkBar');
+      if (bar) bar.classList.remove('visible');
+    }
+
+    async function bulkAssignCampaignPclp() {
+      const sel = document.getElementById('pclpBulkCampaignSel');
+      const val = sel ? sel.value : '';
+      if (!val) { toast('Choose a campaign first', 'error'); return; }
+      if (!_pclpSelected.size) { toast('Select at least one parent', 'error'); return; }
+      const leadIds = [..._pclpSelected];
+      const campaignId = val === '__none__' ? null : val;
+      const label = val === '__none__' ? 'removed from campaign' : 'assigned to campaign';
+      try {
+        await api('/campaigns/assign', { method: 'POST', body: JSON.stringify({ campaignId, leadIds }) });
+        toast('✅ ' + leadIds.length + ' parent(s) ' + label, 'success');
+        clearPclpBulkSelect();
+        await refreshParentCampaignLeads();
+        LEADS = await api('/leads').catch(() => LEADS);
+      } catch (e) { toast('❌ ' + e.message, 'error'); }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //   CAMPAIGN LEADS SUB-VIEW
+    // ═══════════════════════════════════════════════════════════════════════
+    let CLP_CAMPAIGN_ID = null;   // UUID of current campaign in sub-view
+    let CLP_CAMPAIGN_NAME = '';     // display name
+    let CLP_ALL_LEADS = [];     // all leads for this campaign (unfiltered)
+
+    async function openCampaignLeads(campaignId, campaignName, campaignType) {
+      CLP_CAMPAIGN_ID = campaignId;
+      CLP_CAMPAIGN_NAME = campaignName;
+      CLP_ALL_LEADS = [];
+
+      // Show sub-view, hide overview
+      document.getElementById('campaignOverview').style.display = 'none';
+      const panel = document.getElementById('campaignLeadsPanel');
+      panel.classList.add('visible');
+
+      // Set header
+      document.getElementById('clpTitle').textContent = campaignName;
+      document.getElementById('clpBadge').textContent = 'Loading…';
+      document.getElementById('clpTableTitle').textContent = campaignName + ' — Leads';
+
+      // Clear search/filter
+      document.getElementById('clpSearch').value = '';
+      document.getElementById('clpStatusFilter').value = '';
+      document.getElementById('clpCategoryFilter').value = '';
+      document.getElementById('clpLeadsTable').innerHTML = '<div style="text-align:center;color:var(--muted);padding:24px">Loading leads…</div>';
+
+      // Populate bulk campaign selector
+      const bulkSel = document.getElementById('clpBulkCampaignSel');
+      if (bulkSel && bulkSel.options.length <= 2 && CAMPAIGNS.length) {
+        CAMPAIGNS.forEach(c => {
+          const o = document.createElement('option');
+          o.value = c.id;
+          o.textContent = c.name + (c.status !== 'active' ? ' (' + c.status + ')' : '');
+          bulkSel.appendChild(o);
+        });
+      }
+
+      await refreshCampaignLeads();
+    }
+
+    async function refreshCampaignLeads() {
+      if (!CLP_CAMPAIGN_ID) return;
+      try {
+        const leads = await api('/leads?campaignId=' + CLP_CAMPAIGN_ID);
+        CLP_ALL_LEADS = leads;
+        document.getElementById('clpBadge').textContent = leads.length + ' lead' + (leads.length !== 1 ? 's' : '');
+        renderCampaignLeadsKpis(leads);
+        renderClpTable(leads);
+      } catch (e) {
+        document.getElementById('clpLeadsTable').innerHTML =
+          '<div class="empty"><div class="icon">⚠️</div>' + esc(e.message) + '</div>';
+      }
+    }
+
+    function closeCampaignLeads() {
+      CLP_CAMPAIGN_ID = null;
+      CLP_CAMPAIGN_NAME = '';
+      CLP_ALL_LEADS = [];
+      clearClpBulkSelect();
+      document.getElementById('campaignLeadsPanel').classList.remove('visible');
+      document.getElementById('campaignOverview').style.display = '';
+    }
+
+    function renderCampaignLeadsKpis(leads) {
+      const el = document.getElementById('clpKpis');
+      if (!el) return;
+      const total = leads.length;
+      const hot = leads.filter(l => l.leadCategory === 'hot').length;
+      const contacted = leads.filter(l => l.totalCallAttempts > 0).length;
+      const meetings = leads.filter(l => ['meeting-scheduled', 'meeting-completed'].includes(l.status)).length;
+      const enrolled = leads.filter(l => l.status === 'enrolled').length;
+      const avgScore = total ? Math.round(leads.reduce((s, l) => s + (l.leadScore || 0), 0) / total) : 0;
+      el.innerHTML =
+        kpiChip('👥', total, 'Total Leads', '#3b82f6') +
+        kpiChip('🔥', hot, 'Hot Leads', '#ef4444') +
+        kpiChip('📞', contacted, 'Contacted', '#f59e0b') +
+        kpiChip('📅', meetings, 'Meetings', '#10b981') +
+        kpiChip('🎓', enrolled, 'Enrolled', '#ec4899') +
+        kpiChip('⭐', avgScore, 'Avg Score', '#8b5cf6');
+    }
+
+    function filterCampaignLeads() {
+      const search = document.getElementById('clpSearch').value.toLowerCase();
+      const status = document.getElementById('clpStatusFilter').value;
+      const category = document.getElementById('clpCategoryFilter').value;
+      let filtered = CLP_ALL_LEADS;
+      if (search) filtered = filtered.filter(l => (l.fullName + l.email + l.phone).toLowerCase().includes(search));
+      if (status) filtered = filtered.filter(l => l.status === status);
+      if (category) filtered = filtered.filter(l => l.leadCategory === category);
+      clearClpBulkSelect();
+      renderClpTable(filtered);
+    }
+
+    function renderClpTable(leads) {
+      const el = document.getElementById('clpLeadsTable');
+      if (!leads || !leads.length) {
+        el.innerHTML = '<div class="empty"><div class="icon">📭</div>No leads in this campaign yet.<br><br><div style="display:flex;gap:8px;justify-content:center"><button class="btn btn-primary btn-sm" onclick="openAddLeadForCampaign()">➕ Add Lead</button> <button class="btn btn-secondary btn-sm" onclick="openImportLeadsModal(true)">⬆ Import Leads</button></div></div>';
+        return;
+      }
+      el.innerHTML = `
+    <table>
+      <thead><tr>
+        <th class="cb-col"><input type="checkbox" id="clpChkAll" title="Select all" onchange="clpSelectAll(this.checked)"></th>
+        <th>Name</th><th>Grade</th><th>Phone</th><th>Program</th><th>Score</th><th>Status</th><th>Calls</th><th>Actions</th>
+      </tr></thead>
+      <tbody>${leads.map(l => {
+        const phoneValid = isValidPhone(l.phone);
+        return `
+        <tr onclick="openLead('${l._id}')" style="cursor:pointer" data-lead-id="${l._id}">
+          <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="clp-chk" data-id="${l._id}" onchange="toggleClpSelect()"></td>
+          <td data-label="Name"><strong>${esc(l.fullName)}</strong><br><span style="color:var(--muted);font-size:12px">${esc(l.email)}</span></td>
+          <td data-label="Grade">${esc(l.grade || '—')}</td>
+          <td data-label="Phone" style="font-family:monospace;font-size:12px;color:${phoneValid ? 'inherit' : 'var(--hot)'}">${phoneValid ? '' : '⚠️ '}${esc(l.phone)}</td>
+          <td data-label="Program">${esc(l.courseInterest || '—')}</td>
+          <td data-label="Score"><span class="score-badge ${l.leadCategory}">${l.leadScore} ${catEmoji(l.leadCategory)}</span></td>
+          <td data-label="Status"><span class="status-badge ${l.status}">${fmtStatus(l.status)}</span></td>
+          <td data-label="Calls">${l.totalCallAttempts || 0}</td>
+          <td data-label="Actions" style="white-space:nowrap" onclick="event.stopPropagation()">
+            <div style="display:flex;gap:4px;flex-wrap:wrap">
+              ${l.status === 'calling'
+            ? `<button class="btn btn-sm" style="background:var(--hot);color:#fff" onclick="stopCall('${l._id}')">🛑 Stop</button>`
+            : phoneValid
+              ? `<button class="btn btn-primary btn-sm" onclick="callLead('${l._id}')">📞 Call</button>`
+              : `<button class="btn btn-secondary btn-sm" style="opacity:.6" title="Invalid phone">⚠️ Bad #</button>`
+          }
+              <button class="btn btn-secondary btn-sm" onclick="openEditLead('${l._id}')">✏️ Edit</button>
+              <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="confirmDeleteLead('${l._id}','${esc(l.fullName)}')">🗑️</button>
+            </div>
+          </td>
+        </tr>
+      `}).join('')}</tbody>
+    </table>`;
+    }
+
+    // Add lead pre-assigned to current campaign
+    function openAddLeadForCampaign() {
+      openAddLead();
+      // Pre-select the current campaign in the lead form after a tiny delay
+      if (CLP_CAMPAIGN_ID) {
+        setTimeout(() => {
+          const sel = document.getElementById('lf_campaign');
+          if (sel) sel.value = CLP_CAMPAIGN_ID;
+        }, 300);
+      }
+    }
+
+    // ─── CLP bulk-select helpers ─────────────────────────
+    let _clpSelected = new Set();
+
+    function toggleClpSelect() {
+      _clpSelected.clear();
+      document.querySelectorAll('.clp-chk:checked').forEach(el => _clpSelected.add(el.dataset.id));
+      updateClpBulkBar();
+    }
+
+    function clpSelectAll(checked) {
+      _clpSelected.clear();
+      document.querySelectorAll('.clp-chk').forEach(el => {
+        el.checked = checked;
+        if (checked) _clpSelected.add(el.dataset.id);
+      });
+      updateClpBulkBar();
+    }
+
+    function updateClpBulkBar() {
+      const bar = document.getElementById('clpBulkBar');
+      if (!bar) return;
+      const n = _clpSelected.size;
+      document.getElementById('clpBulkCount').textContent = n;
+      bar.classList.toggle('visible', n > 0);
+    }
+
+    function clearClpBulkSelect() {
+      _clpSelected.clear();
+      document.querySelectorAll('.clp-chk').forEach(el => el.checked = false);
+      const chk = document.getElementById('clpChkAll');
+      if (chk) chk.checked = false;
+      const bar = document.getElementById('clpBulkBar');
+      if (bar) bar.classList.remove('visible');
+    }
+
+    async function bulkAssignCampaignClp() {
+      const sel = document.getElementById('clpBulkCampaignSel');
+      const val = sel ? sel.value : '';
+      if (!val) { toast('Choose a campaign first', 'error'); return; }
+      if (!_clpSelected.size) { toast('Select at least one lead', 'error'); return; }
+      const leadIds = [..._clpSelected];
+      const campaignId = val === '__none__' ? null : val;
+      const label = val === '__none__' ? 'removed from campaign' : 'assigned to campaign';
+      try {
+        await api('/campaigns/assign', { method: 'POST', body: JSON.stringify({ campaignId, leadIds }) });
+        toast('✅ ' + leadIds.length + ' lead(s) ' + label, 'success');
+        clearClpBulkSelect();
+        await refreshCampaignLeads();
+        // Also refresh global leads cache
+        LEADS = await api('/leads').catch(() => LEADS);
+      } catch (e) { toast('❌ ' + e.message, 'error'); }
+    }
+
+
+    function campaignName(id) {
+      const c = CAMPAIGNS.find(x => x.id === id);
+      return c ? c.name : 'Campaign';
+    }
+
+    // Populate a campaign <select> (used by the lead form). Loads cache if empty.
+    async function populateCampaignSelect(selectId, selectedId) {
+      const sel = document.getElementById(selectId);
+      if (!sel) return;
+      try {
+        if (!CAMPAIGNS.length) {
+          const data = await api('/campaigns');
+          CAMPAIGNS = data.campaigns || [];
+        }
+      } catch (_) { /* campaigns not set up — leave selector with default only */ }
+      sel.innerHTML = '<option value="">— Default (Demo Test Follow-up) —</option>' +
+        CAMPAIGNS.map(c => `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${esc(c.name)}${c.status !== 'active' ? ' (' + c.status + ')' : ''}</option>`).join('');
+    }
+
+    // ─── Calls ───────────────────────────────────────────
+    async function loadCalls() {
+      try {
+        CALLS = await api('/calls');
+        document.getElementById('navCallCount').textContent = CALLS.length;
+        renderCallsKpis();
+        const el = document.getElementById('callsTable');
+        if (!CALLS.length) { el.innerHTML = '<div class="empty"><div class="icon">📞</div>No call activity yet</div>'; return; }
+        el.innerHTML = `
+      <table>
+        <thead><tr><th>Lead</th><th>Phone</th><th>Date</th><th>Duration</th><th>Status</th><th>Sentiment</th><th>Recording</th><th>Actions</th></tr></thead>
+        <tbody>${CALLS.map(c => `
+          <tr>
+            <td data-label="Lead"><strong>${esc(c.leadName)}</strong> · attempt #${c.attemptNumber}</td>
+            <td data-label="Phone" style="font-family:monospace;font-size:12px">${esc(c.leadPhone)}</td>
+            <td data-label="Date">${c.startTime ? new Date(c.startTime).toLocaleString() : '—'}</td>
+            <td data-label="Duration">${c.duration ? c.duration + 's' : '—'}</td>
+            <td data-label="Status"><span class="status-badge">${c.status || '—'}</span></td>
+            <td data-label="Sentiment">${sentEmoji(c.sentiment)} ${c.sentiment || '—'}</td>
+            <td data-label="Recording">${c.recordingUrl ? '🎙️ Yes' : '—'}</td>
+            <td data-label="Actions" style="white-space:nowrap;display:flex;gap:6px">
+              <button class="btn btn-secondary btn-sm" onclick="openLead('${c.leadId}')">👁️ View</button>
+              <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="confirmDeleteCall('${c.leadId}','${c.callId}','${esc(c.leadName)}',${c.attemptNumber})">🗑️ Delete</button>
+            </td>
+          </tr>
+        `).join('')}</tbody>
+      </table>
+    `;
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    function renderCallsKpis() {
+      const el = document.getElementById('callsKpis');
+      if (!el) return;
+      const total = CALLS.length;
+      const completed = CALLS.filter(c => c.status === 'completed').length;
+      const noAnswer = CALLS.filter(c => ['no-answer', 'busy', 'failed'].includes(c.status)).length;
+      const positive = CALLS.filter(c => c.sentiment === 'positive').length;
+      const durs = CALLS.filter(c => c.duration > 0).map(c => c.duration);
+      const avgDur = durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : 0;
+      el.innerHTML =
+        kpiChip('📞', total, 'Total Calls', '#3b82f6') +
+        kpiChip('✅', completed, 'Completed', '#10b981') +
+        kpiChip('📵', noAnswer, 'No Answer', '#ef4444') +
+        kpiChip('😊', positive, 'Positive', '#f59e0b') +
+        kpiChip('⏱️', avgDur + 's', 'Avg Duration', '#8b5cf6');
+    }
+
+    // ─── Meetings ───────────────────────────────────────
+    async function loadMeetings() {
+      try {
+        MEETINGS = await api('/meetings');
+        document.getElementById('navMeetCount').textContent = MEETINGS.total;
+        renderMeetingsKpis();
+        renderMeetingList('meetingsUpcoming', MEETINGS.upcoming, 'No upcoming meetings', true);
+        renderMeetingList('meetingsPast', MEETINGS.past, 'No past meetings', false);
+        loadMeetingOutcomes();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    function renderMeetingsKpis() {
+      const el = document.getElementById('meetingsKpis');
+      if (!el) return;
+      const upcoming = (MEETINGS.upcoming || []).length;
+      const past = (MEETINGS.past || []).length;
+      const total = MEETINGS.total || (upcoming + past);
+      const now = Date.now(), weekAhead = now + 7 * 86400000;
+      const thisWeek = (MEETINGS.upcoming || []).filter(l => {
+        const t = new Date(l.meeting?.scheduledAt).getTime();
+        return t >= now && t <= weekAhead;
+      }).length;
+      el.innerHTML =
+        kpiChip('📅', total, 'Total Meetings', '#3b82f6') +
+        kpiChip('🔜', upcoming, 'Upcoming', '#10b981') +
+        kpiChip('🗓️', thisWeek, 'This Week', '#f59e0b') +
+        kpiChip('📋', past, 'Past Meetings', '#8b5cf6');
+    }
+
+    function renderMeetingList(elId, list, emptyMsg, isUpcoming) {
+      const el = document.getElementById(elId);
+      if (!list.length) { el.innerHTML = `<div class="empty"><div class="icon">📅</div>${emptyMsg}</div>`; return; }
+      el.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Student</th><th>Grade</th><th>Date / Time</th><th>Program</th><th>Meet Link</th><th>Status</th>
+        <th>Action</th>
+      </tr></thead>
+      <tbody>${list.map(l => `
+        <tr>
+          <td onclick="openLead('${l._id}')" style="cursor:pointer">
+            <strong>${esc(l.fullName)}</strong><br>
+            <span style="color:var(--muted);font-size:12px">${esc(l.email)}</span>
+          </td>
+          <td>${esc(l.grade || '—')}</td>
+          <td>${new Date(l.meeting.scheduledAt).toLocaleString()}</td>
+          <td>${esc(l.courseInterest || '—')}</td>
+          <td>${l.meeting.meetLink ? `<a href="${l.meeting.meetLink}" target="_blank" style="color:var(--brand)">🎥 Join</a>` : '—'}</td>
+          <td><span class="status-badge ${(l.status || '').replace(/\\s/g, '-')}">${fmtStatus(l.meeting.status || l.status)}</span></td>
+          <td>
+            <div style="display:flex;gap:6px">
+              ${isUpcoming ? `
+              <button class="btn btn-sm" style="background:var(--success);color:#fff;white-space:nowrap"
+                onclick="completeMeeting('${l._id}','${esc(l.fullName)}')">
+                ✅ Complete
+              </button>` : `
+              <button class="btn btn-sm btn-secondary" onclick="editMeeting('${l._id}')">✏️ Edit</button>
+              <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="deleteMeeting('${l._id}', '${esc(l.fullName)}')">🗑️ Delete</button>
+              `}
+            </div>
+          </td>
+        </tr>
+      `).join('')}</tbody>
+    </table>
+  `;
+    }
+
+    async function deleteMeeting(leadId, name) {
+      if (!confirm(`Are you sure you want to permanently delete the meeting for ${name}?`)) return;
+      try {
+        await api('/meetings/' + leadId, { method: 'DELETE' });
+        toast('Meeting deleted successfully', 'success');
+        loadMeetings();
+      } catch (e) {
+        toast('Failed to delete meeting: ' + e.message, 'error');
+      }
+    }
+
+    async function editMeeting(leadId) {
+      const allMeetings = [...(MEETINGS.upcoming || []), ...(MEETINGS.past || [])];
+      const lead = allMeetings.find(l => l._id === leadId);
+      if (!lead) return;
+
+      const html = `
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div><label>Date & Time</label>
+          <input type="datetime-local" id="edit-mtg-date" value="${new Date(lead.meeting.scheduledAt).toISOString().slice(0,16)}" style="width:100%"></div>
+          <div><label>Meet Link</label>
+          <input type="text" id="edit-mtg-link" value="${esc(lead.meeting.meetLink || '')}" style="width:100%"></div>
+          <div><label>Status</label>
+          <select id="edit-mtg-status" style="width:100%">
+            <option value="Scheduled" ${lead.meeting.status === 'Scheduled' ? 'selected' : ''}>Scheduled</option>
+            <option value="Completed" ${lead.meeting.status === 'Completed' ? 'selected' : ''}>Completed</option>
+            <option value="Cancelled" ${lead.meeting.status === 'Cancelled' ? 'selected' : ''}>Cancelled</option>
+          </select></div>
+        </div>
+      `;
+      openModal('Edit Meeting', html, async () => {
+        const scheduledAt = new Date(document.getElementById('edit-mtg-date').value).toISOString();
+        const meetLink = document.getElementById('edit-mtg-link').value;
+        const status = document.getElementById('edit-mtg-status').value;
+        
+        try {
+          await api('/meetings/' + leadId, {
+            method: 'PATCH',
+            body: { scheduledAt, meetLink, status }
+          });
+          toast('Meeting updated', 'success');
+          loadMeetings();
+          closeModal();
+        } catch (e) {
+          toast('Error updating meeting: ' + e.message, 'error');
+        }
+      });
+    }
+
+    async function loadMeetingOutcomes() {
+      const el = document.getElementById('meetingOutcomesList');
+      if (!el) return;
+      try {
+        const data = await api('/crm/meeting-outcomes');
+        const list = data.outcomes || data;
+        if (!list || !list.length) {
+          el.innerHTML = '<div class="empty"><div class="icon">📋</div>No outcomes logged yet</div>';
+          return;
+        }
+        const outcomeColor = {
+          'interested': 'var(--brand)',
+          'need-follow-up': 'var(--warm)',
+          'not-interested': 'var(--hot)',
+          'parent-wants-discussion': 'var(--purple)',
+          'ready-to-enroll': 'var(--success)',
+        };
+        const outcomeNext = {
+          'interested': '→ Proposal Sent',
+          'need-follow-up': '→ Follow-up Queue',
+          'not-interested': '→ Lost',
+          'parent-wants-discussion': '→ Parent Follow-up',
+          'ready-to-enroll': '→ Enrollment Pending',
+        };
+        el.innerHTML = `
+      <table>
+        <thead><tr><th>Student</th><th>Outcome</th><th>Pipeline Move</th><th>Notes</th><th>Logged</th><th>Actions</th></tr></thead>
+        <tbody>${list.map(o => {
+          const color = outcomeColor[o.outcome] || 'var(--muted)';
+          const next = outcomeNext[o.outcome] || '';
+          const name = o.leadId?.fullName || '—';
+          const notes = o.notes ? esc(o.notes.slice(0, 80)) + (o.notes.length > 80 ? '…' : '') : '—';
+          const lid = o.leadId?._id || '';
+          return `<tr>
+            <td data-label="Student" onclick="openLead('${lid}')" style="cursor:pointer"><strong>${esc(name)}</strong></td>
+            <td data-label="Outcome"><span style="background:${color}22;color:${color};padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600">${fmtStatus(o.outcome)}</span></td>
+            <td data-label="Pipeline Move" style="color:var(--muted);font-size:12px">${next}</td>
+            <td data-label="Notes" style="color:var(--muted);font-size:12px;max-width:200px">${notes}</td>
+            <td data-label="Logged" style="color:var(--muted);font-size:12px">${o.createdAt ? new Date(o.createdAt).toLocaleDateString() : '—'}</td>
+            <td data-label="Actions" style="white-space:nowrap;display:flex;gap:6px">
+              <button class="btn btn-secondary btn-sm" onclick="editOutcome('${o._id}','${esc(name)}','${o.outcome}','${esc((o.notes || '').replace(/'/g, "\\'").replace(/\n/g, ' '))}')">✏️ Edit</button>
+              <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="confirmDeleteOutcome('${o._id}','${esc(name)}')">🗑️</button>
+            </td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    `;
+      } catch (e) {
+        el.innerHTML = '<div class="empty"><div class="icon">⚠️</div>Could not load outcomes</div>';
+      }
+    }
+
+    function completeMeeting(leadId, name) {
+      // Open the outcome modal — same modal used from lead detail view
+      const m = document.getElementById('outcomeModal');
+      document.getElementById('outcomeLeadId').value = leadId;
+      document.getElementById('outcomeLeadName').textContent = name;
+      document.getElementById('outcomeResult').value = '';
+      document.getElementById('outcomeNotes').value = '';
+      m.dataset.editId = '';
+      m.querySelector('h2').textContent = 'Log Meeting Outcome';
+      m.classList.add('active');
+      // Flag that we came from the meetings page so refresh is correct
+      m.dataset.fromMeetings = '1';
+    }
+
+    // ─── Analytics ─────────────────────────────────────
+    async function loadAnalytics() {
+      try {
+        const [s, a] = await Promise.all([api('/stats'), api('/analytics')]);
+
+        // KPI values
+        document.getElementById('an_conv').textContent = s.conversionRate + '%';
+        document.getElementById('an_meet').textContent = s.meetingRate + '%';
+        document.getElementById('an_score').textContent = s.avgScore;
+        document.getElementById('an_calls').textContent = s.callsCompleted;
+
+        // ── Programs bar chart ───────────────────────────────────────
+        const PROG_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899'];
+        if (a.byProgram && a.byProgram.length) {
+          const total = a.byProgram.reduce((s, p) => s + p.count, 0) || 1;
+          const max = Math.max(...a.byProgram.map(p => p.count));
+          document.getElementById('programChart').innerHTML = a.byProgram.map((p, i) => {
+            const pct = Math.round((p.count / max) * 100);
+            const color = PROG_COLORS[i % PROG_COLORS.length];
+            return `
+        <div class="prog-bar-row">
+          <div class="prog-bar-label" title="${esc(p._id || 'Unknown')}">${esc(p._id || 'Unknown')}</div>
+          <div class="prog-bar-track">
+            <div class="prog-bar-fill" style="width:${pct}%;background:${color}"></div>
+          </div>
+          <div class="prog-bar-count">${p.count} (${Math.round((p.count / total) * 100)}%)</div>
+        </div>`;
+          }).join('');
+        } else {
+          document.getElementById('programChart').innerHTML =
+            '<div style="padding:32px;text-align:center;color:var(--muted)">📊 No data yet</div>';
+        }
+
+        // ── Sentiment donut ──────────────────────────────────────────
+        const SENT = [
+          { key: 'positive', label: 'Positive', color: '#10b981' },
+          { key: 'neutral', label: 'Neutral', color: '#f59e0b' },
+          { key: 'negative', label: 'Negative', color: '#ef4444' },
+        ];
+        const sentMap = {};
+        (a.sentiment || []).forEach(x => sentMap[x._id] = x.count);
+        const sentTotal = SENT.reduce((s, r) => s + (sentMap[r.key] || 0), 0) || 1;
+
+        // SVG donut (r=52, C≈327)
+        const C = 2 * Math.PI * 52;
+        let offset = 0;
+        const arcs = SENT.map(r => {
+          const count = sentMap[r.key] || 0;
+          const len = (count / sentTotal) * C;
+          const arc = `<circle cx="64" cy="64" r="52" fill="none" stroke="${r.color}" stroke-width="14"
+        stroke-dasharray="${len.toFixed(1)} ${(C - len).toFixed(1)}"
+        stroke-dashoffset="${(-offset).toFixed(1)}" stroke-linecap="butt"/>`;
+          offset += len;
+          return arc;
+        }).join('');
+
+        document.getElementById('sentimentChart').innerHTML = `
+      <div class="sent-layout">
+        <div style="position:relative;width:128px;height:128px;flex-shrink:0">
+          <svg viewBox="0 0 128 128" style="transform:rotate(-90deg);width:128px;height:128px">
+            <circle cx="64" cy="64" r="52" fill="none" stroke="var(--border)" stroke-width="14"/>
+            ${arcs}
+          </svg>
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+            <div style="font-size:22px;font-weight:800">${sentTotal}</div>
+            <div style="font-size:10px;color:var(--muted)">Total Calls</div>
+          </div>
+        </div>
+        <div class="sent-legend">
+          ${SENT.map(r => {
+          const cnt = sentMap[r.key] || 0;
+          const pct = Math.round((cnt / sentTotal) * 100);
+          return `<div class="sent-row">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="sent-dot" style="background:${r.color}"></span>
+                <span style="font-weight:600">${r.label}</span>
+              </div>
+              <div style="font-weight:700">${cnt} <span style="color:var(--muted);font-weight:400;font-size:12px">(${pct}%)</span></div>
+            </div>`;
+        }).join('')}
+        </div>
+      </div>`;
+
+        // ── Daily area chart (SVG) ───────────────────────────────────
+        const daily = a.dailyLeads || [];
+        if (daily.length) {
+          const W = 900, H = 160, PAD = { t: 16, r: 20, b: 36, l: 36 };
+          const cW = W - PAD.l - PAD.r;
+          const cH = H - PAD.t - PAD.b;
+          const maxV = Math.max(...daily.map(d => d.count), 1);
+          const n = daily.length;
+
+          const xPos = (i) => PAD.l + (i / Math.max(n - 1, 1)) * cW;
+          const yPos = (v) => PAD.t + cH - (v / maxV) * cH;
+
+          const pts = daily.map((d, i) => `${xPos(i)},${yPos(d.count)}`).join(' ');
+          const area = `${PAD.l},${PAD.t + cH} ` + pts + ` ${xPos(n - 1)},${PAD.t + cH}`;
+
+          // Y-axis labels
+          const yTicks = [0, Math.ceil(maxV / 2), maxV];
+          const yGrids = yTicks.map(v => {
+            const y = yPos(v);
+            return `<line x1="${PAD.l}" y1="${y}" x2="${W - PAD.r}" y2="${y}" stroke="var(--border)" stroke-width="1"/>
+                <text x="${PAD.l - 6}" y="${y + 4}" fill="var(--muted)" font-size="10" text-anchor="end">${v}</text>`;
+          }).join('');
+
+          // X-axis labels — show every ~5th
+          const step = Math.max(1, Math.floor(n / 8));
+          const xLabels = daily.map((d, i) => {
+            if (i % step !== 0 && i !== n - 1) return '';
+            const parts = (d._id || '').split('-');
+            const label = parts.length >= 3
+              ? new Date(d._id).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+              : d._id;
+            return `<text x="${xPos(i)}" y="${H - 6}" fill="var(--muted)" font-size="10" text-anchor="middle">${label}</text>`;
+          }).join('');
+
+          // Data point dots + tooltips
+          const dots = daily.map((d, i) => d.count > 0
+            ? `<circle cx="${xPos(i)}" cy="${yPos(d.count)}" r="4" fill="#3b82f6" stroke="var(--panel)" stroke-width="2">
+             <title>${d._id}: ${d.count} leads</title>
+           </circle>`
+            : '').join('');
+
+          // Count labels above high points
+          const countLabels = daily.map((d, i) => d.count > 0
+            ? `<text x="${xPos(i)}" y="${yPos(d.count) - 8}" fill="var(--muted)" font-size="10" text-anchor="middle">${d.count}</text>`
+            : '').join('');
+
+          document.getElementById('dailyChart').innerHTML = `
+        <svg viewBox="0 0 ${W} ${H}" class="an-chart-svg" style="height:180px">
+          <defs>
+            <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.35"/>
+              <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.02"/>
+            </linearGradient>
+          </defs>
+          ${yGrids}
+          <polygon points="${area}" fill="url(#areaGrad)"/>
+          <polyline points="${pts}" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+          ${dots}
+          ${countLabels}
+          ${xLabels}
+        </svg>`;
+        } else {
+          document.getElementById('dailyChart').innerHTML =
+            '<div style="padding:48px;text-align:center;color:var(--muted)">📈 No leads in last 30 days</div>';
+        }
+
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    // loadSystem no longer needed — Settings page now shows user profile
+
+    // ─── Lead Detail Modal ─────────────────────────────
+    async function openLead(id) {
+      try {
+        // Show modal instantly to avoid UI freeze
+        const cached = typeof LEADS !== 'undefined' ? LEADS.find(x => x._id === id) : null;
+        document.getElementById('modalName').textContent = cached ? cached.fullName : 'Loading...';
+        document.getElementById('modalMeta').textContent = '';
+        document.getElementById('modalBody').innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Fetching lead details...</div>';
+        document.getElementById('leadModal').classList.add('active');
+
+        const l = await api('/leads/' + id);
+        document.getElementById('modalName').textContent = l.fullName;
+        document.getElementById('modalMeta').textContent =
+          `Grade ${l.grade || '—'} · ${l.courseInterest || 'Unknown program'} · Lead Score ${l.leadScore}/100 (${(l.leadCategory || '').toUpperCase()})`;
+
+        const m = l.meeting || {};
+        const q = l.qualification || {};
+
+        let body = `
+      <div class="section-title">👤 Contact Information</div>
+      <div class="detail-grid">
+        <div class="detail-cell"><div class="lbl">Student Email</div><div class="val">${esc(l.email)}</div></div>
+        <div class="detail-cell"><div class="lbl">Phone</div><div class="val" style="font-family:monospace">${esc(l.phone)}</div></div>
+        <div class="detail-cell"><div class="lbl">Parent Name</div><div class="val">${esc(l.parentName || '—')}</div></div>
+        <div class="detail-cell"><div class="lbl">Parent Email</div><div class="val">${esc(l.parentEmail || '—')}</div></div>
+      </div>
+
+      <div class="section-title">🌍 Time Zone & Calling Automation</div>
+      <div class="detail-grid">
+        <div class="detail-cell"><div class="lbl">Country Code</div><div class="val">${esc(l.countryCode || '—')}</div></div>
+        <div class="detail-cell"><div class="lbl">Country</div><div class="val">${esc(l.country || '—')}</div></div>
+        <div class="detail-cell"><div class="lbl">State (USA)</div><div class="val">${esc(l.state || '—')}</div></div>
+        <div class="detail-cell"><div class="lbl">Time Zone</div><div class="val">${esc(l.timeZone || '—')}</div></div>
+        <div class="detail-cell"><div class="lbl">Meeting Status</div><div class="val"><span class="status-badge ${l.meetingStatus === 'Booked' ? 'meeting-scheduled' : 'lost'}">${esc(l.meetingStatus || 'Not Booked')}</span></div></div>
+        <div class="detail-cell"><div class="lbl">Last Morning Call</div><div class="val">${l.lastMorningCall ? new Date(l.lastMorningCall).toLocaleString() : '—'}</div></div>
+        <div class="detail-cell"><div class="lbl">Last Evening Call</div><div class="val">${l.lastEveningCall ? new Date(l.lastEveningCall).toLocaleString() : '—'}</div></div>
+        <div class="detail-cell"><div class="lbl">Next Scheduled Call</div><div class="val">${l.nextScheduledCall ? new Date(l.nextScheduledCall).toLocaleString() : '—'}</div></div>
+      </div>
+
+      <div class="section-title">🎯 Status & Score</div>
+      <div class="detail-grid">
+        <div class="detail-cell"><div class="lbl">Status</div><div class="val"><span class="status-badge ${l.status}">${fmtStatus(l.status)}</span></div></div>
+        <div class="detail-cell"><div class="lbl">Lead Score</div><div class="val"><span class="score-badge ${l.leadCategory}">${l.leadScore} ${catEmoji(l.leadCategory)}</span></div></div>
+        <div class="detail-cell"><div class="lbl">Call Attempts</div><div class="val">${l.totalCallAttempts || 0}</div></div>
+        <div class="detail-cell"><div class="lbl">Last Updated</div><div class="val">${new Date(l.updatedAt).toLocaleString()}</div></div>
+      </div>
+
+      <div class="section-title">📣 Campaign</div>
+      <div class="campaign-row" id="campaignRowModal">
+        <span class="camp-icon">📣</span>
+        <div>
+          <div class="camp-label">Assigned Campaign</div>
+          <div class="camp-name">${l.campaignId ? esc(campaignName(l.campaignId)) : '<span style="color:var(--muted);font-weight:400">None (uses Demo Test Follow-up)</span>'}</div>
+        </div>
+        <select onchange="updateLeadCampaign('${l._id}', this.value)" title="Reassign campaign">
+          <option value="">— No Campaign —</option>
+          ${CAMPAIGNS.map(c => `<option value="${c.id}" ${c.id === l.campaignId ? 'selected' : ''}>${esc(c.name)}${c.status !== 'active' ? ' (' + c.status + ')' : ''}</option>`).join('')}
+        </select>
+      </div>
+    `;
+
+        if (q.currentScore || q.targetScore || q.targetExamDate || q.preferredFormat) {
+          body += `<div class="section-title">📝 Qualification Data</div>
+        <div class="detail-grid">
+          ${q.currentScore ? `<div class="detail-cell"><div class="lbl">Current Score</div><div class="val">${esc(q.currentScore)}</div></div>` : ''}
+          ${q.targetScore ? `<div class="detail-cell"><div class="lbl">Target Score</div><div class="val">${esc(q.targetScore)}</div></div>` : ''}
+          ${q.targetExamDate ? `<div class="detail-cell"><div class="lbl">Exam Date</div><div class="val">${esc(q.targetExamDate)}</div></div>` : ''}
+          ${q.preferredFormat ? `<div class="detail-cell"><div class="lbl">Format</div><div class="val">${esc(q.preferredFormat)}</div></div>` : ''}
+        </div>`;
+        }
+
+        if (m.scheduledAt) {
+          body += `<div class="section-title">📅 Scheduled Meeting</div>
+        <div class="detail-grid">
+          <div class="detail-cell"><div class="lbl">Date / Time</div><div class="val">${new Date(m.scheduledAt).toLocaleString()}</div></div>
+          <div class="detail-cell"><div class="lbl">Status</div><div class="val">${esc(m.status)}</div></div>
+          ${m.meetLink ? `<div class="detail-cell" style="grid-column:1/-1"><div class="lbl">Video Meeting Link</div><div class="val"><a href="${m.hostMeetLink || m.meetLink}" target="_blank" style="color:var(--brand)">🎥 ${m.hostMeetLink || m.meetLink}</a></div></div>` : ''}
+        </div>`;
+        }
+
+        if (l.callAttempts && l.callAttempts.length > 0) {
+          const chId = 'ch_' + l._id;
+          body += `
+        <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleCallHistory('${chId}')">
+          <span>📞 Call History (${l.callAttempts.length})</span>
+          <span id="${chId}_icon" style="font-size:12px;color:var(--muted);transition:transform .2s">▼ View History</span>
+        </div>
+        <div id="${chId}" style="display:none">`;
+          l.callAttempts.slice().reverse().forEach((c, revIdx) => {
+            const idx = l.callAttempts.length - 1 - revIdx;
+            body += `
+          <div class="call-attempt">
+            <div class="meta">
+              <span>📞 Attempt #${c.attemptNumber}</span>
+              <span>${c.startTime ? new Date(c.startTime).toLocaleString() : '—'}</span>
+              <span>Status: <strong>${esc(c.status || '—')}</strong></span>
+              ${c.duration ? `<span>⏱ ${c.duration}s</span>` : ''}
+              ${c.sentiment ? `<span>${sentEmoji(c.sentiment)} ${esc(c.sentiment)}</span>` : ''}
+            </div>
+            ${c.aiSummary ? `<div class="summary"><strong>AI Summary:</strong>\n${esc(c.aiSummary)}</div>` : ''}
+            ${c.recordingUrl === 'FAILED'
+              ? `<div style="color:#ef4444;font-size:13px;font-weight:500;margin-top:8px;">⚠️ Recording Failed — Twilio could not capture audio for this call.</div>`
+              : (c.recordingUrl
+                ? `<div style="margin-top:10px">
+                    <div style="font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600">🎙️ Call Recording</div>
+                    <audio controls preload="none" data-rec="/api/leads/${l._id}/recording/${idx}" style="width:100%;border-radius:8px"></audio>
+                  </div>`
+                : `<div style="font-size:12px;color:var(--muted);margin-top:8px">🎙️ Recording pending or unavailable</div>`)}
+            ${c.transcript ? `
+              <details style="margin-top:10px" open>
+                <summary style="cursor:pointer;color:var(--brand);font-size:12px;font-weight:600;margin-bottom:6px">📄 View Transcript</summary>
+                <div class="transcript" style="padding:12px;border-radius:8px;background:var(--bg);line-height:1.7;font-size:13px">${
+                  c.transcript.split('\n').map(line => {
+                    if (line.startsWith('AI:')) {
+                      return `<div style="margin-bottom:4px"><span style="color:#60a5fa;font-weight:600">AI:</span> ${esc(line.slice(3).trim())}</div>`;
+                    } else if (line.startsWith('AGENT:')) {
+                      return `<div style="margin-bottom:4px"><span style="color:#60a5fa;font-weight:600">AI:</span> ${esc(line.slice(6).trim())}</div>`;
+                    } else if (line.startsWith('Caller:')) {
+                      return `<div style="margin-bottom:4px"><span style="color:#34d399;font-weight:600">Caller:</span> ${esc(line.slice(7).trim())}</div>`;
+                    } else if (line.trim()) {
+                      return `<div style="margin-bottom:4px;color:var(--muted)">${esc(line)}</div>`;
+                    }
+                    return '';
+                  }).join('')
+                }</div>
+              </details>
+            ` : ''}
+          </div>`;
+          });
+          body += `</div>`;
+        }
+
+        if (l.emailsSent && l.emailsSent.length > 0) {
+          const sentCount = l.emailsSent.filter(e => e.status !== 'failed').length;
+          const failedCount = l.emailsSent.filter(e => e.status === 'failed').length;
+          body += `<div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>&#128231; Email History (${l.emailsSent.length})</span>
+            <span style="font-size:11px;font-weight:400;">
+              <span style="color:#10b981;">&#10003; ${sentCount} sent</span>
+              ${failedCount ? `<span style="color:#ef4444;margin-left:8px;">&#10007; ${failedCount} failed</span>` : ''}
+            </span>
+          </div>`;
+          body += '<div style="display:flex;flex-direction:column;gap:6px;">';
+          body += l.emailsSent.slice().reverse().map(e => {
+            const isFailed = e.status === 'failed';
+            const label = e.label || e.type || 'Email';
+            const sentAt = e.sentAt ? new Date(e.sentAt).toLocaleString() : '—';
+            const statusBadge = isFailed
+              ? `<span style="background:rgba(239,68,68,.15);color:#f87171;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;">FAILED</span>`
+              : `<span style="background:rgba(16,185,129,.15);color:#10b981;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;">SENT</span>`;
+            return `
+              <div style="background:var(--panel2);padding:10px 14px;border-radius:8px;display:flex;align-items:center;gap:12px;font-size:13px;${isFailed ? 'opacity:.75;' : ''}">
+                <div style="font-size:18px;">&#128231;</div>
+                <div style="flex:1;">
+                  <div style="font-weight:700;margin-bottom:2px;">${esc(label)}</div>
+                  <div style="color:var(--muted);font-size:11px;">${sentAt}</div>
+                  ${e.error ? `<div style="color:#f87171;font-size:11px;margin-top:2px;">Error: ${esc(e.error)}</div>` : ''}
+                </div>
+                ${statusBadge}
+              </div>`;
+          }).join('');
+          body += '</div>';
+        }
+
+
+        // Objections & Follow-ups
+        try {
+          const [objections, followUps, meetingRecording, meetingTranscript, meetingAnalysis] = await Promise.all([
+            fetch('/api/crm/objections?leadId=' + l._id).then(r => r.json()).catch(() => []),
+            fetch('/api/crm/follow-ups?leadId=' + l._id).then(r => r.json()).catch(() => []),
+            fetch('/api/leads/' + l._id + '/meeting-recording').then(r => r.status === 204 ? null : r.json()).catch(() => null),
+            fetch('/api/leads/' + l._id + '/meeting-transcript').then(r => r.status === 204 ? null : r.json()).catch(() => null),
+            fetch('/api/leads/' + l._id + '/meeting-analysis').then(r => r.status === 204 ? null : r.json()).catch(() => null),
+          ]);
+
+          if (meetingRecording || meetingTranscript) {
+            const statusLabels = { recording: '🔴 Recording in progress', processing: '⏳ Processing…', ready: '⏳ Transcribing…', transcribed: '✅ Ready', failed: '⚠️ Recording failed' };
+            body += `<div class="section-title">🎥 Meeting Recording &amp; Transcript</div>`;
+            if (meetingRecording) {
+              body += `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">${statusLabels[meetingRecording.status] || esc(meetingRecording.status || '')}${meetingRecording.durationSeconds ? ' · ' + Math.round(meetingRecording.durationSeconds / 60) + ' min' : ''}</div>`;
+              if (meetingRecording.url) {
+                body += `<video controls preload="none" src="${meetingRecording.url}" style="width:100%;max-height:360px;border-radius:8px;background:#000"></video>
+                  <a href="${meetingRecording.url}" download target="_blank" class="btn btn-secondary btn-sm" style="margin-top:8px">⬇ Download Recording</a>`;
+              }
+            }
+            if (meetingTranscript && meetingTranscript.fullText) {
+              const speakerColors = ['#60a5fa', '#34d399', '#f472b6', '#fbbf24'];
+              const speakerColorMap = {};
+              let colorIdx = 0;
+              body += `
+                <details style="margin-top:10px">
+                  <summary style="cursor:pointer;color:var(--brand);font-size:12px;font-weight:600;margin-bottom:6px">📄 View Transcript${meetingTranscript.language ? ' (' + esc(meetingTranscript.language) + ')' : ''}</summary>
+                  <input type="text" placeholder="Search transcript…" oninput="filterMeetingTranscript(this)" style="width:100%;margin-bottom:8px;padding:6px 10px;border-radius:6px;border:1px solid var(--border,#333);background:var(--bg);color:inherit">
+                  <div class="transcript" style="padding:12px;border-radius:8px;background:var(--bg);line-height:1.7;font-size:13px">${
+                    (meetingTranscript.segments && meetingTranscript.segments.length ? meetingTranscript.segments : meetingTranscript.fullText.split('\n').map(l => ({ speaker: l.split(':')[0], text: l.split(':').slice(1).join(':').trim() })))
+                      .map(seg => {
+                        if (!speakerColorMap[seg.speaker]) speakerColorMap[seg.speaker] = speakerColors[colorIdx++ % speakerColors.length];
+                        const ts = seg.startMs != null ? `<span style="color:var(--muted);font-size:11px;margin-right:6px">${fmtMs(seg.startMs)}</span>` : '';
+                        return `<div class="transcript-line" style="margin-bottom:4px">${ts}<span style="color:${speakerColorMap[seg.speaker]};font-weight:600">${esc(seg.speaker || 'Speaker')}:</span> ${esc(seg.text || '')}</div>`;
+                      }).join('')
+                  }</div>
+                </details>`;
+            }
+          }
+
+          if (meetingAnalysis) {
+            const sentimentStyle = {
+              Positive: { e: '😊', c: '#34d399' }, Neutral: { e: '😐', c: '#9ca3af' }, Confused: { e: '😕', c: '#fb923c' },
+              Interested: { e: '🤔', c: '#60a5fa' }, Excited: { e: '🤩', c: '#a78bfa' }, Concerned: { e: '😟', c: '#fbbf24' },
+              Frustrated: { e: '😤', c: '#f87171' }, Hesitant: { e: '😬', c: '#eab308' },
+            };
+            const iq = meetingAnalysis.intelligence || {};
+
+            if (meetingAnalysis.summary) {
+              body += `<div class="section-title">🧠 AI Meeting Summary</div>
+                <div class="summary" style="white-space:pre-wrap;font-size:13px;line-height:1.6">${esc(meetingAnalysis.summary)}</div>`;
+            }
+
+            if (meetingAnalysis.actionItems && meetingAnalysis.actionItems.length) {
+              body += `<div class="section-title">✅ AI Action Items</div><div style="margin-bottom:12px">`;
+              ['counselor', 'student'].forEach(who => {
+                const items = meetingAnalysis.actionItems.map((it, i) => ({ ...it, i })).filter(it => it.assignee === who);
+                if (!items.length) return;
+                body += `<div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin:8px 0 4px">${who === 'counselor' ? '👩‍💼 Counselor Tasks' : '🎓 Student Tasks'}</div>`;
+                items.forEach(it => {
+                  body += `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;cursor:pointer;${it.done ? 'opacity:.55;text-decoration:line-through' : ''}">
+                    <input type="checkbox" ${it.done ? 'checked' : ''} onchange="toggleMeetingActionItem('${l._id}', ${it.i}, this.checked, this)">
+                    ${esc(it.task)}
+                  </label>`;
+                });
+              });
+              body += `</div>`;
+            }
+
+            if (meetingAnalysis.sentimentTimeline && meetingAnalysis.sentimentTimeline.length) {
+              body += `<div class="section-title">📈 Sentiment Timeline</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+                  ${meetingAnalysis.sentimentTimeline.map(p => {
+                    const s = sentimentStyle[p.sentiment] || { e: '•', c: 'var(--muted)' };
+                    return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--panel2);border-radius:8px;padding:6px 10px;min-width:64px">
+                      <span style="font-size:18px">${s.e}</span>
+                      <span style="font-size:10px;color:${s.c};font-weight:600">${esc(p.sentiment)}</span>
+                      <span style="font-size:10px;color:var(--muted)">${fmtMs(p.atMs)}</span>
+                    </div>`;
+                  }).join('')}
+                </div>`;
+            }
+
+            if (Object.keys(iq).length) {
+              body += `<div class="section-title">📊 AI Conversation Intelligence</div>
+                <div class="detail-grid">
+                  ${iq.interestScore != null ? `<div class="detail-cell"><div class="lbl">Student Interest Score</div><div class="val"><strong>${iq.interestScore}%</strong></div></div>` : ''}
+                  ${iq.enrollmentProbability != null ? `<div class="detail-cell"><div class="lbl">Enrollment Probability</div><div class="val"><strong>${iq.enrollmentProbability}%</strong></div></div>` : ''}
+                  ${iq.buyingIntent ? `<div class="detail-cell"><div class="lbl">Buying Intent</div><div class="val">${esc(iq.buyingIntent)}</div></div>` : ''}
+                  ${iq.confidenceLevel ? `<div class="detail-cell"><div class="lbl">Confidence Level</div><div class="val">${esc(iq.confidenceLevel)}</div></div>` : ''}
+                </div>`;
+
+              if (iq.detectedTopics && iq.detectedTopics.length) {
+                body += `<div style="margin-top:10px"><div class="lbl" style="margin-bottom:6px">Detected Topics</div>
+                  <div style="display:flex;gap:6px;flex-wrap:wrap">${iq.detectedTopics.map(t => `<span style="display:inline-flex;align-items:center;background:rgba(96,165,250,.12);color:#60a5fa;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;margin:3px">${esc(t)}</span>`).join('')}</div></div>`;
+              }
+              if (iq.commonQuestions && iq.commonQuestions.length) {
+                body += `<div style="margin-top:10px"><div class="lbl" style="margin-bottom:6px">Common Questions</div>
+                  <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7">${iq.commonQuestions.map(q => `<li>${esc(q)}</li>`).join('')}</ul></div>`;
+              }
+              if (iq.objections && iq.objections.length) {
+                body += `<div style="margin-top:10px"><div class="lbl" style="margin-bottom:6px">Objections</div>
+                  <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7">${iq.objections.map(o => `<li>${esc(o)}</li>`).join('')}</ul></div>`;
+              }
+
+              const talk = iq.talkTimeMs || {};
+              const talkRows = Object.entries(talk);
+              if (talkRows.length || iq.questionsAsked != null || iq.avgResponseTimeMs != null) {
+                body += `<div style="margin-top:10px"><div class="lbl" style="margin-bottom:6px">Conversation Statistics</div>
+                  <div class="detail-grid">
+                    ${talkRows.map(([name, ms]) => `<div class="detail-cell"><div class="lbl">${esc(name)} Talking Time</div><div class="val">${fmtMs(ms)}</div></div>`).join('')}
+                    ${iq.questionsAsked != null ? `<div class="detail-cell"><div class="lbl">Questions Asked</div><div class="val">${iq.questionsAsked}</div></div>` : ''}
+                    ${iq.avgResponseTimeMs != null ? `<div class="detail-cell"><div class="lbl">Avg Response Time</div><div class="val">${(iq.avgResponseTimeMs / 1000).toFixed(1)}s</div></div>` : ''}
+                  </div></div>`;
+              }
+            }
+          }
+
+          if (objections.length) {
+            body += `<div class="section-title">⚠️ Objections (${objections.length})</div>`;
+            body += `<div style="margin-bottom:12px">${objections.map(o => `
+          <span class="objection-chip ${o.resolved ? 'resolved' : ''}">
+            ${o.resolved ? '✓' : '!'} ${fmtStatus(o.objectionType)}
+            ${o.notes ? ` — ${esc(o.notes.slice(0, 40))}` : ''}
+          </span>`).join('')}
+        </div>`;
+          }
+          if (followUps.length) {
+            // Group follow-ups into weeks
+            const weeks = {
+              'Week 1': ['email-day1', 'ai-call-day2', 'success-stories-day3', 'ai-call-day4', 'email-day5', 'ai-call-day6', 'counselor-reminder-day7'],
+              'Week 2': ['email-day8', 'success-stories-day9', 'ai-call-day10', 'email-day12', 'counselor-reminder-day14'],
+              'Week 3': ['ai-call-week3', 'success-stories-week3', 'parent-discussion-week3', 'enrollment-reminder-week3'],
+              'Week 4': ['ai-call-week4', 'success-stories-week4', 'program-benefits-week4', 'limited-seat-week4', 'counselor-reminder-week4'],
+              'Ongoing': ['nurture-ai-call', 'nurture-email', 'nurture-success-stories', 'nurture-counselor-reminder', 'nurture-lead-review'],
+            };
+            // Determine default tab: first week with pending items
+            const weekKeys = Object.keys(weeks);
+            let defaultTab = weekKeys[0];
+            for (const wk of weekKeys) {
+              if (followUps.some(f => weeks[wk].includes(f.followupType) && !f.completed)) { defaultTab = wk; break; }
+            }
+            const tabId = 'fu_tabs_' + l._id;
+            body += `<div class="section-title">🔔 Follow-up Schedule (${followUps.length})</div>`;
+            body += `<div class="fu-week-tabs" id="${tabId}">`;
+            weekKeys.forEach((wk, i) => {
+              const wkItems = followUps.filter(f => weeks[wk].includes(f.followupType));
+              if (!wkItems.length) return;
+              const done = wkItems.filter(f => f.completed).length;
+              const badge = done === wkItems.length ? '✅' : done > 0 ? '🔄' : '⏳';
+              body += `<button class="fu-tab${wk === defaultTab ? ' active' : ''}" onclick="switchFuTab('${tabId}','${wk}')">${badge} ${wk}</button>`;
+            });
+            body += `</div>`;
+            weekKeys.forEach(wk => {
+              const wkItems = followUps.filter(f => weeks[wk].includes(f.followupType));
+              if (!wkItems.length) return;
+              body += `<div class="fu-week-panel" id="${tabId}_${wk.replace(' ', '_')}" style="display:${wk === defaultTab ? 'block' : 'none'}">`;
+              wkItems.forEach(f => {
+                body += `<div class="followup-item">
+              <div><div class="fu-type">${fmtFollowupType(f.followupType)}</div><div class="fu-date">📅 ${new Date(f.scheduledDate).toLocaleDateString()}</div></div>
+              <span class="fu-status ${f.completed ? 'status-badge meeting-completed' : 'status-badge queued'}">${f.completed ? '✓ Done' : '⏳ Pending'}</span>
+            </div>`;
+              });
+              body += `</div>`;
+            });
+          }
+        } catch (_) { }
+
+        // Billing history for this lead (actual Twilio costs)
+        try {
+          const bill = await api('/billing/by-lead/' + l._id);
+          const brows = bill.rows || [];
+          const t = bill.totals || {};
+          if (brows.length) {
+            body += `<div class="section-title">💰 Billing History (${brows.length})</div>
+            <div class="detail-grid">
+              <div class="detail-cell"><div class="lbl">Total Cost</div><div class="val"><strong>${blMoney(t.totalCost, t.currency)}</strong></div></div>
+              <div class="detail-cell"><div class="lbl">Total Minutes</div><div class="val">${t.totalMinutes || 0}</div></div>
+              <div class="detail-cell"><div class="lbl">Total Calls</div><div class="val">${t.totalCalls || 0}</div></div>
+            </div>
+            <div style="overflow-x:auto;margin-top:8px"><table class="data-table" style="width:100%">
+              <thead><tr><th>Date</th><th>Campaign</th><th>Duration</th><th>Cost</th><th>Status</th><th></th></tr></thead>
+              <tbody>${brows.map(r => `<tr>
+                <td>${r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}</td>
+                <td>${esc(r.campaign_name || 'Demo / Unassigned')}</td>
+                <td>${blFmtDuration(r.duration_seconds)}</td>
+                <td>${r.twilio_price != null ? '<strong>' + blMoney(r.twilio_price, r.currency) + '</strong>' : '<span class="bl-badge pending">pending</span>'}</td>
+                <td>${blStatusBadge(r.call_status)}</td>
+                <td><button class="bl-pill-btn" onclick="openBillingDetail('${r.id}')">Details</button></td>
+              </tr>`).join('')}</tbody>
+            </table></div>`;
+          }
+        } catch (_) { }
+
+        body += `
+      <div class="action-bar">
+        ${l.status === 'calling'
+            ? `<button class="btn" style="background:var(--hot);color:#fff" onclick="stopCall('${l._id}')">🛑 Stop Call</button>`
+            : `<button class="btn btn-primary" onclick="callLead('${l._id}')">📞 Call Now</button>`
+          }
+        <button class="btn btn-secondary" onclick="sendEmail('${l._id}', 'welcome')">📧 Welcome</button>
+        ${m.scheduledAt ? `<button class="btn btn-secondary" onclick="sendEmail('${l._id}', 'reminder')">⏰ Reminder</button>` : ''}
+        ${m.scheduledAt ? `<button class="btn btn-secondary" onclick="logOutcome('${l._id}', '${esc(l.fullName)}')">📝 Log Outcome</button>` : ''}
+        <button class="btn btn-secondary" onclick="addObjection('${l._id}', '${esc(l.fullName)}')">⚠️ Log Objection</button>
+        <button class="btn btn-secondary" onclick="scheduleFollowUps('${l._id}')">🔔 Schedule Follow-ups</button>
+        <button class="btn btn-secondary" onclick="sendEmail('${l._id}', 'success-stories')">⭐ Success Story</button>
+        <button class="btn btn-secondary" onclick="sendEmail('${l._id}', 'enrollment')">🎯 Enrollment</button>
+        <button class="btn btn-success btn-sm" onclick="showEnrollFromLead('${l._id}', '${esc(l.fullName)}', '${esc(l.grade || '')}', '${esc(l.parentName || '')}', '${esc(l.parentEmail || '')}', '${esc(l.phone || '')}', '${esc(l.courseInterest || '')}')">✅ Enroll</button>
+      </div>
+    `;
+
+        document.getElementById('modalBody').innerHTML = body;
+        document.getElementById('leadModal').classList.add('active');
+        hydrateRecordings();
+        // Lazy-load campaign options into modal if cache not yet ready
+        if (!CAMPAIGNS.length) {
+          try {
+            const d = await api('/campaigns');
+            CAMPAIGNS = d.campaigns || [];
+            // Re-render the campaign row select with now-loaded options
+            const row = document.getElementById('campaignRowModal');
+            if (row) {
+              const sel = row.querySelector('select');
+              if (sel && CAMPAIGNS.length) {
+                const cur = sel.dataset.cur || '';
+                sel.innerHTML = '<option value="">— No Campaign —</option>' +
+                  CAMPAIGNS.map(c => `<option value="${c.id}" ${c.id === cur ? 'selected' : ''}>${esc(c.name)}${c.status !== 'active' ? ' (' + c.status + ')' : ''}</option>`).join('');
+              }
+            }
+          } catch (_) { }
+        }
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function updateLeadCampaign(leadId, campaignId) {
+      try {
+        await api('/leads/' + leadId, {
+          method: 'PATCH',
+          body: JSON.stringify({ campaignId: campaignId || null })
+        });
+        const name = campaignId ? campaignName(campaignId) : 'None';
+        toast(`✅ Campaign updated → ${name}`, 'success');
+        // Refresh the camp-name display in the modal row
+        const row = document.getElementById('campaignRowModal');
+        if (row) {
+          const nameEl = row.querySelector('.camp-name');
+          if (nameEl) nameEl.innerHTML = campaignId
+            ? esc(campaignName(campaignId))
+            : '<span style="color:var(--muted);font-weight:400">None (uses Demo Test Follow-up)</span>';
+        }
+        // Update in-memory LEADS cache
+        const lead = LEADS.find(l => l._id === leadId);
+        if (lead) lead.campaignId = campaignId || null;
+        renderLeadsTable();
+      } catch (e) { toast('❌ ' + e.message, 'error'); }
+    }
+
+    // Call recordings live behind auth-protected /api routes, so a native
+    // <audio src="…"> can't send the Bearer token. Fetch each recording as an
+    // authenticated blob (the patched fetch injects the token) and assign an
+    // object URL. Downloading the full blob also lets the browser show duration.
+    const _recordingObjectUrls = [];
+    async function hydrateRecordings() {
+      const players = document.querySelectorAll('#modalBody audio[data-rec]');
+      players.forEach(async (el) => {
+        const url = el.getAttribute('data-rec');
+        el.removeAttribute('data-rec'); // guard against double-load
+        try {
+          const res = await fetch(url); // patched window.fetch adds Authorization
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const blob = await res.blob();
+          if (!blob || blob.size === 0) throw new Error('empty recording');
+          const objUrl = URL.createObjectURL(blob);
+          _recordingObjectUrls.push(objUrl);
+          el.src = objUrl;
+        } catch (_) {
+          const note = document.createElement('div');
+          note.style.cssText = 'font-size:12px;color:var(--muted);margin-top:6px';
+          note.textContent = '🎙️ Recording unavailable';
+          el.replaceWith(note);
+        }
+      });
+    }
+
+    function closeModal() {
+      document.getElementById('leadModal').classList.remove('active');
+      // Free any blob URLs created for this lead's recordings
+      while (_recordingObjectUrls.length) {
+        try { URL.revokeObjectURL(_recordingObjectUrls.pop()); } catch (_) { }
+      }
+    }
+
+    // ─── Actions ────────────────────────────────────────
+    function isValidPhone(p) {
+      return typeof p === 'string' && /^\+[1-9]\d{6,14}$/.test(p);
+    }
+
+    async function callLead(id) {
+      // Find the lead — fetch fresh in case the list is stale
+      let lead = LEADS.find(l => l._id === id);
+      // Also check campaign leads cache if we're in a campaign sub-view
+      if (!lead && CLP_ALL_LEADS.length) lead = CLP_ALL_LEADS.find(l => l._id === id);
+      // Also check parent campaign leads cache
+      if (!lead && PCLP_ALL_LEADS.length) lead = PCLP_ALL_LEADS.find(l => l._id === id);
+      if (!lead) {
+        try { lead = await api('/leads/' + id); }
+        catch (e) { toast('❌ Lead not found', 'error'); return; }
+      }
+
+      // Validate phone BEFORE sending to backend so user gets a clear message
+      if (!isValidPhone(lead.phone)) {
+        alert(
+          `❌ Cannot call ${lead.fullName}\n\n` +
+          `Phone number "${lead.phone}" is invalid.\n\n` +
+          `Required format: +<country code><digits> (E.164)\n` +
+          `Examples: +14155551234 (US)  or  +918466924574 (India)\n\n` +
+          `Please update the phone in your Google Sheet.`
+        );
+        return;
+      }
+
+      // Resolve campaign type — used to pick the correct AI calling script.
+      // If we're inside a campaign leads sub-view, use that campaign's type directly.
+      // This works even before the SQL schema has been applied.
+      let campaignType = null;
+      if (CLP_CAMPAIGN_ID) {
+        // We're inside a campaign leads page — find the type from the CAMPAIGNS global
+        const camp = CAMPAIGNS.find(c => c.id === CLP_CAMPAIGN_ID);
+        if (camp && camp.type) campaignType = camp.type;
+      } else if (PCLP_CAMPAIGN_ID) {
+        // We're inside a parent campaign leads page
+        const camp = CAMPAIGNS.find(c => c.id === PCLP_CAMPAIGN_ID);
+        if (camp && camp.type) campaignType = camp.type;
+      } else if (lead.campaignId) {
+        // Lead has a campaign assigned — look it up from the CAMPAIGNS cache
+        const camp = CAMPAIGNS.find(c => c.id === lead.campaignId);
+        if (camp && camp.type) campaignType = camp.type;
+      }
+
+      const campLabel = campaignType && campaignType !== 'demo-test-followup'
+        ? ` using the ${campaignType.replace(/-/g, ' ')} script` : '';
+      const ok = confirm(`📞 Place a call to ${lead.fullName} at ${lead.phone}?${campLabel ? '\n\n✅ ' + campLabel : ''}`);
+      if (!ok) return;
+      toast('Placing call…', 'info');
+      try {
+        const body = {};
+        if (campaignType) body.campaignType = campaignType;
+        const r = await api('/leads/' + id + '/call', { method: 'POST', body: JSON.stringify(body) });
+        toast(`📞 ${r.message || 'Call placed'}`, 'success');
+        closeModal();
+        setTimeout(() => {
+          loadLeads();
+          if (CLP_CAMPAIGN_ID) refreshCampaignLeads();
+          if (PCLP_CAMPAIGN_ID) refreshParentCampaignLeads();
+        }, 2000);
+      } catch (e) {
+        toast('❌ ' + e.message, 'error');
+        console.error('Call failed:', e);
+      }
+    }
+
+    async function stopCall(id) {
+      const ok = confirm('🛑 Stop the ongoing call for this lead?\n\nThe call will be hung up immediately and the status reset.');
+      if (!ok) return;
+      toast('Stopping call…', 'info');
+      try {
+        const r = await api('/leads/' + id + '/stop-call', { method: 'POST' });
+        toast(`🛑 ${r.message || 'Call stopped'}`, 'success');
+        closeModal();
+        setTimeout(loadLeads, 1000);
+      } catch (e) {
+        toast('❌ ' + e.message, 'error');
+      }
+    }
+    async function sendEmail(id, type) {
+      try {
+        if (!id || !type) { toast('Invalid parameters', 'error'); return; }
+        const result = await api(`/leads/${id}/email`, {
+          method: 'POST',
+          body: JSON.stringify({ type })
+        });
+        if (result.ok) {
+          toast(`✅ ${type.charAt(0).toUpperCase() + type.slice(1)} email sent`, 'success');
+        } else {
+          toast(`❌ Email failed: ${result.error || 'Unknown error'}`, 'error');
+        }
+      } catch (e) {
+        toast(`❌ Error: ${e.message}`, 'error');
+      }
+    }
+    async function pollNow() {
+      toast('Polling Google Sheets…', 'info');
+      try {
+        await api('/poll', { method: 'POST' });
+        toast('Sheets polled successfully', 'success');
+        setTimeout(loadLeads, 1500);
+      } catch (e) { toast(e.message, 'error'); }
+    }
+    async function refreshAll() {
+      await loadLeads();
+      toast('Refreshed', 'success');
+    }
+    function exportLeads() {
+      window.open('/api/leads/export', '_blank');
+      toast('Downloading CSV…', 'info');
+    }
+
+    // ─── Counselor Dashboard ────────────────────────────
+    function switchCdTab(range, btn) {
+      document.querySelectorAll('.cd-tab').forEach(t => t.classList.remove('active'));
+      if (btn) { btn.classList.add('active'); btn.dataset.range = range; }
+      else {
+        const t = document.querySelector(`.cd-tab[onclick*="${range}"]`);
+        if (t) t.classList.add('active');
+      }
+      loadCounselor(range);
+    }
+
+    async function loadCounselor(range = 'today') {
+      try {
+        const d = await fetch('/api/crm/counselor-dashboard?range=' + range).then(r => r.json());
+        
+        window.COMPLETED_FOLLOWUPS = d.completedFollowUps || [];
+
+        // KPI values
+        const mtg = d.meetingsInRange || 0;
+        const hot = d.hotLeads?.length || 0;
+        const enr = d.enrollmentPending?.length || 0;
+        document.getElementById('cd_meetings').textContent = mtg;
+        document.getElementById('cd_hot').textContent = hot;
+        document.getElementById('cd_enroll_pending').textContent = enr;
+        document.getElementById('cd_revenue').textContent = '$' + (d.revenuePipeline || 0).toLocaleString();
+        document.getElementById('cd_meetings_sub').textContent = mtg > 0 ? `${mtg} meeting${mtg > 1 ? 's' : ''} scheduled` : 'No meetings scheduled';
+        document.getElementById('cd_hot_sub').textContent = hot > 0 ? `${hot} hot lead${hot > 1 ? 's' : ''}` : 'No hot leads';
+        document.getElementById('cd_enroll_sub').textContent = enr > 0 ? `${enr} pending enrollment${enr > 1 ? 's' : ''}` : 'No pending enrollments';
+
+        function ini(n) { return (n || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase(); }
+        function fmtTime(d) { return d ? new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'; }
+        function fmtDate(d) { return d ? new Date(d).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) : '—'; }
+        const AVATAR_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899'];
+        function avatarColor(name) { let h = 0; for (const c of (name || '')) h = (h * 31 + c.charCodeAt(0)) & 0xffffff; return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]; }
+
+        // ── Today's Meetings ─────────────────────────────────
+        const el1 = document.getElementById('cd_today_meetings');
+        if (d.todayMeetings?.length) {
+          el1.innerHTML = d.todayMeetings.map(l => `
+        <div class="cd-lead-item" onclick="openLead('${l._id}')">
+          <div class="cd-lead-avatar" style="background:${avatarColor(l.fullName)}">${ini(l.fullName)}</div>
+          <div style="flex:1;min-width:0">
+            <div class="cd-lead-name">${esc(l.fullName)}</div>
+            <div class="cd-lead-meta">🕐 ${fmtTime(l.meeting?.scheduledAt)} · ${esc(l.courseInterest || '—')}</div>
+          </div>
+          ${l.meeting?.meetLink ? `<a href="${l.meeting.hostMeetLink || l.meeting.meetLink}" target="_blank" onclick="event.stopPropagation()" class="btn btn-primary btn-sm" style="font-size:12px">🎥 Join</a>` : '<span class="status-badge meeting-scheduled" style="font-size:11px">Scheduled</span>'}
+        </div>`).join('');
+        } else {
+          el1.innerHTML = `
+        <div class="cd-empty">
+          <div class="cd-empty-icon">📅</div>
+          <div class="cd-empty-title">No meetings today</div>
+          <div class="cd-empty-sub">You have no meetings scheduled for today.</div>
+          <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="switchView('meetings')">View Calendar</button>
+        </div>`;
+        }
+
+        // ── Follow-ups Due ───────────────────────────────────
+        const el2 = document.getElementById('cd_followups');
+        const FU_ICONS = { 'ai-call': '📞', 'email': '📧', 'success-stories': '⭐', 'counselor-reminder': '🔔', 'parent-discussion': '👨‍👩‍👧', 'enrollment-reminder': '🎓', 'program-benefits': '📋', 'limited-seat': '⚠️' };
+        const FU_COLORS = { 'ai-call': 'rgba(59,130,246,.15)', 'email': 'rgba(16,185,129,.15)', 'success-stories': 'rgba(245,158,11,.15)', 'counselor-reminder': 'rgba(139,92,246,.15)' };
+        const FU_TEXT = { 'ai-call': '#3b82f6', 'email': '#10b981', 'success-stories': '#f59e0b', 'counselor-reminder': '#8b5cf6' };
+
+        function fuIconKey(type) { return Object.keys(FU_ICONS).find(k => type.includes(k)) || 'counselor-reminder'; }
+
+        if (d.pendingFollowUps?.length) {
+          el2.innerHTML = d.pendingFollowUps.slice(0, 6).map(f => {
+            const k = fuIconKey(f.followupType);
+            const icon = FU_ICONS[k] || '🔔';
+            const bg = FU_COLORS[k] || 'rgba(139,92,246,.15)';
+            const clr = FU_TEXT[k] || '#8b5cf6';
+            const isOverdue = new Date(f.scheduledDate) <= new Date();
+            const isFailed = f.result && (f.result.startsWith('failed:') || f.result.startsWith('email-failed:'));
+            let actionHtml = '';
+            if (isFailed) {
+              const reason = f.result.replace(/^(email-)?failed:/, '').trim();
+              actionHtml = `<span class="cd-due-badge" style="background:rgba(239,68,68,0.15);color:#ef4444">Status: Failed (${reason})</span>
+                            <button class="btn btn-secondary btn-sm" style="font-size:11px" onclick="retryFollowUp('${f._id}')">↻ Retry</button>`;
+            } else if (isOverdue) {
+              actionHtml = `<span class="cd-due-badge">Due Today</span>`;
+            }
+            return `
+        <div class="cd-fu-item">
+          <div class="cd-fu-icon" style="background:${bg};color:${clr}">${icon}</div>
+          <div style="flex:1;min-width:0">
+            <div class="cd-fu-title">${fmtFollowupType(f.followupType)}</div>
+            <div class="cd-fu-date">📅 ${fmtDate(f.scheduledDate)}</div>
+          </div>
+          <div class="cd-fu-actions">
+            ${actionHtml}
+          </div>
+        </div>`;
+          }).join('');
+        } else {
+          el2.innerHTML = `
+        <div class="cd-empty">
+          <div class="cd-empty-icon">✅</div>
+          <div class="cd-empty-title">All caught up!</div>
+          <div class="cd-empty-sub">No follow-ups due right now.</div>
+        </div>`;
+        }
+
+        // ── Hot Leads ────────────────────────────────────────
+        const el3 = document.getElementById('cd_hot_leads');
+        if (d.hotLeads?.length) {
+          el3.innerHTML = d.hotLeads.map(l => `
+        <div class="cd-lead-item" onclick="openLead('${l._id}')">
+          <div class="cd-lead-avatar" style="background:${avatarColor(l.fullName)}">${ini(l.fullName)}</div>
+          <div style="flex:1;min-width:0">
+            <div class="cd-lead-name">${esc(l.fullName)} <span style="font-size:11px;background:rgba(239,68,68,.15);color:#ef4444;padding:1px 6px;border-radius:5px;font-weight:700">${l.leadScore}🔥</span></div>
+            <div class="cd-lead-meta">${esc(l.courseInterest || '—')} · ${esc(l.phone || '—')}</div>
+          </div>
+          <span class="status-badge ${l.status}" style="font-size:11px">${fmtStatus(l.status)}</span>
+        </div>`).join('');
+        } else {
+          el3.innerHTML = `
+        <div class="cd-empty">
+          <div class="cd-empty-icon">🔥</div>
+          <div class="cd-empty-title">No hot leads</div>
+          <div class="cd-empty-sub">You don't have any hot leads at the moment.</div>
+          <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="switchView('leads')">View All Leads</button>
+        </div>`;
+        }
+
+        // ── Enrollment Pending ───────────────────────────────
+        const el4 = document.getElementById('cd_enroll_list');
+        if (d.enrollmentPending?.length) {
+          el4.innerHTML = d.enrollmentPending.map(l => `
+        <div class="cd-lead-item" onclick="openLead('${l._id}')">
+          <div class="cd-lead-avatar" style="background:${avatarColor(l.fullName)}">${ini(l.fullName)}</div>
+          <div style="flex:1;min-width:0">
+            <div class="cd-lead-name">${esc(l.fullName)}</div>
+            <div class="cd-lead-meta">${esc(l.courseInterest || '—')} · Grade ${esc(l.grade || '?')}</div>
+          </div>
+          <span class="status-badge ${l.status}" style="font-size:11px">${fmtStatus(l.status)}</span>
+        </div>`).join('');
+        } else {
+          el4.innerHTML = `
+        <div class="cd-empty">
+          <div class="cd-empty-icon">🎓</div>
+          <div class="cd-empty-title">No pending enrollments</div>
+          <div class="cd-empty-sub">You don't have any pending enrollments.</div>
+          <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="switchView('enrollments')">View All Enrollments</button>
+        </div>`;
+        }
+
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function retryFollowUp(fuId) {
+      try {
+        await fetch('/api/crm/follow-ups/' + fuId + '/retry', { method: 'POST' });
+        toast('Follow-up queued for retry', 'success');
+        loadCounselor('today');
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    // ─── Pipeline ───────────────────────────────────────
+    let _pipelineData = {};   // cache for drill-down modal
+
+    async function loadPipeline() {
+      const board = document.getElementById('pipelineBoard');
+      board.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Loading…</div>';
+      try {
+        const data = await fetch('/api/crm/pipeline').then(r => r.json());
+        _pipelineData = data;
+
+        const COLS = [
+          { key: 'new', emoji: '👤', label: 'New', sub: 'Leads captured', color: '#06b6d4', bg: 'rgba(6,182,212,.12)' },
+          { key: 'contacted', emoji: '📞', label: 'Contacted', sub: 'Initial outreach done', color: '#f59e0b', bg: 'rgba(245,158,11,.12)' },
+          { key: 'qualified', emoji: '✅', label: 'Qualified', sub: 'Student qualified', color: '#8b5cf6', bg: 'rgba(139,92,246,.12)' },
+          { key: 'meeting-scheduled', emoji: '📅', label: 'Meeting Scheduled', sub: 'Meeting booked', color: '#10b981', bg: 'rgba(16,185,129,.12)' },
+          { key: 'meeting-completed', emoji: '🎙', label: 'Meeting Completed', sub: 'Consultation done', color: '#34d399', bg: 'rgba(52,211,153,.12)' },
+          { key: 'proposal-sent', emoji: '📄', label: 'Proposal Sent', sub: 'Proposal shared', color: '#a78bfa', bg: 'rgba(167,139,250,.12)' },
+          { key: 'interested', emoji: '🙋', label: 'Interested', sub: 'Student showing interest', color: '#3b82f6', bg: 'rgba(59,130,246,.12)' },
+          { key: 'enrollment-pending', emoji: '⏳', label: 'Enrollment Pending', sub: 'Waiting for enrollment', color: '#fb923c', bg: 'rgba(251,146,60,.12)' },
+          { key: 'payment-pending', emoji: '💳', label: 'Payment Pending', sub: 'Payment in process', color: '#fbbf24', bg: 'rgba(251,191,36,.12)' },
+          { key: 'enrolled', emoji: '🎓', label: 'Enrolled', sub: 'Successfully enrolled', color: '#ec4899', bg: 'rgba(236,72,153,.12)' },
+          { key: 'lost', emoji: '✗', label: 'Lost', sub: 'Not interested / dropped', color: '#ef4444', bg: 'rgba(239,68,68,.12)' },
+        ];
+
+        const totalLeads = data['new']?.count || 0;
+        const enrolled = data['enrolled']?.count || 0;
+        const mtgSched = data['meeting-scheduled']?.count || 0;
+        const totalActive = COLS.reduce((s, c) => s + (data[c.key]?.count || 0), 0);
+        const convRate = totalLeads ? ((enrolled / totalLeads) * 100).toFixed(1) : '0.0';
+
+        // Helpers
+        function ini(name) {
+          return (name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+        }
+        function ago(d) {
+          if (!d) return '—';
+          const m = Math.round((Date.now() - new Date(d)) / 60000);
+          if (m < 60) return m + 'm ago';
+          if (m < 1440) return Math.round(m / 60) + 'h ago';
+          return Math.round(m / 1440) + 'd ago';
+        }
+
+        // Stats row
+        const stats = [
+          { icon: '👥', label: 'Total Leads', val: totalActive, color: '#3b82f6', bg: 'rgba(59,130,246,.12)' },
+          { icon: '📅', label: 'Meetings Scheduled', val: mtgSched, color: '#10b981', bg: 'rgba(16,185,129,.12)' },
+          { icon: '🎓', label: 'Enrolled', val: enrolled, color: '#ec4899', bg: 'rgba(236,72,153,.12)' },
+          { icon: '⏳', label: 'Enrollment Pending', val: data['enrollment-pending']?.count || 0, color: '#fb923c', bg: 'rgba(251,146,60,.12)' },
+          { icon: '💳', label: 'Payment Pending', val: data['payment-pending']?.count || 0, color: '#fbbf24', bg: 'rgba(251,191,36,.12)' },
+        ];
+
+        const statsHtml = stats.map(s => `
+      <div class="pipe-stat">
+        <div class="pipe-stat-icon" style="background:${s.bg}; color:${s.color}">${s.icon}</div>
+        <div class="pipe-stat-body">
+          <div class="pipe-stat-val" style="color:${s.color}">${s.val}</div>
+          <div class="pipe-stat-label">${s.label}</div>
+        </div>
+      </div>`).join('');
+
+        // Table rows
+        const maxCount = Math.max(1, ...COLS.map(c => data[c.key]?.count || 0));
+
+        const rowsHtml = COLS.map(col => {
+          const cd = data[col.key] || { count: 0, leads: [] };
+          const conv = totalLeads ? ((cd.count / totalLeads) * 100).toFixed(1) : '0.0';
+          const pct = Math.round((cd.count / maxCount) * 100);
+          const top = cd.leads[0];
+          const extra = cd.count > 1 ? `<span style="margin-left:6px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700;color:var(--muted)">+${cd.count - 1} more</span>` : '';
+          const latestHtml = top ? `
+        <div class="pipe-latest">
+          <div class="pipe-avatar" style="background:${col.color}">${ini(top.fullName)}</div>
+          <div style="min-width:0">
+            <div class="pipe-latest-name" style="display:flex;align-items:center;gap:4px">${esc(top.fullName)}${extra}</div>
+            <div class="pipe-latest-time">${ago(top.lastCallAt || top.updatedAt)}</div>
+          </div>
+        </div>` : `<span style="color:var(--muted);font-size:12px">—</span>`;
+
+          return `
+      <div class="pipe-row" onclick="openStageModal('${col.key}')" style="${cd.count === 0 ? 'opacity:.5;pointer-events:none' : 'cursor:pointer'}">
+        <div class="pipe-stage-cell">
+          <div class="pipe-stage-icon" style="background:${col.bg};color:${col.color}">${col.emoji}</div>
+          <div>
+            <div class="pipe-stage-name">${col.label}</div>
+            <div class="pipe-stage-sub">${col.sub}</div>
+          </div>
+        </div>
+        <div class="pipe-count">${cd.count}</div>
+        <div class="pipe-conv">${conv}%</div>
+        <div class="pipe-bar-wrap">
+          <div class="pipe-bar-track">
+            <div class="pipe-bar-fill" style="width:${pct}%;background:${col.color}"></div>
+          </div>
+        </div>
+        <div>${latestHtml}</div>
+        <div class="pipe-chevron">›</div>
+      </div>`;
+        }).join('');
+
+        board.innerHTML = `
+      <div class="pipe-page">
+        <!-- Header -->
+        <div class="pipe-header">
+          <div class="pipe-header-left">
+            <h2>Enrollment Pipeline</h2>
+            <p>Track and manage students across the enrollment journey</p>
+          </div>
+          <div class="pipe-header-right">
+            <select class="pipe-date-select" onchange="loadPipeline()">
+              <option>Last 30 days</option>
+              <option>Last 7 days</option>
+              <option>All time</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" onclick="exportPipelineCSV()">↓ Export</button>
+            <button class="btn btn-secondary btn-sm" onclick="loadPipeline()">↻</button>
+          </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="pipe-stats">${statsHtml}</div>
+
+        <!-- Table -->
+        <div class="pipe-table-card">
+          <div class="pipe-table-head">
+            <div>Stage</div>
+            <div>Leads</div>
+            <div>Conversion</div>
+            <div>Progress</div>
+            <div>Latest Lead</div>
+            <div></div>
+          </div>
+          ${rowsHtml}
+          <div class="pipe-footer-row">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:18px">📊</span>
+              <span>Overall Conversion Rate</span>
+            </div>
+            <div></div>
+            <div class="pipe-footer-conv">${convRate}%</div>
+            <div style="font-size:12px;color:var(--muted);grid-column:span 3">${enrolled} enrolled out of ${totalLeads} new leads</div>
+          </div>
+        </div>
+      </div>`;
+
+      } catch (e) {
+        board.innerHTML = `<div style="padding:40px;text-align:center;color:var(--hot)">${e.message}</div>`;
+        toast(e.message, 'error');
+      }
+    }
+
+    function exportPipelineCSV() {
+      window.open('/api/leads/export', '_blank');
+      toast('Downloading pipeline CSV…', 'info');
+    }
+
+    function openStageModal(key) {
+      const COLS = {
+        'new': { emoji: '👤', label: 'New', color: '#06b6d4' },
+        'contacted': { emoji: '📞', label: 'Contacted', color: '#f59e0b' },
+        'qualified': { emoji: '✅', label: 'Qualified', color: '#8b5cf6' },
+        'meeting-scheduled': { emoji: '📅', label: 'Meeting Scheduled', color: '#10b981' },
+        'meeting-completed': { emoji: '🎙', label: 'Meeting Completed', color: '#34d399' },
+        'proposal-sent': { emoji: '📄', label: 'Proposal Sent', color: '#a78bfa' },
+        'interested': { emoji: '🙋', label: 'Interested', color: '#3b82f6' },
+        'enrollment-pending': { emoji: '⏳', label: 'Enrollment Pending', color: '#fb923c' },
+        'payment-pending': { emoji: '💳', label: 'Payment Pending', color: '#fbbf24' },
+        'enrolled': { emoji: '🎓', label: 'Enrolled', color: '#ec4899' },
+        'lost': { emoji: '✗', label: 'Lost', color: '#ef4444' },
+      };
+      const col = COLS[key] || { emoji: '📋', label: key, color: 'var(--brand)' };
+      const cd = _pipelineData[key] || { count: 0, leads: [] };
+      const leads = cd.leads || [];
+
+      document.getElementById('stageModalTitle').textContent = col.emoji + ' ' + col.label;
+      document.getElementById('stageModalSub').textContent = leads.length + ' lead' + (leads.length !== 1 ? 's' : '') + ' in this stage';
+
+      function ini(n) { return (n || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase(); }
+      function ago(d) {
+        if (!d) return '—';
+        const m = Math.round((Date.now() - new Date(d)) / 60000);
+        if (m < 60) return m + 'm ago';
+        if (m < 1440) return Math.round(m / 60) + 'h ago';
+        return Math.round(m / 1440) + 'd ago';
+      }
+
+      document.getElementById('stageModalBody').innerHTML = leads.length ? leads.map(l => `
+    <div onclick="closeStageModal();openLead('${l._id}')" style="
+      display:flex;align-items:center;gap:12px;padding:14px 20px;
+      border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s"
+      onmouseover="this.style.background='var(--panel2)'"
+      onmouseout="this.style.background=''">
+      <div style="width:40px;height:40px;border-radius:50%;background:${col.color};flex-shrink:0;
+        display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff">
+        ${ini(l.fullName)}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:14px">${esc(l.fullName)}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">
+          ${esc(l.courseInterest || '—')} · Grade ${esc(l.grade || '?')} · ${ago(l.lastCallAt || l.updatedAt)}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <span style="
+          padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700;
+          background:${l.leadCategory === 'hot' ? 'rgba(239,68,68,.15)' : l.leadCategory === 'warm' ? 'rgba(245,158,11,.15)' : 'rgba(100,116,139,.2)'};
+          color:${l.leadCategory === 'hot' ? '#fca5a5' : l.leadCategory === 'warm' ? '#fcd34d' : 'var(--muted)'}">
+          ${l.leadScore || 0} ${catEmoji(l.leadCategory)}
+        </span>
+        <span style="color:var(--muted);font-size:18px">›</span>
+      </div>
+    </div>`).join('')
+        : '<div style="padding:32px;text-align:center;color:var(--muted)">No leads in this stage</div>';
+
+      document.getElementById('stageModal').classList.add('active');
+    }
+
+    function closeStageModal() {
+      document.getElementById('stageModal').classList.remove('active');
+    }
+
+    // ─── Enrollments ────────────────────────────────────
+    let ENROLLMENTS = [];
+    async function loadEnrollments() {
+      try {
+        const status = document.getElementById('enrollStatusFilter')?.value || '';
+        ENROLLMENTS = await fetch('/api/crm/enrollments' + (status ? '?status=' + status : '')).then(r => r.json());
+        document.getElementById('navEnrollCount').textContent = ENROLLMENTS.length;
+        renderEnrollKpis();
+        renderEnrollmentsTable();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+    function renderEnrollKpis() {
+      const el = document.getElementById('enrollKpis');
+      if (!el) return;
+      const total = ENROLLMENTS.length;
+      const active = ENROLLMENTS.filter(e => ['active', 'confirmed'].includes(e.enrollmentStatus)).length;
+      const pending = ENROLLMENTS.filter(e => e.enrollmentStatus === 'pending').length;
+      const revenue = ENROLLMENTS.reduce((s, e) => s + (e.programFee || 0), 0);
+      el.innerHTML =
+        kpiChip('🎓', total, 'Total Enrollments', '#3b82f6') +
+        kpiChip('✅', active, 'Active', '#10b981') +
+        kpiChip('⏳', pending, 'Pending', '#f59e0b') +
+        kpiChip('💰', '$' + revenue.toLocaleString(), 'Program Value', '#ec4899');
+    }
+    function renderEnrollmentsTable() {
+      const el = document.getElementById('enrollmentsTable');
+      if (!ENROLLMENTS.length) { el.innerHTML = '<div class="empty"><div class="icon">📋</div>No enrollments yet</div>'; return; }
+      el.innerHTML = `<table>
+    <thead><tr><th>Student</th><th>Program</th><th>Learning Mode</th><th>Exam Date</th><th>Fee</th><th>Status</th><th></th></tr></thead>
+    <tbody>${ENROLLMENTS.map(e => `<tr>
+      <td><strong>${esc(e.studentName)}</strong><br><span style="color:var(--muted);font-size:12px">Grade ${esc(e.grade || '—')}</span></td>
+      <td>${esc(e.program)}</td>
+      <td>${esc(e.learningMode || '—')}</td>
+      <td>${e.examDate ? new Date(e.examDate).toLocaleDateString() : '—'}</td>
+      <td>$${(e.programFee || 0).toLocaleString()}</td>
+      <td><span class="status-badge">${fmtStatus(e.enrollmentStatus)}</span></td>
+      <td><button class="btn btn-secondary btn-sm" onclick="openEnrollment('${e._id}')">View</button></td>
+    </tr>`).join('')}
+    </tbody></table>`;
+    }
+
+    let _enrollEditId = null;
+    function showEnrollForm(id) {
+      _enrollEditId = id;
+      document.getElementById('enrollFormTitle').textContent = id ? 'Edit Enrollment' : 'New Enrollment';
+      document.getElementById('ef_studentName').value = '';
+      document.getElementById('ef_grade').value = '';
+      document.getElementById('ef_parentName').value = '';
+      document.getElementById('ef_parentEmail').value = '';
+      document.getElementById('ef_parentPhone').value = '';
+      document.getElementById('ef_program').value = '';
+      document.getElementById('ef_examDate').value = '';
+      document.getElementById('ef_learningMode').value = 'online';
+      document.getElementById('ef_paymentPlan').value = 'full';
+      document.getElementById('ef_programFee').value = '';
+      document.getElementById('ef_leadId').value = '';
+      document.getElementById('ef_notes').value = '';
+      document.getElementById('enrollFormWrap').style.display = 'block';
+      document.getElementById('enrollFormWrap').scrollIntoView({ behavior: 'smooth' });
+    }
+    function showEnrollFromLead(id, name, grade, parentName, parentEmail, phone, program) {
+      showView('enrollments');
+      setTimeout(() => {
+        showEnrollForm(null);
+        document.getElementById('ef_studentName').value = name;
+        document.getElementById('ef_grade').value = grade;
+        document.getElementById('ef_parentName').value = parentName;
+        document.getElementById('ef_parentEmail').value = parentEmail;
+        document.getElementById('ef_parentPhone').value = phone;
+        const progMap = { 'sat': 'SAT Prep', 'act': 'ACT Prep', 'ap': 'AP Courses', 'college': 'College Admissions' };
+        const prog = Object.keys(progMap).find(k => (program || '').toLowerCase().includes(k));
+        if (prog) document.getElementById('ef_program').value = progMap[prog];
+        document.getElementById('ef_leadId').value = id;
+      }, 200);
+    }
+    function hideEnrollForm() { document.getElementById('enrollFormWrap').style.display = 'none'; }
+    async function saveEnrollment() {
+      const name = document.getElementById('ef_studentName').value.trim();
+      const program = document.getElementById('ef_program').value;
+      if (!name || !program) { toast('Student name and program are required', 'error'); return; }
+      const body = {
+        leadId: document.getElementById('ef_leadId').value || undefined,
+        studentName: name,
+        grade: document.getElementById('ef_grade').value,
+        parentName: document.getElementById('ef_parentName').value,
+        parentEmail: document.getElementById('ef_parentEmail').value,
+        parentPhone: document.getElementById('ef_parentPhone').value,
+        program,
+        examDate: document.getElementById('ef_examDate').value || undefined,
+        learningMode: document.getElementById('ef_learningMode').value,
+        paymentPlan: document.getElementById('ef_paymentPlan').value,
+        programFee: document.getElementById('ef_programFee').value,
+        notes: document.getElementById('ef_notes').value,
+      };
+      try {
+        await fetch('/api/crm/enrollments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        toast('Enrollment saved ✓', 'success');
+        hideEnrollForm();
+        loadEnrollments();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+    async function openEnrollment(id) {
+      try {
+        const { enrollment: e, payments } = await fetch('/api/crm/enrollments/' + id).then(r => r.json());
+        let html = `<div class="section-title">📋 Enrollment Details</div>
+      <div class="detail-grid">
+        <div class="detail-cell"><div class="lbl">Student</div><div class="val">${esc(e.studentName)}</div></div>
+        <div class="detail-cell"><div class="lbl">Grade</div><div class="val">${esc(e.grade || '—')}</div></div>
+        <div class="detail-cell"><div class="lbl">Program</div><div class="val">${esc(e.program)}</div></div>
+        <div class="detail-cell"><div class="lbl">Mode</div><div class="val">${esc(e.learningMode)}</div></div>
+        <div class="detail-cell"><div class="lbl">Payment Plan</div><div class="val">${esc(e.paymentPlan)}</div></div>
+        <div class="detail-cell"><div class="lbl">Fee</div><div class="val">$${(e.programFee || 0).toLocaleString()}</div></div>
+        <div class="detail-cell"><div class="lbl">Status</div><div class="val"><span class="status-badge">${fmtStatus(e.enrollmentStatus)}</span></div></div>
+        ${e.examDate ? `<div class="detail-cell"><div class="lbl">Exam Date</div><div class="val">${new Date(e.examDate).toLocaleDateString()}</div></div>` : ''}
+      </div>`;
+        if (payments.length) {
+          html += `<div class="section-title">💳 Payments</div>`;
+          payments.forEach(p => {
+            html += `<div class="payment-row">
+          <div><strong>$${p.amount.toLocaleString()}</strong> total · $${p.amountPaid.toLocaleString()} paid</div>
+          <div>${p.paymentDate ? new Date(p.paymentDate).toLocaleDateString() : '—'}</div>
+          <span class="payment-status-badge ${p.paymentStatus}">${fmtStatus(p.paymentStatus)}</span>
+        </div>`;
+          });
+        }
+        html += `<div class="action-bar">
+      <button class="btn btn-primary btn-sm" onclick="addPayment('${e._id}', '${e.leadId || ''}', '${e.programFee || 0}', '${e.program}')">💳 Add Payment</button>
+      <select onchange="if(this.value)updateEnrollStatus('${e._id}', this.value)" style="padding:8px 12px;border-radius:8px">
+        <option value="">Change Status…</option>
+        <option value="pending">Pending</option>
+        <option value="confirmed">Confirmed</option>
+        <option value="active">Active</option>
+        <option value="completed">Completed</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+    </div>`;
+        document.getElementById('modalBody').innerHTML = html;
+        document.getElementById('modalName').textContent = e.studentName;
+        document.getElementById('modalMeta').textContent = e.program + ' · ' + fmtStatus(e.enrollmentStatus);
+        document.getElementById('leadModal').classList.add('active');
+      } catch (e) { toast(e.message, 'error'); }
+    }
+    async function updateEnrollStatus(id, status) {
+      try {
+        await fetch('/api/crm/enrollments/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enrollmentStatus: status }) });
+        toast('Status updated ✓', 'success');
+        loadEnrollments();
+        closeModal();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+    async function addPayment(enrollId, leadId, totalFee, program) {
+      const amountStr = prompt(`Enter amount paid for this enrollment (Total fee: $${totalFee}):`, totalFee);
+      if (!amountStr) return;
+      const amount = parseFloat(amountStr);
+      if (isNaN(amount) || amount <= 0) { toast('Invalid amount', 'error'); return; }
+      const method = prompt('Payment method (e.g. Credit Card, Check, Wire):') || '';
+      try {
+        await fetch('/api/crm/payments', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enrollmentId: enrollId, leadId, amount: totalFee || amount, amountPaid: amount, paymentDate: new Date().toISOString(), paymentMethod: method, program }),
+        });
+        toast('Payment recorded ✓', 'success');
+        openEnrollment(enrollId);
+        loadEnrollments();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    // ─── Revenue ────────────────────────────────────────
+    async function loadRevenue(days = 30) {
+      try {
+        const d = await fetch('/api/crm/revenue?range=' + days).then(r => r.json());
+        document.getElementById('rv_revenue').textContent = '$' + (d.totalRevenue || 0).toLocaleString();
+        document.getElementById('rv_pending').textContent = '$' + (d.pendingRevenue || 0).toLocaleString();
+        document.getElementById('rv_enrolled').textContent = d.metrics.enrolled;
+        document.getElementById('rv_overall_conv').textContent = d.conversion.overallConversion + '%';
+
+        // Conversion metrics
+        document.getElementById('rv_conv_metrics').innerHTML = `
+      <div class="conv-row"><span>Total Leads</span><span class="conv-pct">${d.metrics.totalLeads}</span></div>
+      <div class="conv-row"><span>Qualified Leads</span><span class="conv-pct">${d.metrics.qualifiedLeads}</span></div>
+      <div class="conv-row"><span>Meetings Scheduled</span><span class="conv-pct">${d.metrics.meetingsScheduled}</span></div>
+      <div class="conv-row"><span>Meetings Completed</span><span class="conv-pct">${d.metrics.meetingsCompleted}</span></div>
+      <div class="conv-row"><span>Enrolled</span><span class="conv-pct" style="color:var(--pink)">${d.metrics.enrolled}</span></div>
+      <hr style="border-color:var(--border);margin:12px 0">
+      <div class="conv-row"><span>Lead → Meeting %</span><span class="conv-pct">${d.conversion.leadToMeeting}%</span></div>
+      <div class="conv-row"><span>Meeting → Enrolled %</span><span class="conv-pct">${d.conversion.meetingToEnroll}%</span></div>
+      <div class="conv-row"><span>Overall Conversion</span><span class="conv-pct" style="color:var(--success)">${d.conversion.overallConversion}%</span></div>`;
+
+        // Revenue by program
+        const el1 = document.getElementById('rv_by_program');
+        if (d.revByProgram.length) {
+          const maxR = Math.max(...d.revByProgram.map(p => p.revenue));
+          el1.innerHTML = d.revByProgram.map(p => `
+        <div class="bar-row">
+          <div class="label"><span>${esc(p._id || 'Unknown')}</span><strong>$${p.revenue.toLocaleString()}</strong></div>
+          <div class="bar"><div class="bar-fill" style="width:${(p.revenue / maxR) * 100}%"></div></div>
+        </div>`).join('');
+        } else {
+          el1.innerHTML = '<div class="empty"><div class="icon">💰</div>No payments yet</div>';
+        }
+
+        // Enrollments by program
+        const el2 = document.getElementById('rv_enroll_prog');
+        if (d.enrollByProgram.length) {
+          const maxE = Math.max(...d.enrollByProgram.map(p => p.count));
+          el2.innerHTML = d.enrollByProgram.map(p => `
+        <div class="bar-row">
+          <div class="label"><span>${esc(p._id || 'Unknown')}</span><strong>${p.count}</strong></div>
+          <div class="bar"><div class="bar-fill" style="width:${(p.count / maxE) * 100}%;background:var(--pink)"></div></div>
+        </div>`).join('');
+        } else {
+          el2.innerHTML = '<div class="empty">No enrollments yet</div>';
+        }
+
+        // Pipeline status counts
+        const el3 = document.getElementById('rv_pipeline');
+        const pipe = d.pipeline;
+        el3.innerHTML = Object.entries(pipe).map(([k, v]) => `
+      <div class="conv-row"><span><span class="status-badge ${k}">${fmtStatus(k)}</span></span><span class="conv-pct">${v}</span></div>`).join('');
+
+        // Revenue trend
+        const el4 = document.getElementById('rv_trend');
+        if (d.revTrend.length) {
+          const maxT = Math.max(...d.revTrend.map(x => x.revenue));
+          el4.innerHTML = `<div style="display:flex;gap:4px;align-items:flex-end;height:120px;padding:8px 0;border-bottom:1px solid var(--border);overflow-x:auto">
+        ${d.revTrend.map(x => `
+          <div style="flex:1;min-width:20px;display:flex;flex-direction:column;align-items:center;gap:4px">
+            <div style="font-size:9px;color:var(--muted)">$${x.revenue > 999 ? Math.round(x.revenue / 1000) + 'k' : x.revenue}</div>
+            <div style="width:100%;background:var(--success);height:${maxT > 0 ? Math.max(4, (x.revenue / maxT) * 100) : 2}px;border-radius:2px"></div>
+            <div style="font-size:8px;color:var(--muted);transform:rotate(-45deg);transform-origin:left;white-space:nowrap;margin-top:6px">${x._id.slice(5)}</div>
+          </div>`).join('')}
+      </div>`;
+        } else {
+          el4.innerHTML = '<div class="empty"><div class="icon">📈</div>No payment data yet</div>';
+        }
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    // ─── Add / Edit / Delete Lead ───────────────────────
+    function openAddLead() {
+      document.getElementById('leadFormId').value = '';
+      document.getElementById('leadFormTitle').textContent = '➕ Add New Lead';
+      document.getElementById('leadFormSaveBtn').textContent = '💾 Save Lead';
+      document.getElementById('lf_fullName').value = '';
+      document.getElementById('lf_email').value = '';
+      document.getElementById('lf_phone').value = '';
+      document.getElementById('lf_grade').value = '';
+      document.getElementById('lf_program').value = '';
+      document.getElementById('lf_status').value = 'new';
+      document.getElementById('lf_parentName').value = '';
+      document.getElementById('lf_parentEmail').value = '';
+      document.getElementById('lf_notes').value = '';
+      document.getElementById('lf_state').value = '';
+      document.getElementById('lf_timeZone').value = '';
+      document.getElementById('lf_meetingStatus').value = 'Not Booked';
+      document.getElementById('lf_nextScheduledCall').value = '';
+      populateCampaignSelect('lf_campaign', '');
+      document.getElementById('leadFormModal').classList.add('active');
+    }
+
+    async function openEditLead(id) {
+      try {
+        const l = await api('/leads/' + id);
+        document.getElementById('leadFormId').value = l._id;
+        document.getElementById('leadFormTitle').textContent = '✏️ Edit Lead — ' + esc(l.fullName);
+        document.getElementById('leadFormSaveBtn').textContent = '💾 Update Lead';
+        document.getElementById('lf_fullName').value = l.fullName || '';
+        document.getElementById('lf_email').value = l.email || '';
+        document.getElementById('lf_phone').value = l.phone || '';
+        document.getElementById('lf_grade').value = l.grade || '';
+        document.getElementById('lf_program').value = l.courseInterest || '';
+        document.getElementById('lf_status').value = l.status || 'new';
+        document.getElementById('lf_parentName').value = l.parentName || '';
+        document.getElementById('lf_parentEmail').value = l.parentEmail || '';
+        document.getElementById('lf_notes').value = l.notes || '';
+        document.getElementById('lf_state').value = l.state || '';
+        document.getElementById('lf_timeZone').value = l.timeZone || '';
+        document.getElementById('lf_meetingStatus').value = l.meetingStatus || 'Not Booked';
+
+        let nextCallFormatted = '';
+        if (l.nextScheduledCall) {
+          const d = new Date(l.nextScheduledCall);
+          const pad = n => String(n).padStart(2, '0');
+          nextCallFormatted = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+        document.getElementById('lf_nextScheduledCall').value = nextCallFormatted;
+
+        await populateCampaignSelect('lf_campaign', l.campaignId || '');
+        document.getElementById('leadFormModal').classList.add('active');
+      } catch (e) { toast('Failed to load lead: ' + e.message, 'error'); }
+    }
+
+    function closeLeadForm() {
+      document.getElementById('leadFormModal').classList.remove('active');
+    }
+
+    async function saveLeadForm() {
+      const id = document.getElementById('leadFormId').value;
+      const fullName = document.getElementById('lf_fullName').value.trim();
+      const email = document.getElementById('lf_email').value.trim();
+      const phone = document.getElementById('lf_phone').value.trim();
+      const grade = document.getElementById('lf_grade').value;
+      const courseInterest = document.getElementById('lf_program').value;
+      const status = document.getElementById('lf_status').value;
+      const parentName = document.getElementById('lf_parentName').value.trim();
+      const parentEmail = document.getElementById('lf_parentEmail').value.trim();
+      const notes = document.getElementById('lf_notes').value.trim();
+      const campaignId = (document.getElementById('lf_campaign') || {}).value || '';
+      const state = document.getElementById('lf_state').value.trim();
+      const timeZone = document.getElementById('lf_timeZone').value;
+      const meetingStatus = document.getElementById('lf_meetingStatus').value;
+      const nextScheduledCallVal = document.getElementById('lf_nextScheduledCall').value;
+      const nextScheduledCall = nextScheduledCallVal ? new Date(nextScheduledCallVal).toISOString() : null;
+
+      if (!fullName) { toast('Full name is required', 'error'); return; }
+      if (!email) { toast('Email is required', 'error'); return; }
+      if (!phone) { toast('Phone is required', 'error'); return; }
+
+      const payload = { fullName, email, phone, grade, courseInterest, status, parentName, parentEmail, notes, state, timeZone, meetingStatus, nextScheduledCall };
+      // Assign/clear campaign. On edit, send null to clear; on create, only send when chosen.
+      if (id) payload.campaignId = campaignId || null;
+      else if (campaignId) payload.campaignId = campaignId;
+      const btn = document.getElementById('leadFormSaveBtn');
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+
+      try {
+        if (id) {
+          // Edit existing
+          await api('/leads/' + id, { method: 'PATCH', body: JSON.stringify(payload) });
+          toast('✅ Lead updated successfully', 'success');
+        } else {
+          // Create new
+          const createdLead = await api('/leads', { method: 'POST', body: JSON.stringify(payload) });
+          toast('✅ Lead added successfully', 'success');
+          
+          if (typeof leadTargetClassId !== 'undefined' && leadTargetClassId) {
+             try {
+                 await api('/classes/' + leadTargetClassId + '/students', {
+                    method: 'POST',
+                    body: JSON.stringify({ leadIds: [createdLead._id || createdLead.id] })
+                 });
+                 if (typeof loadClassStudents === 'function') await loadClassStudents();
+             } catch(err) {
+                 toast('❌ Could not assign to class: ' + err.message, 'error');
+             }
+             leadTargetClassId = null;
+          }
+        }
+        closeLeadForm();
+        await loadLeads();
+        if (CLP_CAMPAIGN_ID) await refreshCampaignLeads();
+      } catch (e) {
+        toast('❌ ' + e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = id ? '💾 Update Lead' : '💾 Save Lead';
+      }
+    }
+
+    async function confirmDeleteLead(id, name) {
+      document.getElementById('deleteLeadId').value = id;
+      document.getElementById('deleteLeadName').textContent = name;
+      document.getElementById('deleteLeadModal').classList.add('active');
+    }
+    function closeDeleteLead() {
+      document.getElementById('deleteLeadModal').classList.remove('active');
+    }
+    async function deleteLead() {
+      const id = document.getElementById('deleteLeadId').value;
+      const name = document.getElementById('deleteLeadName').textContent;
+      if (!id) return;
+      try {
+        const r = await api('/leads/' + id, { method: 'DELETE' });
+        toast('🗑️ ' + (r.message || 'Lead deleted'), 'success');
+        closeDeleteLead();
+        closeModal();
+        await loadLeads();
+        if (CLP_CAMPAIGN_ID) await refreshCampaignLeads();
+      } catch (e) { toast('❌ ' + e.message, 'error'); }
+    }
+
+    // ─── Delete Call Record ──────────────────────────────
+    async function confirmDeleteCall(leadId, callId, leadName, attemptNum) {
+      document.getElementById('deleteCallLeadId').value = leadId;
+      document.getElementById('deleteCallId').value = callId;
+      document.getElementById('deleteCallDesc').textContent = `Attempt #${attemptNum} for "${leadName}"`;
+      document.getElementById('deleteCallModal').classList.add('active');
+    }
+    function closeDeleteCall() {
+      document.getElementById('deleteCallModal').classList.remove('active');
+    }
+    async function deleteCall() {
+      const leadId = document.getElementById('deleteCallLeadId').value;
+      const callId = document.getElementById('deleteCallId').value;
+      if (!leadId || !callId) return;
+      try {
+        const r = await api(`/leads/${leadId}/calls/${callId}`, { method: 'DELETE' });
+        toast('🗑️ ' + (r.message || 'Call record deleted'), 'success');
+        closeDeleteCall();
+        await loadCalls();
+      } catch (e) { toast('❌ ' + e.message, 'error'); }
+    }
+
+    // ─── Meeting Outcome ────────────────────────────────
+    function logOutcome(leadId, name) {
+      const m = document.getElementById('outcomeModal');
+      document.getElementById('outcomeLeadId').value = leadId;
+      document.getElementById('outcomeLeadName').textContent = name;
+      document.getElementById('outcomeResult').value = '';
+      document.getElementById('outcomeNotes').value = '';
+      m.dataset.editId = '';
+      m.querySelector('h2').textContent = 'Log Meeting Outcome';
+      closeModal();
+      m.classList.add('active');
+      m.dataset.fromMeetings = '0';
+    }
+    function editOutcome(id, name, outcome, notes) {
+      const m = document.getElementById('outcomeModal');
+      m.dataset.editId = id;
+      m.dataset.fromMeetings = '1';
+      document.getElementById('outcomeLeadName').textContent = name + ' (editing)';
+      document.getElementById('outcomeResult').value = outcome || '';
+      document.getElementById('outcomeNotes').value = notes || '';
+      m.querySelector('h2').textContent = 'Edit Meeting Outcome';
+      m.classList.add('active');
+    }
+    function confirmDeleteOutcome(id, name) {
+      if (!confirm(`🗑️ Delete this meeting outcome for ${name}?\n\nThis action cannot be undone.`)) return;
+      deleteOutcome(id);
+    }
+    async function deleteOutcome(id) {
+      try {
+        const r = await api('/crm/meeting-outcomes/' + id, { method: 'DELETE' });
+        toast('🗑️ ' + (r.message || 'Outcome deleted'), 'success');
+        loadMeetingOutcomes();
+      } catch (e) { toast('❌ ' + e.message, 'error'); }
+    }
+    function closeOutcomeModal() {
+      const m = document.getElementById('outcomeModal');
+      m.classList.remove('active');
+      m.dataset.fromMeetings = '0';
+      m.dataset.editId = '';
+      m.querySelector('h2').textContent = 'Log Meeting Outcome';
+      const btn = document.getElementById('btnSaveOutcome');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `💾 Save Outcome`;
+      }
+    }
+    async function saveOutcome() {
+      const m = document.getElementById('outcomeModal');
+      const editId = m.dataset.editId;
+      const leadId = document.getElementById('outcomeLeadId').value;
+      const outcome = document.getElementById('outcomeResult').value;
+      const notes = document.getElementById('outcomeNotes').value;
+      if (!outcome) { toast('Please select an outcome', 'error'); return; }
+
+      const btn = document.getElementById('btnSaveOutcome');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner"></span> Saving...`;
+      }
+
+      // ── EDIT MODE — PATCH existing outcome ──
+      if (editId) {
+        try {
+          await api('/crm/meeting-outcomes/' + editId, {
+            method: 'PATCH',
+            body: JSON.stringify({ outcome, notes }),
+          });
+          toast('Meeting outcome saved successfully.', 'success');
+          closeOutcomeModal();
+          loadMeetingOutcomes();
+          loadLeads();
+          loadMeetings();
+        } catch (e) {
+          toast('❌ ' + e.message, 'error');
+        } finally {
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `💾 Save Outcome`;
+          }
+        }
+        return;
+      }
+
+      // Backend /api/crm/meeting-outcomes POST handles the status update automatically.
+      try {
+        await fetch('/api/crm/meeting-outcomes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ leadId, outcome, notes }),
+        });
+
+        toast('Meeting outcome saved successfully.', 'success');
+        closeOutcomeModal();
+        loadLeads();
+        loadMeetings();
+        loadMeetingOutcomes();
+      } catch (e) {
+        toast('❌ ' + e.message, 'error');
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = `💾 Save Outcome`;
+        }
+      }
+    }
+
+    // ─── Objection ──────────────────────────────────────
+    function addObjection(leadId, name) {
+      document.getElementById('objLeadId').value = leadId;
+      document.getElementById('objLeadName').textContent = name;
+      document.getElementById('objType').value = '';
+      document.getElementById('objNotes').value = '';
+      closeModal();
+      document.getElementById('objectionModal').classList.add('active');
+    }
+    function closeObjModal() { document.getElementById('objectionModal').classList.remove('active'); }
+    async function saveObjection() {
+      const leadId = document.getElementById('objLeadId').value;
+      const objectionType = document.getElementById('objType').value;
+      const notes = document.getElementById('objNotes').value;
+      if (!objectionType) { toast('Please select an objection type', 'error'); return; }
+      try {
+        await fetch('/api/crm/objections', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ leadId, objectionType, notes }) });
+        toast('Objection logged ✓', 'success');
+        closeObjModal();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function scheduleFollowUps(leadId) {
+      try {
+        const r = await fetch('/api/crm/follow-ups/schedule/' + leadId, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(r => r.json());
+        toast(`✓ ${r.count} follow-ups scheduled`, 'success');
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    // ─── Helpers ────────────────────────────────────────
+    function esc(s) { return (s || '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
+    function catEmoji(c) { return { hot: '🔥', warm: '⚡', cold: '❄️' }[c] || ''; }
+    function sentEmoji(s) { return { positive: '😊', neutral: '😐', negative: '😞' }[s] || ''; }
+    function fmtStatus(s) { return (s || '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()); }
+    function fmtMs(ms) {
+      const totalSec = Math.floor((Number(ms) || 0) / 1000);
+      const m = Math.floor(totalSec / 60), s = totalSec % 60;
+      return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+    function filterMeetingTranscript(inputEl) {
+      const term = inputEl.value.trim().toLowerCase();
+      const container = inputEl.closest('details').querySelector('.transcript');
+      container.querySelectorAll('.transcript-line').forEach(line => {
+        line.style.display = !term || line.textContent.toLowerCase().includes(term) ? '' : 'none';
+      });
+    }
+    async function toggleMeetingActionItem(leadId, index, done, checkboxEl) {
+      const label = checkboxEl.closest('label');
+      try {
+        await api('/leads/' + leadId + '/meeting-analysis/action-item', {
+          method: 'PATCH',
+          body: JSON.stringify({ index, done }),
+        });
+        if (label) {
+          label.style.opacity = done ? '.55' : '';
+          label.style.textDecoration = done ? 'line-through' : '';
+        }
+      } catch (e) {
+        checkboxEl.checked = !done; // revert on failure
+        toast('❌ ' + e.message, 'error');
+      }
+    }
+    function fmtUptime(sec) {
+      const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+      return `${h}h ${m}m`;
+    }
+    function fmtFollowupType(t) {
+      const map = {
+        // Week 1
+        'email-day1': '📧 Email Follow-up (Day 1)',
+        'whatsapp-day1': '💬 WhatsApp (Day 1)',
+        'ai-call-day2': '🤖 AI Follow-up Call (Day 2)',
+        'success-stories-day3': '⭐ Success Stories Email (Day 3)',
+        'success-stories-day9': '⭐ Success Stories Email (Day 9)',
+        'ai-call-day4': '🤖 AI Follow-up Call (Day 4)',
+        'email-day5': '📧 Email Follow-up (Day 5)',
+        'ai-call-day6': '🤖 AI Follow-up Call (Day 6)',
+        'counselor-reminder-day7': '👤 Counselor Reminder (Day 7)',
+        // Week 2
+        'email-day8': '📧 Email Follow-up (Day 8)',
+        'ai-call-day10': '🤖 AI Follow-up Call (Day 10)',
+        'email-day12': '📧 Email Follow-up (Day 12)',
+        'counselor-reminder-day14': '👤 Counselor Reminder (Day 14)',
+        // Week 3
+        'ai-call-week3': '🤖 AI Follow-up Call (Week 3)',
+        'success-stories-week3': '⭐ Success Stories Email (Week 3)',
+        'parent-discussion-week3': '👨‍👩‍👧 Parent Discussion (Week 3)',
+        'enrollment-reminder-week3': '🎓 Enrollment Reminder (Week 3)',
+        // Week 4
+        'ai-call-week4': '🤖 AI Follow-up Call (Week 4)',
+        'success-stories-week4': '⭐ Success Stories Email (Week 4)',
+        'program-benefits-week4': '📋 Program Benefits (Week 4)',
+        'limited-seat-week4': '⚠️ Limited Seat Reminder (Week 4)',
+        'counselor-reminder-week4': '👤 Counselor Reminder (Week 4)',
+        // Ongoing
+        'nurture-ai-call': '🤖 AI Call (Ongoing)',
+        'nurture-email': '📧 Nurture Email (Ongoing)',
+        'nurture-success-stories': '⭐ Success Stories (Ongoing)',
+        'nurture-counselor-reminder': '👤 Counselor Reminder (Ongoing)',
+        'nurture-lead-review': '🔍 Lead Review (Ongoing)',
+        // Legacy
+        'ai-call-day3': '🤖 AI Follow-up Call (Day 3)',
+        'success-stories-day5': '⭐ Success Stories Email (Day 5)',
+        'enrollment-reminder-day10': '🎓 Enrollment Reminder (Day 10)',
+      };
+      return map[t] || t;
+    }
+
+    function toggleCallHistory(chId) {
+      const panel = document.getElementById(chId);
+      const icon = document.getElementById(chId + '_icon');
+      if (!panel) return;
+      const open = panel.style.display === 'none';
+      panel.style.display = open ? 'block' : 'none';
+      if (icon) icon.textContent = open ? '▲ Hide History' : '▼ View History';
+    }
+
+    function switchFuTab(tabId, weekLabel) {
+      // Deactivate all tabs in this group
+      document.querySelectorAll(`#${tabId} .fu-tab`).forEach(btn => btn.classList.remove('active'));
+      // Hide all panels
+      const panelPrefix = tabId + '_';
+      document.querySelectorAll(`[id^="${panelPrefix}"]`).forEach(p => p.style.display = 'none');
+      // Activate selected
+      const activeBtn = [...document.querySelectorAll(`#${tabId} .fu-tab`)].find(b => b.textContent.includes(weekLabel));
+      if (activeBtn) activeBtn.classList.add('active');
+      const panel = document.getElementById(tabId + '_' + weekLabel.replace(' ', '_'));
+      if (panel) panel.style.display = 'block';
+    }
+
+    // ─── Mobile Menu ────────────────────────────────────
+    // Alias for showView — used in counselor dashboard buttons
+    function switchView(name) { showView(name); }
+    function toggleMobileMenu() {
+      const sidebar = document.querySelector('.sidebar');
+      const app = document.querySelector('.app');
+      sidebar.classList.toggle('mobile-open');
+      app.classList.toggle('sidebar-open');
+    }
+
+    function closeMobileMenu() {
+      const sidebar = document.querySelector('.sidebar');
+      const app = document.querySelector('.app');
+      sidebar.classList.remove('mobile-open');
+      app.classList.remove('sidebar-open');
+    }
+
+    // Close mobile menu when clicking nav items
+    document.querySelectorAll('.nav a').forEach(link => {
+      link.addEventListener('click', closeMobileMenu);
+    });
+
+    // Close mobile menu when clicking outside on mobile
+    document.addEventListener('click', (e) => {
+      const sidebar = document.querySelector('.sidebar');
+      const toggle = document.querySelector('.menu-toggle');
+      if (window.innerWidth <= 768 && sidebar?.classList.contains('mobile-open')) {
+        if (!sidebar.contains(e.target) && !toggle.contains(e.target)) {
+          closeMobileMenu();
+        }
+      }
+    });
+
+    // Improve touch handling
+    document.addEventListener('touchstart', () => { }, { passive: true });
+
+    // ─── Bulk Import Logic ─────────────────────────────
+    let _parsedLeads = [];
+
+    function openImportLeadsModal(isCampaign = false) {
+      document.getElementById('importLeadsModal').style.display = 'flex';
+      document.getElementById('il_campaignId').value = (isCampaign && typeof CLP_CAMPAIGN_ID !== 'undefined' && CLP_CAMPAIGN_ID) ? CLP_CAMPAIGN_ID : '';
+      
+      // Reset UI
+      document.getElementById('il_fileInput').value = '';
+      document.getElementById('il_previewArea').style.display = 'none';
+      document.getElementById('il_previewThead').innerHTML = '';
+      document.getElementById('il_previewTbody').innerHTML = '';
+      document.getElementById('il_stats').innerHTML = '';
+      document.getElementById('il_importBtn').disabled = true;
+      _parsedLeads = [];
+    }
+
+    function closeImportLeadsModal() {
+      document.getElementById('importLeadsModal').style.display = 'none';
+    }
+
+    function handleImportFileSelect(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const data = evt.target.result;
+        try {
+          const workbook = XLSX.read(data, { type: 'binary' });
+          const firstSheet = workbook.SheetNames[0];
+          const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], { defval: "" });
+          
+          if (!rows || rows.length === 0) {
+            toast('File is empty or could not be parsed.', 'error');
+            return;
+          }
+          
+          processImportRows(rows);
+        } catch(err) {
+          toast('Error reading file. Make sure it is a valid Excel or CSV file.', 'error');
+          console.error(err);
+        }
+      };
+      reader.readAsBinaryString(file);
+    }
+
+    function processImportRows(rows) {
+      _parsedLeads = [];
+      let validCount = 0;
+      let invalidCount = 0;
+      
+      // Auto-detect columns (fuzzy match)
+      const firstRow = rows[0] || {};
+      const keys = Object.keys(firstRow);
+      
+      const findKey = (search) => {
+        search = search.toLowerCase();
+        return keys.find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '').includes(search)) || null;
+      };
+
+      const map = {
+        fullName: findKey('name') || findKey('full'),
+        email: findKey('email'),
+        phone: findKey('phone') || findKey('mobile'),
+        grade: findKey('grade') || findKey('class'),
+        courseInterest: findKey('program') || findKey('course') || findKey('interest'),
+        parentName: findKey('parentname') || findKey('guardian'),
+        parentEmail: findKey('parentemail'),
+      };
+
+      if (!map.fullName && !map.email) {
+        toast('Could not identify Name or Email columns. Please check your headers.', 'error');
+        return;
+      }
+
+      let tbodyHtml = '';
+      
+      rows.forEach((row, i) => {
+        const lead = {
+          fullName: row[map.fullName] ? String(row[map.fullName]).trim() : '',
+          email: row[map.email] ? String(row[map.email]).trim() : '',
+          phone: row[map.phone] ? String(row[map.phone]).trim() : '',
+          grade: row[map.grade] ? String(row[map.grade]).trim() : '',
+          courseInterest: row[map.courseInterest] ? String(row[map.courseInterest]).trim() : '',
+          parentName: row[map.parentName] ? String(row[map.parentName]).trim() : '',
+          parentEmail: row[map.parentEmail] ? String(row[map.parentEmail]).trim() : '',
+          status: 'new'
+        };
+
+        const errors = [];
+        if (!lead.fullName) errors.push('Missing Name');
+        if (!lead.email) errors.push('Missing Email');
+        if (!lead.phone) errors.push('Missing Phone');
+
+        const isValid = errors.length === 0;
+        if (isValid) {
+          validCount++;
+          _parsedLeads.push(lead);
+        } else {
+          invalidCount++;
+        }
+        
+        // Show up to 50 rows in preview for performance
+        if (i < 50) {
+          tbodyHtml += `<tr style="${isValid ? '' : 'background:rgba(239,68,68,0.05)'}">
+            <td>${isValid ? '✅' : '❌'}</td>
+            <td>${esc(lead.fullName) || '—'}</td>
+            <td>${esc(lead.email) || '—'}</td>
+            <td>${esc(lead.phone) || '—'}</td>
+            <td>${isValid ? '' : `<span style="color:var(--hot);font-size:11px">${errors.join(', ')}</span>`}</td>
+          </tr>`;
+        }
+      });
+
+      if (rows.length > 50) {
+        tbodyHtml += `<tr><td colspan="5" style="text-align:center;color:var(--muted);font-style:italic">...and ${rows.length - 50} more rows not shown in preview</td></tr>`;
+      }
+
+      document.getElementById('il_previewThead').innerHTML = `<tr><th>Status</th><th>Name</th><th>Email</th><th>Phone</th><th>Errors</th></tr>`;
+      document.getElementById('il_previewTbody').innerHTML = tbodyHtml;
+      document.getElementById('il_previewArea').style.display = 'flex';
+      
+      document.getElementById('il_stats').innerHTML = `<span style="color:var(--brand)">${validCount} Valid</span> / <span style="color:var(--hot)">${invalidCount} Invalid</span>`;
+      
+      const btn = document.getElementById('il_importBtn');
+      if (validCount > 0) {
+        btn.disabled = false;
+        btn.textContent = `🚀 Import ${validCount} Valid Leads`;
+      } else {
+        btn.disabled = true;
+        btn.textContent = '🚀 Import Valid Leads';
+      }
+    }
+
+    async function submitImportLeads() {
+      const btn = document.getElementById('il_importBtn');
+      if (!btn || btn.disabled) return;
+      
+      const campaignId = document.getElementById('il_campaignId').value;
+      const payload = {
+        leads: _parsedLeads,
+        campaignId: campaignId || null
+      };
+
+      btn.disabled = true;
+      btn.textContent = 'Importing...';
+      
+      try {
+        const data = await api('/leads/bulk', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        
+        if (data.error) throw new Error(data.error);
+        
+        let msg = `✅ Successfully imported ${data.successCount} leads.`;
+        if (data.failedCount > 0) {
+          msg += `\n❌ ${data.failedCount} failed to import (usually duplicates).`;
+        }
+        
+        toast(msg, data.failedCount === 0 ? 'success' : 'warn');
+        closeImportLeadsModal();
+        
+        if (data.createdLeadIds && data.createdLeadIds.length > 0 && typeof leadTargetClassId !== 'undefined' && leadTargetClassId) {
+             try {
+                 await api('/classes/' + leadTargetClassId + '/students', {
+                    method: 'POST',
+                    body: JSON.stringify({ leadIds: data.createdLeadIds })
+                 });
+                 if (typeof loadClassStudents === 'function') await loadClassStudents();
+             } catch(err) {
+                 toast('❌ Could not assign to class: ' + err.message, 'error');
+             }
+             leadTargetClassId = null;
+        }
+
+        // Refresh grids
+        if (campaignId && typeof refreshCampaignLeads === 'function') {
+          refreshCampaignLeads();
+        } else {
+          loadLeads();
+        }
+      } catch(err) {
+        toast('❌ Import error: ' + err.message, 'error');
+        btn.disabled = false;
+        btn.textContent = `🚀 Import ${_parsedLeads.length} Valid Leads`;
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //   BILLING & COST ANALYTICS
+    // ═══════════════════════════════════════════════════════════════════════
+    const blState = { page: 1, pageSize: 25, sortBy: 'date', sortDir: 'desc' };
+    const blCharts = {};            // Chart.js instances (destroyed before re-create)
+    let _blFiltersReady = false;
+    let _blSearchTimer = null;
+
+    function blIsAdmin() { return (window._currentUser?.role || '') === 'admin'; }
+
+    function blMoney(n, cur) {
+      const v = Number(n) || 0;
+      const sym = (cur === 'USD' || !cur) ? '$' : '';
+      const suffix = (cur && cur !== 'USD') ? ' ' + cur : '';
+      const dp = Math.abs(v) >= 1 ? 2 : 4;
+      return sym + v.toFixed(dp) + suffix;
+    }
+    function blFmtDuration(sec) {
+      sec = Number(sec) || 0;
+      const m = Math.floor(sec / 60), s = sec % 60;
+      return m > 0 ? `${m}m ${s}s` : `${s}s`;
+    }
+    function blStatusBadge(status) {
+      const s = (status || '').toLowerCase();
+      let cls = 'other', label = status || '—';
+      if (s === 'completed') { cls = 'answered'; label = 'Answered'; }
+      else if (['no-answer', 'busy', 'failed'].includes(s)) { cls = 'failed'; }
+      else if (s === 'voicemail') { cls = 'voicemail'; }
+      return `<span class="bl-badge ${cls}">${esc(label)}</span>`;
+    }
+
+    // Chart theming (works on the app's dark surface; light-safe fallback colors)
+    const BL_PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#ef4444', '#84cc16', '#f97316', '#14b8a6', '#a855f7', '#eab308'];
+    function blAxisColor() { return '#94a3b8'; }
+    function blGridColor() { return 'rgba(148,163,184,.12)'; }
+    function blBaseOpts(extra = {}) {
+      return Object.assign({
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: blAxisColor(), font: { size: 11 } } } },
+        scales: {
+          x: { ticks: { color: blAxisColor(), font: { size: 10 } }, grid: { color: blGridColor() } },
+          y: { ticks: { color: blAxisColor(), font: { size: 10 } }, grid: { color: blGridColor() }, beginAtZero: true },
+        },
+      }, extra);
+    }
+    function blDestroyChart(key) { if (blCharts[key]) { blCharts[key].destroy(); delete blCharts[key]; } }
+    function blMakeChart(key, canvasId, config) {
+      const el = document.getElementById(canvasId);
+      if (!el || typeof Chart === 'undefined') return;
+      blDestroyChart(key);
+      blCharts[key] = new Chart(el.getContext('2d'), config);
+    }
+
+    async function loadBilling() {
+      // Role gating: hide counselor-only widgets for non-admins
+      const admin = blIsAdmin();
+      ['blCounselorFilterWrap', 'blCounselorChartCard', 'blCounselorTableCard'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.style.display = admin ? '' : 'none';
+      });
+      document.querySelectorAll('.bl-col-counselor').forEach(el => { el.style.display = admin ? '' : 'none'; });
+
+      // Historical import is admin-only
+      const importBtn = document.getElementById('blImportBtn');
+      if (importBtn) importBtn.style.display = admin ? '' : 'none';
+      if (admin) blLoadBackfillStatus();
+
+      await blPopulateFilters();
+      await Promise.all([blLoadAnalytics(), loadBillingTable()]);
+    }
+
+    async function blLoadBackfillStatus() {
+      const bar = document.getElementById('blBackfillBar');
+      if (!bar) return;
+      try {
+        const s = await api('/billing/backfill/status');
+        bar.style.display = '';
+        if (s.running) {
+          bar.innerHTML = `⏳ <strong>Historical import running…</strong> creating billing records for existing calls.`;
+        } else if (s.done) {
+          const im = s.summary || {};
+          bar.innerHTML = `✅ <strong>Historical import complete.</strong> ${s.historicalRecords} imported · ${s.totalRecords} total billing records.` +
+            (im.finalized != null ? ` (${im.finalized} priced, ${im.pending || 0} pending)` : '');
+        } else {
+          bar.innerHTML = `📥 Historical calls have not been imported yet. Click <strong>Import Historical Calls</strong> to fetch actual Twilio charges for all existing calls.`;
+        }
+      } catch (e) {
+        // 503 (table missing) or 403 — show a hint only for real errors
+        if (/not set up/i.test(e.message)) { bar.style.display = ''; bar.innerHTML = `⚠️ ${esc(e.message)}`; }
+        else bar.style.display = 'none';
+      }
+    }
+
+    async function blImportHistorical() {
+      const btn = document.getElementById('blImportBtn');
+      if (!confirm('Import billing for ALL existing calls? This fetches the actual Twilio price for each past call. It runs once and skips anything already imported.')) return;
+      try {
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ Importing…'; }
+        await api('/billing/backfill', { method: 'POST' });
+        toast('📥 Historical import started — records will appear live as they are priced.', 'success');
+        blLoadBackfillStatus();
+      } catch (e) {
+        toast('❌ ' + e.message, 'error');
+        if (btn) { btn.disabled = false; btn.textContent = '⤓ Import Historical Calls'; }
+      }
+    }
+
+    function blOnBackfillEvent(msg) {
+      const bar = document.getElementById('blBackfillBar');
+      const btn = document.getElementById('blImportBtn');
+      if (bar) {
+        bar.style.display = '';
+        if (msg.done) {
+          bar.innerHTML = `✅ <strong>Historical import complete.</strong> ${msg.created || 0} created (${msg.finalized || 0} priced, ${msg.pending || 0} pending), ${msg.skipped || 0} skipped.`;
+          if (btn) { btn.disabled = false; btn.textContent = '⤓ Import Historical Calls'; }
+          // Refresh the whole view now that rows exist
+          if ((document.querySelector('.view.active')?.id || '') === 'view-billing') loadBilling();
+        } else {
+          bar.innerHTML = `⏳ <strong>Importing…</strong> ${msg.processed || 0}/${msg.total || 0} calls (${msg.finalized || 0} priced).`;
+        }
+      }
+    }
+
+    async function blPopulateFilters() {
+      if (_blFiltersReady) return;
+      try {
+        if (!CAMPAIGNS.length) { try { const d = await api('/campaigns'); CAMPAIGNS = d.campaigns || []; } catch (_) {} }
+        const cSel = document.getElementById('blCampaign');
+        if (cSel) cSel.innerHTML = '<option value="">All campaigns</option>' +
+          CAMPAIGNS.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+        if (blIsAdmin()) {
+          try {
+            const counselors = await api('/counselors');
+            const sel = document.getElementById('blCounselor');
+            if (sel) sel.innerHTML = '<option value="">All counselors</option>' +
+              (counselors || []).map(c => `<option value="${c.id}">${esc(c.fullName || c.email)}</option>`).join('');
+          } catch (_) {}
+        }
+        _blFiltersReady = true;
+      } catch (_) {}
+    }
+
+    function blResetFilters() {
+      ['blFrom', 'blTo', 'blCampaign', 'blCounselor', 'blStatus', 'blCostMin', 'blCostMax', 'blSearch']
+        .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+      blApplyFilters();
+    }
+    function blDebouncedSearch() { clearTimeout(_blSearchTimer); _blSearchTimer = setTimeout(blApplyFilters, 350); }
+    function blApplyFilters() { blState.page = 1; loadBillingTable(); }
+
+    function blFilterQuery() {
+      const p = new URLSearchParams();
+      const g = id => (document.getElementById(id)?.value || '').trim();
+      if (g('blFrom')) p.set('dateFrom', g('blFrom'));
+      if (g('blTo')) p.set('dateTo', g('blTo') + 'T23:59:59');
+      if (g('blCampaign')) p.set('campaignId', g('blCampaign'));
+      if (g('blCounselor')) p.set('counselorId', g('blCounselor'));
+      if (g('blStatus')) p.set('status', g('blStatus'));
+      if (g('blCostMin')) p.set('costMin', g('blCostMin'));
+      if (g('blCostMax')) p.set('costMax', g('blCostMax'));
+      if (g('blSearch')) p.set('search', g('blSearch'));
+      return p;
+    }
+
+    function blSort(col) {
+      if (blState.sortBy === col) blState.sortDir = blState.sortDir === 'asc' ? 'desc' : 'asc';
+      else { blState.sortBy = col; blState.sortDir = 'desc'; }
+      loadBillingTable();
+    }
+    function blGoPage(p) { blState.page = p; loadBillingTable(); }
+    function blSetPageSize(v) { blState.pageSize = parseInt(v) || 25; blState.page = 1; loadBillingTable(); }
+
+    async function loadBillingTable() {
+      const tbody = document.getElementById('blTableBody');
+      if (!tbody) return;
+      const colspan = blIsAdmin() ? 11 : 10;
+      tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center;padding:24px;color:var(--muted)">Loading…</td></tr>`;
+      try {
+        const p = blFilterQuery();
+        p.set('page', blState.page); p.set('pageSize', blState.pageSize);
+        p.set('sortBy', blState.sortBy); p.set('sortDir', blState.sortDir);
+        const res = await api('/billing?' + p.toString());
+        blRenderRows(res.rows || []);
+        blRenderPager(res.total || 0, res.page || 1, res.pageSize || blState.pageSize);
+        const cnt = document.getElementById('blCount');
+        if (cnt) cnt.textContent = `${res.total || 0} record${(res.total || 0) === 1 ? '' : 's'}`;
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center;padding:24px;color:var(--danger)">${esc(e.message)}</td></tr>`;
+      }
+    }
+
+    function blRenderRows(rows) {
+      const tbody = document.getElementById('blTableBody');
+      const admin = blIsAdmin();
+      const colspan = admin ? 11 : 10;
+      if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center;padding:24px;color:var(--muted)">No billing records match your filters.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = rows.map(r => {
+        const priceCell = r.twilio_price != null
+          ? `<strong>${blMoney(r.twilio_price, r.currency)}</strong>`
+          : `<span class="bl-badge pending">pending</span>`;
+        return `<tr>
+          <td data-label="Date">${r.created_at ? new Date(r.created_at).toLocaleString() : '—'}</td>
+          <td data-label="Student"><strong>${esc(r.student_name || '—')}</strong></td>
+          <td data-label="Parent">${esc(r.parent_name || '—')}</td>
+          <td data-label="Campaign">${esc(r.campaign_name || 'Demo / Unassigned')}</td>
+          ${admin ? `<td class="bl-col-counselor" data-label="Counselor">${esc(r.counselor_id ? (r.counselor_id.slice(0, 8) + '…') : '—')}</td>` : ''}
+          <td data-label="Phone" style="font-family:monospace;font-size:12px">${esc(r.phone_number || r.to_number || '—')}</td>
+          <td data-label="Duration">${blFmtDuration(r.duration_seconds)}</td>
+          <td data-label="Cost">${priceCell}</td>
+          <td data-label="Status">${blStatusBadge(r.call_status)}</td>
+          <td data-label="Call SID" style="font-family:monospace;font-size:11px;color:var(--muted)">${esc((r.call_sid || '').slice(0, 12))}…</td>
+          <td data-label=""><button class="bl-pill-btn" onclick="openBillingDetail('${r.id}')">Details</button></td>
+        </tr>`;
+      }).join('');
+    }
+
+    function blRenderPager(total, page, pageSize) {
+      const pager = document.getElementById('blPager');
+      if (!pager) return;
+      const pages = Math.max(1, Math.ceil(total / pageSize));
+      const from = total ? (page - 1) * pageSize + 1 : 0;
+      const to = Math.min(total, page * pageSize);
+      pager.innerHTML = `
+        <div style="font-size:12px;color:var(--muted)">Showing ${from}–${to} of ${total}</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="bl-pill-btn" ${page <= 1 ? 'disabled' : ''} onclick="blGoPage(1)">« First</button>
+          <button class="bl-pill-btn" ${page <= 1 ? 'disabled' : ''} onclick="blGoPage(${page - 1})">‹ Prev</button>
+          <span style="font-size:12px;color:var(--muted)">Page ${page} / ${pages}</span>
+          <button class="bl-pill-btn" ${page >= pages ? 'disabled' : ''} onclick="blGoPage(${page + 1})">Next ›</button>
+          <button class="bl-pill-btn" ${page >= pages ? 'disabled' : ''} onclick="blGoPage(${pages})">Last »</button>
+          <select class="bl-input" style="padding:4px 8px" onchange="blSetPageSize(this.value)">
+            ${[25, 50, 100, 200].map(n => `<option value="${n}" ${n === pageSize ? 'selected' : ''}>${n}/pg</option>`).join('')}
+          </select>
+        </div>`;
+    }
+
+    async function blLoadAnalytics() {
+      try {
+        const a = await api('/billing/analytics');
+        _blReports = a.reports || { daily: [], weekly: [], monthly: [] };
+        blRenderSummary(a.summary || {});
+        blRenderCharts(a.charts || {});
+        blRenderCampaignBilling(a.byCampaign || []);
+        if (blIsAdmin()) blRenderCounselorBilling(a.byCounselor || []);
+        blRenderReport();
+      } catch (e) {
+        const s = document.getElementById('blSummary');
+        if (s) s.innerHTML = `<div class="bl-card" style="grid-column:1/-1;color:var(--danger)">${esc(e.message)}</div>`;
+      }
+    }
+
+    function blCard(label, val, sub) {
+      return `<div class="bl-card"><div class="bl-card-label">${label}</div><div class="bl-card-val">${val}</div>${sub ? `<div class="bl-card-sub">${sub}</div>` : ''}</div>`;
+    }
+    function blRenderSummary(s) {
+      const cur = s.currency || 'USD';
+      const el = document.getElementById('blSummary');
+      if (!el) return;
+      el.innerHTML =
+        blCard('Cost Today', blMoney(s.costToday, cur)) +
+        blCard('Cost This Week', blMoney(s.costWeek, cur)) +
+        blCard('Cost This Month', blMoney(s.costMonth, cur)) +
+        blCard('Cost This Year', blMoney(s.costYear, cur)) +
+        blCard('Lifetime Cost', blMoney(s.lifetimeCost, cur)) +
+        blCard('Avg Cost / Call', blMoney(s.avgCostPerCall, cur)) +
+        blCard('Avg Cost / Minute', blMoney(s.avgCostPerMinute, cur)) +
+        blCard('Total Call Minutes', (s.totalMinutes || 0).toLocaleString()) +
+        blCard('Total Calls', (s.totalCalls || 0).toLocaleString(), s.pendingCount ? `${s.pendingCount} pending price` : '') +
+        blCard('Answered', (s.answeredCalls || 0).toLocaleString()) +
+        blCard('Failed', (s.failedCalls || 0).toLocaleString()) +
+        blCard('Voicemail', (s.voicemailCalls || 0).toLocaleString());
+    }
+
+    function blRenderCharts(c) {
+      const spendOpts = blBaseOpts();
+      // Daily spend (line)
+      blMakeChart('daily', 'blChartDaily', {
+        type: 'line',
+        data: { labels: (c.daily || []).map(d => d.label), datasets: [{ label: 'Cost', data: (c.daily || []).map(d => d.cost), borderColor: BL_PALETTE[0], backgroundColor: 'rgba(59,130,246,.15)', fill: true, tension: .3, pointRadius: 2 }] },
+        options: spendOpts,
+      });
+      // Weekly spend (bar)
+      blMakeChart('weekly', 'blChartWeekly', {
+        type: 'bar',
+        data: { labels: (c.weekly || []).map(d => d.label), datasets: [{ label: 'Cost', data: (c.weekly || []).map(d => d.cost), backgroundColor: BL_PALETTE[1] }] },
+        options: blBaseOpts(),
+      });
+      // Monthly spend (bar)
+      blMakeChart('monthly', 'blChartMonthly', {
+        type: 'bar',
+        data: { labels: (c.monthly || []).map(d => d.label), datasets: [{ label: 'Cost', data: (c.monthly || []).map(d => d.cost), backgroundColor: BL_PALETTE[3] }] },
+        options: blBaseOpts(),
+      });
+      // Cost by campaign (horizontal bar)
+      blMakeChart('campaign', 'blChartCampaign', {
+        type: 'bar',
+        data: { labels: (c.costByCampaign || []).map(d => d.label), datasets: [{ label: 'Cost', data: (c.costByCampaign || []).map(d => d.totalCost), backgroundColor: (c.costByCampaign || []).map((_, i) => BL_PALETTE[i % BL_PALETTE.length]) }] },
+        options: blBaseOpts({ indexAxis: 'y' }),
+      });
+      // Cost by counselor (horizontal bar) — admin only
+      if (blIsAdmin()) {
+        blMakeChart('counselor', 'blChartCounselor', {
+          type: 'bar',
+          data: { labels: (c.costByCounselor || []).map(d => d.label), datasets: [{ label: 'Cost', data: (c.costByCounselor || []).map(d => d.totalCost), backgroundColor: (c.costByCounselor || []).map((_, i) => BL_PALETTE[i % BL_PALETTE.length]) }] },
+          options: blBaseOpts({ indexAxis: 'y' }),
+        });
+      }
+      // Cost by lead (horizontal bar)
+      blMakeChart('lead', 'blChartLead', {
+        type: 'bar',
+        data: { labels: (c.costByLead || []).map(d => d.label), datasets: [{ label: 'Cost', data: (c.costByLead || []).map(d => d.totalCost), backgroundColor: BL_PALETTE[4] }] },
+        options: blBaseOpts({ indexAxis: 'y' }),
+      });
+      // Cost vs Duration (scatter)
+      blMakeChart('costDur', 'blChartCostDuration', {
+        type: 'scatter',
+        data: { datasets: [{ label: 'Calls', data: (c.costVsDuration || []), backgroundColor: BL_PALETTE[0] }] },
+        options: blBaseOpts({
+          scales: {
+            x: { title: { display: true, text: 'Duration (s)', color: blAxisColor() }, ticks: { color: blAxisColor() }, grid: { color: blGridColor() } },
+            y: { title: { display: true, text: 'Cost', color: blAxisColor() }, ticks: { color: blAxisColor() }, grid: { color: blGridColor() }, beginAtZero: true },
+          },
+        }),
+      });
+      // Calls vs Cost + Avg cost/call (combo)
+      const ccLabels = (c.callsVsCost || []).map(d => d.label);
+      const avgMap = {}; (c.avgCostPerCall || []).forEach(d => { avgMap[d.label] = d.value; });
+      blMakeChart('callsCost', 'blChartCallsCost', {
+        type: 'bar',
+        data: {
+          labels: ccLabels,
+          datasets: [
+            { type: 'bar', label: 'Calls', data: (c.callsVsCost || []).map(d => d.calls), backgroundColor: 'rgba(59,130,246,.5)', yAxisID: 'y' },
+            { type: 'line', label: 'Cost', data: (c.callsVsCost || []).map(d => d.cost), borderColor: BL_PALETTE[1], yAxisID: 'y1', tension: .3, pointRadius: 2 },
+            { type: 'line', label: 'Avg $/Call', data: ccLabels.map(l => avgMap[l] || 0), borderColor: BL_PALETTE[2], borderDash: [4, 3], yAxisID: 'y1', tension: .3, pointRadius: 0 },
+          ],
+        },
+        options: blBaseOpts({
+          scales: {
+            x: { ticks: { color: blAxisColor(), font: { size: 10 } }, grid: { color: blGridColor() } },
+            y: { position: 'left', ticks: { color: blAxisColor() }, grid: { color: blGridColor() }, beginAtZero: true, title: { display: true, text: 'Calls', color: blAxisColor() } },
+            y1: { position: 'right', ticks: { color: blAxisColor() }, grid: { drawOnChartArea: false }, beginAtZero: true, title: { display: true, text: 'Cost', color: blAxisColor() } },
+          },
+        }),
+      });
+    }
+
+    function blRenderCampaignBilling(list) {
+      const tb = document.getElementById('blCampaignBody');
+      if (!tb) return;
+      if (!list.length) { tb.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>`; return; }
+      tb.innerHTML = list.map(g => `<tr>
+        <td><strong>${esc(g.label)}</strong></td>
+        <td>${g.totalCalls}</td><td>${g.totalMinutes}</td><td>${blFmtDuration(g.avgDuration)}</td>
+        <td><strong>${blMoney(g.totalCost)}</strong></td><td>${blMoney(g.avgCostPerCall)}</td><td>${blMoney(g.avgCostPerMinute)}</td>
+      </tr>`).join('');
+    }
+    function blRenderCounselorBilling(list) {
+      const tb = document.getElementById('blCounselorBody');
+      if (!tb) return;
+      if (!list.length) { tb.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>`; return; }
+      tb.innerHTML = list.map(g => `<tr>
+        <td><strong>${esc(g.label)}</strong></td>
+        <td>${g.totalCalls}</td><td>${g.totalMinutes}</td>
+        <td><strong>${blMoney(g.totalCost)}</strong></td><td>${blMoney(g.avgCostPerCall)}</td><td>${blFmtDuration(g.avgDuration)}</td>
+      </tr>`).join('');
+    }
+
+    let _blReports = { daily: [], weekly: [], monthly: [] };
+    function blRenderReport() {
+      const gran = document.getElementById('blReportGran')?.value || 'daily';
+      const rows = _blReports[gran] || [];
+      const tb = document.getElementById('blReportBody');
+      if (!tb) return;
+      if (!rows.length) { tb.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>`; return; }
+      tb.innerHTML = rows.slice().reverse().map(r => `<tr>
+        <td>${esc(r.label)}</td><td>${r.calls}</td><td>${r.minutes}</td><td><strong>${blMoney(r.cost)}</strong></td>
+      </tr>`).join('');
+    }
+
+    async function openBillingDetail(id) {
+      try {
+        const d = await api('/billing/' + id);
+        const b = d.billing || {};
+        document.getElementById('blDetailName').textContent = b.student_name || 'Call Detail';
+        document.getElementById('blDetailMeta').textContent =
+          `${b.campaign_name || 'Demo / Unassigned'} · ${b.created_at ? new Date(b.created_at).toLocaleString() : ''}`;
+
+        let body = `
+          <div class="section-title">💵 Billing</div>
+          <div class="detail-grid">
+            <div class="detail-cell"><div class="lbl">Twilio Cost</div><div class="val">${b.twilio_price != null ? '<strong>' + blMoney(b.twilio_price, b.currency) + '</strong>' : '<span class="bl-badge pending">pending</span>'}</div></div>
+            <div class="detail-cell"><div class="lbl">Currency</div><div class="val">${esc(b.currency || 'USD')}</div></div>
+            <div class="detail-cell"><div class="lbl">Billing Status</div><div class="val">${esc(b.billing_status || '—')}</div></div>
+            <div class="detail-cell"><div class="lbl">Call Status</div><div class="val">${blStatusBadge(b.call_status)}</div></div>
+            <div class="detail-cell"><div class="lbl">Duration</div><div class="val">${blFmtDuration(b.duration_seconds)} (${b.duration_minutes || 0} min billed)</div></div>
+            <div class="detail-cell"><div class="lbl">Per-Minute Rate</div><div class="val">${b.price_per_minute != null ? blMoney(b.price_per_minute, b.currency) : '—'}</div></div>
+            <div class="detail-cell"><div class="lbl">Direction</div><div class="val">${esc(b.direction || '—')}</div></div>
+            <div class="detail-cell"><div class="lbl">Source</div><div class="val">${b.source === 'historical-import' ? '<span class="bl-badge other">Historical Import</span>' : '<span class="bl-badge answered">Live</span>'}</div></div>
+            ${b.recording_sid ? `<div class="detail-cell"><div class="lbl">Recording SID</div><div class="val" style="font-family:monospace;font-size:11px">${esc(b.recording_sid)}</div></div>` : ''}
+          </div>
+
+          <div class="section-title">📇 Call Information</div>
+          <div class="detail-grid">
+            <div class="detail-cell"><div class="lbl">Student</div><div class="val">${esc(b.student_name || '—')}</div></div>
+            <div class="detail-cell"><div class="lbl">Parent</div><div class="val">${esc(b.parent_name || '—')}</div></div>
+            <div class="detail-cell"><div class="lbl">Phone</div><div class="val" style="font-family:monospace">${esc(b.phone_number || '—')}</div></div>
+            <div class="detail-cell"><div class="lbl">From → To</div><div class="val" style="font-family:monospace;font-size:12px">${esc(b.from_number || '—')} → ${esc(b.to_number || '—')}</div></div>
+            <div class="detail-cell"><div class="lbl">Campaign</div><div class="val">${esc(b.campaign_name || 'Demo / Unassigned')}</div></div>
+            <div class="detail-cell"><div class="lbl">Call SID</div><div class="val" style="font-family:monospace;font-size:11px">${esc(b.call_sid || '—')}</div></div>
+          </div>`;
+
+        if (d.timeline && d.timeline.length) {
+          body += `<div class="section-title">🕓 Timeline</div><div style="margin-bottom:12px">` +
+            d.timeline.map(t => `<div style="display:flex;gap:10px;font-size:13px;padding:4px 0"><span style="color:var(--muted);min-width:150px">${t.at ? new Date(t.at).toLocaleString() : '—'}</span><span>${esc(t.event)}</span></div>`).join('') +
+            `</div>`;
+        }
+
+        if (d.aiSummary) body += `<div class="section-title">🧠 AI Summary</div><div class="summary" style="white-space:pre-wrap;font-size:13px;line-height:1.6">${esc(d.aiSummary)}</div>`;
+
+        if (d.recordingUrl === 'FAILED') {
+          body += `<div class="section-title">🎙️ Recording</div><div style="color:#ef4444;font-size:13px">⚠️ Recording failed — Twilio could not capture audio.</div>`;
+        } else if (d.recordingUrl && d.leadId != null && d.attemptIndex != null) {
+          body += `<div class="section-title">🎙️ Recording</div>
+            <audio controls preload="none" data-rec="/api/leads/${d.leadId}/recording/${d.attemptIndex}" style="width:100%;border-radius:8px"></audio>`;
+        }
+
+        if (d.transcript) {
+          body += `<div class="section-title">📄 Transcript</div>
+            <div class="transcript" style="padding:12px;border-radius:8px;background:var(--bg);line-height:1.7;font-size:13px">` +
+            d.transcript.split('\n').map(line => {
+              if (line.startsWith('AI:')) return `<div style="margin-bottom:4px"><span style="color:#60a5fa;font-weight:600">AI:</span> ${esc(line.slice(3).trim())}</div>`;
+              if (line.startsWith('Caller:')) return `<div style="margin-bottom:4px"><span style="color:#34d399;font-weight:600">Caller:</span> ${esc(line.slice(7).trim())}</div>`;
+              return line.trim() ? `<div style="margin-bottom:4px;color:var(--muted)">${esc(line)}</div>` : '';
+            }).join('') + `</div>`;
+        }
+
+        document.getElementById('blDetailBody').innerHTML = body;
+        document.getElementById('billingDetailModal').classList.add('active');
+        hydrateRecordings();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+    function closeBillingDetail() { document.getElementById('billingDetailModal').classList.remove('active'); }
+
+    async function exportBilling(format) {
+      try {
+        const p = blFilterQuery();
+        const res = await fetch('/api/billing/export?' + p.toString(), {
+          headers: { 'Authorization': 'Bearer ' + (window._authToken || '') },
+        });
+        if (!res.ok) throw new Error('Export failed (' + res.status + ')');
+        const csvText = await res.text();
+        const stamp = new Date().toISOString().slice(0, 10);
+
+        if (format === 'csv') {
+          const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob); a.download = `billing-${stamp}.csv`; a.click();
+          URL.revokeObjectURL(a.href);
+          return;
+        }
+        const wb = XLSX.read(csvText, { type: 'string' });
+        if (format === 'xlsx') {
+          XLSX.writeFile(wb, `billing-${stamp}.xlsx`);
+          return;
+        }
+        if (format === 'pdf') {
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const aoa = XLSX.utils.sheet_to_json(ws, { header: 1 });
+          const [head, ...rows] = aoa;
+          const { jsPDF } = window.jspdf;
+          const doc = new jsPDF({ orientation: 'landscape' });
+          doc.setFontSize(13); doc.text('Billing Report — ' + stamp, 14, 14);
+          doc.autoTable({ head: [head], body: rows, startY: 20, styles: { fontSize: 6 }, headStyles: { fillColor: [59, 130, 246] } });
+          doc.save(`billing-${stamp}.pdf`);
+        }
+      } catch (e) { toast('Export error: ' + e.message, 'error'); }
+    }
+
+    // Boot — auth required
+    (async function boot() {
+      await initAuth();
+
+      // Show skeleton UI immediately so user sees the page structure
+      const leadsTable = document.getElementById('leadsTable');
+      if (leadsTable) {
+        leadsTable.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--muted);font-size:14px">
+          <div style="display:flex;align-items:center;justify-content:center;gap:10px">
+            <div style="width:18px;height:18px;border:2px solid var(--brand);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite"></div>
+            Loading leads...
+          </div>
+        </td></tr>`;
+      }
+
+      // Load all primary data in parallel — do not await one before starting the next
+      const loader = document.getElementById('globalLoader');
+      if (loader) loader.classList.add('active');
+      try {
+        await Promise.all([
+          loadLeads(),
+          loadMeetings(),
+          loadCallbacks().catch(() => {}),
+        ]);
+      } finally {
+        if (loader) loader.classList.remove('active');
+      }
+
+      // Real-time EventSource Updates
+      let _sseRetry = 1000;
+      function connectSSE() {
+        try {
+          // EventSource can't send Authorization headers — pass the JWT as a query param.
+          const url = '/api/crm/updates/stream?token=' + encodeURIComponent(window._authToken || '');
+          const sse = new EventSource(url);
+          sse.onopen = () => { _sseRetry = 1000; };
+          sse.onmessage = (e) => {
+            let msg = {};
+            try { msg = JSON.parse(e.data); } catch (_) {}
+            const activeView = document.querySelector('.view.active')?.id || '';
+
+            if (msg.type === 'billing-backfill') {
+              if (typeof blOnBackfillEvent === 'function') blOnBackfillEvent(msg);
+              return;
+            }
+            if (msg.type === 'billing-updated') {
+              // Live-refresh billing wherever it's visible
+              if (activeView === 'view-billing') loadBilling();
+              return;
+            }
+            // Default: targeted refresh for lead/meeting updates
+            loadLeads();
+            loadMeetings();
+            if (activeView === 'view-billing') loadBilling();
+          };
+          sse.onerror = () => {
+            sse.close();
+            // Exponential backoff before reconnecting (max 30s)
+            setTimeout(connectSSE, Math.min(_sseRetry *= 2, 30000));
+          };
+        } catch (err) {
+          console.error('Real-time EventSource failed; falling back to 30s polling', err);
+        }
+      }
+      connectSSE();
+
+      // Background polling — only refresh if tab is visible to avoid unnecessary DB load
+      setInterval(() => {
+        if (!document.hidden) {
+          loadLeads();
+          loadMeetings().catch(() => {});
+          loadCallbacks().catch(() => {});
+        }
+      }, 30000);
+    })();
+  

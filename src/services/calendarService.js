@@ -267,7 +267,7 @@ class CalendarService {
       `Format Pref   : ${q.preferredFormat || 'not provided'}`,
       `Lead Score    : ${lead.leadScore}/100 (${lead.leadCategory?.toUpperCase()})`,
       ``,
-      `🎥 Video Meeting Link: ${meetLink}`,
+      `📞 Format: Phone Call (We will call you at ${lead.phone})`,
       `   (No login required — just enter your name and join)`,
       ``,
       `Booked by Admissions Team, AI Admissions Counselor.`,

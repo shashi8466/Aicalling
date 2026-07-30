@@ -65,7 +65,7 @@ class MeetingService {
       }
 
       // 3. Update the CRM timeline/notes
-      const timelineEntry = `\n[Timeline - ${new Date().toLocaleString()}] Meeting scheduled for ${est.format('MMMM Do [at] h:mm A z')}. format: Video Meeting. Link: ${meetingData.meetLink || ''}`;
+      const timelineEntry = `\n[Timeline - ${new Date().toLocaleString()}] Meeting scheduled for ${est.format('MMMM Do [at] h:mm A z')}. format: Phone Call. Link: ${meetingData.meetLink || ''}`;
       lead.notes = (lead.notes || '') + timelineEntry;
 
       // 4. Update Lead fields
