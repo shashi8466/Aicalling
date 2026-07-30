@@ -2,14 +2,15 @@ const Imap = require('imap-simple');
 const simpleParser = require('mailparser').simpleParser;
 const logger = require('../logger');
 const poller = require('../jobs/emailCallbackPoller');
+const cfg = require('../config');
 
 const imapConfig = {
   imap: {
-    user: process.env.SMTP_USER || 'antratestpreppundits@gmail.com',
-    password: process.env.GMAIL_APP_PASSWORD,
-    host: 'imap.gmail.com',
-    port: 993,
-    tls: true,
+    user: cfg.imap.user,
+    password: cfg.imap.password,
+    host: cfg.imap.host,
+    port: cfg.imap.port,
+    tls: cfg.imap.tls,
     authTimeout: 30000,
     tlsOptions: { rejectUnauthorized: false }
   }
@@ -18,8 +19,8 @@ const imapConfig = {
 let connection = null;
 
 async function connect() {
-  if (!process.env.GMAIL_APP_PASSWORD) {
-    logger.warn('GMAIL_APP_PASSWORD not set in .env. Email IMAP polling is disabled.');
+  if (!cfg.imap.password) {
+    logger.warn('IMAP password not set. Email IMAP polling is disabled.');
     return;
   }
   try {

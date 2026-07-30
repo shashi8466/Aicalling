@@ -36,6 +36,15 @@ module.exports = {
     from:   process.env.SMTP_FROM || 'Info@testpreppundits.com',
   },
 
+  // IMAP email polling configuration
+  imap: {
+    host:     process.env.IMAP_HOST || process.env.SMTP_HOST || 'imap.gmail.com',
+    port:     parseInt(process.env.IMAP_PORT) || 993,
+    user:     process.env.IMAP_USER || process.env.SMTP_USER || 'antratestpreppundits@gmail.com',
+    password: process.env.IMAP_PASSWORD || process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || '',
+    tls:      process.env.IMAP_TLS !== 'false',
+  },
+
   google: {
     clientEmail: process.env.GOOGLE_CLIENT_EMAIL,
     privateKey:  (process.env.GOOGLE_PRIVATE_KEY || '')
