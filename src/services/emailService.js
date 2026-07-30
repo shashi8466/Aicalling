@@ -127,11 +127,6 @@ class EmailService {
   }
 
   async sendMeetingConfirmation(lead, overrideCampaignType = null) {
-    if (!lead.email) {
-      const err = `Lead ${lead._id} missing email address`;
-      logger.error(err);
-      return { ok: false, error: err };
-    }
     if (!lead.meeting?.scheduledAt) {
       const err = `Lead ${lead._id} missing meeting.scheduledAt`;
       logger.error(err);
@@ -160,14 +155,20 @@ class EmailService {
 
     const counselorEmail = cfg.company.counselorEmail || cfg.brevo.fromEmail;
 
+    let resStudent = { ok: false, error: 'No student email' };
+    
     // Send email to contact (and CC parent if not business)
-    const resStudent = await this._send({
-      to:      lead.email,
-      cc:      isBusiness ? undefined : lead.parentEmail,
-      subject,
-      html,
-      attachment,
-    });
+    if (lead.email) {
+      resStudent = await this._send({
+        to:      lead.email,
+        cc:      isBusiness ? undefined : lead.parentEmail,
+        subject,
+        html,
+        attachment,
+      });
+    } else {
+      logger.warn(`Skipping student confirmation email for lead ${lead._id} because they have no email address, but will still send counselor copy.`);
+    }
 
     // Send email to counselor independently
     if (counselorEmail && counselorEmail !== lead.email) {
