@@ -132,6 +132,39 @@ class SheetsService {
     }
   }
 
+  /**
+   * Sync lead details edited in the CRM back to Google Sheets.
+   * Columns A–G: Name, Grade, Email, Phone, Parent Name, Parent Email, Course Interest
+   */
+  async updateLeadFields(rowIndex, lead = {}) {
+    if (!rowIndex) return;
+    try {
+      const tabName = await this.getTabName();
+      const data = [];
+
+      if (lead.fullName !== undefined)       data.push({ range: `'${tabName}'!A${rowIndex}`, values: [[lead.fullName]] });
+      if (lead.grade !== undefined)          data.push({ range: `'${tabName}'!B${rowIndex}`, values: [[lead.grade]] });
+      if (lead.email !== undefined)          data.push({ range: `'${tabName}'!C${rowIndex}`, values: [[lead.email]] });
+      if (lead.phone !== undefined)          data.push({ range: `'${tabName}'!D${rowIndex}`, values: [[lead.phone]] });
+      if (lead.parentName !== undefined)     data.push({ range: `'${tabName}'!E${rowIndex}`, values: [[lead.parentName]] });
+      if (lead.parentEmail !== undefined)    data.push({ range: `'${tabName}'!F${rowIndex}`, values: [[lead.parentEmail]] });
+      if (lead.courseInterest !== undefined) data.push({ range: `'${tabName}'!G${rowIndex}`, values: [[lead.courseInterest]] });
+
+      if (data.length) {
+        await this.sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId: this.spreadsheetId,
+          requestBody: {
+            valueInputOption: 'USER_ENTERED',
+            data,
+          },
+        });
+        logger.info(`Sheet row ${rowIndex} lead fields updated from CRM edit`);
+      }
+    } catch (err) {
+      logger.error('Sheets.updateLeadFields error', { msg: err.message, rowIndex });
+    }
+  }
+
   /** Ensure header row has AI columns labelled */
   async ensureHeaders() {
     try {

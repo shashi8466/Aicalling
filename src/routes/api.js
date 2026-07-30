@@ -857,6 +857,22 @@ router.patch('/leads/:id', async (req, res) => {
     allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
     const lead = await Lead.findByIdAndUpdate(req.params.id, update, { new: true });
     if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+    // Sync updated fields back to Google Sheet if sheetRowIndex is present
+    if (lead.sheetRowIndex) {
+      sheetsSvc.updateLeadFields(lead.sheetRowIndex, lead).catch(err => {
+        logger.error('Failed to sync lead edit back to Google Sheet', err);
+      });
+    }
+
+    // Broadcast SSE update to all open dashboard clients
+    try {
+      const crmRouter = require('./crm');
+      if (crmRouter.broadcastUpdate) {
+        crmRouter.broadcastUpdate('lead-updated', { leadId: lead._id });
+      }
+    } catch (_) {}
+
     res.json(lead);
   } catch(e) {
     res.status(500).json({ error: e.message });

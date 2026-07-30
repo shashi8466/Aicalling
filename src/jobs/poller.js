@@ -50,6 +50,15 @@ async function processRow(row) {
     }
 
     if (exists) {
+      // If the lead was edited in the CRM recently (within 5 minutes), preserve CRM fields and sync to Sheet
+      const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
+      const isRecentlyUpdated = exists.updatedAt && new Date(exists.updatedAt) > fiveMinsAgo;
+
+      if (isRecentlyUpdated) {
+        sheetsSvc.updateLeadFields(row.sheetRowIndex, exists).catch(() => {});
+        return 'skipped';
+      }
+
       let changed = false;
       const fieldsToSync = ['fullName','grade','email','phone','parentName','parentEmail','courseInterest'];
       for (const f of fieldsToSync) {
