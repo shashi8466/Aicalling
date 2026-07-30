@@ -1477,6 +1477,17 @@ async function _finaliseCall(lead, session, callSid, reason) {
         lead.meeting = freshLead.meeting;
       }
       
+      // Send confirmation email asynchronously upon call finalization to guarantee delivery
+      setImmediate(async () => {
+        try {
+          const campaign = session?.campaign || campaignReg.getCampaign(lead.campaignId, lead);
+          await emailSvc.sendMeetingConfirmation(lead, campaign?.type);
+          logger.info(`✅ Post-call finalization confirmation email dispatched for ${lead.fullName}`);
+        } catch (e) {
+          logger.error('Finalization email send failed', { msg: e.message });
+        }
+      });
+
       // Notify dashboards immediately
       try {
         const crmRouter = require('./crm');

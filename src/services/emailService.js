@@ -133,6 +133,13 @@ class EmailService {
       return { ok: false, error: err };
     }
 
+    // Deduplication check: if confirmation email was sent within the last 2 minutes, skip to avoid duplicates
+    const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000);
+    if (lead.meeting?.confirmationSentAt && new Date(lead.meeting.confirmationSentAt) > twoMinsAgo) {
+      logger.info(`Confirmation email already sent recently for lead ${lead._id}, skipping duplicate.`);
+      return { ok: true, skipped: true };
+    }
+
     const campaignSvc = require('./campaignService');
     const resolved = await campaignSvc.resolveForLead(lead);
     const campaignType = overrideCampaignType || resolved.type;
@@ -171,13 +178,19 @@ class EmailService {
     }
 
     // Send email to counselor independently
-    if (counselorEmail && counselorEmail !== lead.email) {
+    if (counselorEmail) {
       await this._send({
         to:      counselorEmail,
         subject: `[Counselor Copy] ${subject}`,
         html,
         attachment,
       }).catch(e => logger.error('Counselor notification copy failed', e));
+    }
+
+    // Mark confirmation email sent timestamp on lead
+    if (lead.meeting) {
+      lead.meeting.confirmationSentAt = new Date().toISOString();
+      await lead.save().catch(() => {});
     }
 
     return resStudent;
