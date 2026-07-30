@@ -1022,6 +1022,11 @@ router.post('/meetings', async (req, res) => {
     await lead.save();
 
     logger.info(`Meeting created manually for lead ${lead.fullName} (${lead._id})`);
+    
+    // Send confirmation email asynchronously so we don't block the API response
+    const emailSvc = require('../services/emailService');
+    emailSvc.sendMeetingConfirmation(lead).catch(e => logger.error('Manual booking email failed', e));
+
     res.status(201).json(lead);
   } catch (e) {
     logger.error('Meeting create error', { msg: e.message });
@@ -1064,6 +1069,10 @@ router.patch('/meetings/:leadId', async (req, res) => {
     if (courseInterest !== undefined) lead.courseInterest = courseInterest;
     if (grade !== undefined) lead.grade = grade;
     await lead.save();
+
+    // Send updated confirmation email
+    const emailSvc = require('../services/emailService');
+    emailSvc.sendMeetingConfirmation(lead).catch(e => logger.error('Manual reschedule email failed', e));
 
     res.json(lead);
   } catch (e) {
