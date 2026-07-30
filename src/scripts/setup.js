@@ -39,17 +39,19 @@ async function run() {
     console.log(`${FAIL}  OpenAI        → ${e.message}`);
   }
 
-  // 3 ─ Brevo (send a test to the from-address itself)
+  // 3 ─ SMTP Email
   try {
-    const res = await axios.get('https://api.brevo.com/v3/account', {
-      headers: { 'api-key': cfg.brevo.apiKey, 'Accept': 'application/json' },
-      timeout: 8000,
+    const nodemailer = require('nodemailer');
+    const transporter = nodemailer.createTransport({
+      host: cfg.smtp.host,
+      port: cfg.smtp.port,
+      secure: cfg.smtp.secure,
+      auth: { user: cfg.smtp.user, pass: cfg.smtp.pass },
     });
-    const plan = res.data.plan?.[0]?.type || 'unknown';
-    console.log(`${OK}  Brevo Email   → account: ${res.data.email} | plan: ${plan}`);
+    await transporter.verify();
+    console.log(`${OK}  SMTP Email    → Connected to ${cfg.smtp.host} as ${cfg.smtp.user}`);
   } catch (e) {
-    const detail = e.response?.data?.message || e.message;
-    console.log(`${FAIL}  Brevo Email   → ${detail}`);
+    console.log(`${FAIL}  SMTP Email    → ${e.message}`);
   }
 
   // 4 ─ Google Sheets

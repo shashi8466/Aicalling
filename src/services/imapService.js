@@ -5,7 +5,7 @@ const poller = require('../jobs/emailCallbackPoller');
 
 const imapConfig = {
   imap: {
-    user: process.env.BREVO_FROM_EMAIL || 'antratestpreppundits@gmail.com',
+    user: process.env.SMTP_USER || 'antratestpreppundits@gmail.com',
     password: process.env.GMAIL_APP_PASSWORD,
     host: 'imap.gmail.com',
     port: 993,

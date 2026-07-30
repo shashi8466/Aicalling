@@ -26,11 +26,14 @@ module.exports = {
     provider: process.env.LLM_PROVIDER || 'openai',
   },
 
-  // Brevo transactional email (no SMTP needed — REST API only)
-  brevo: {
-    apiKey:    process.env.BREVO_API_KEY,
-    fromEmail: process.env.BREVO_FROM_EMAIL || 'Info@testpreppundits.com',
-    fromName:  process.env.BREVO_FROM_NAME  || 'Admissions Team – Test Prep Pundits',
+  // SMTP email configuration
+  smtp: {
+    host:   process.env.SMTP_HOST,
+    port:   parseInt(process.env.SMTP_PORT) || 465,
+    secure: process.env.SMTP_SECURE === 'true',
+    user:   process.env.SMTP_USER,
+    pass:   process.env.SMTP_PASS,
+    from:   process.env.SMTP_FROM || 'Info@testpreppundits.com',
   },
 
   google: {
@@ -76,7 +79,7 @@ module.exports = {
 
   company: {
     counselorName:  process.env.COUNSELOR_NAME  || 'Admissions Team',
-    counselorEmail: process.env.COUNSELOR_EMAIL || process.env.BREVO_FROM_EMAIL || '',
+    counselorEmail: process.env.COUNSELOR_EMAIL || process.env.SMTP_FROM || process.env.SMTP_USER || '',
     counselorPhone: process.env.COUNSELOR_PHONE || '',
     website:        process.env.COMPANY_WEBSITE || 'https://testpreppundits.com',
   },

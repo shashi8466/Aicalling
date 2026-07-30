@@ -1,14 +1,10 @@
 /**
- * Email Service — powered by Brevo (formerly Sendinblue)
- * Uses Brevo Transactional Email API (REST, no SMTP config needed).
- * Docs: https://developers.brevo.com/reference/sendtransacemail
+ * Email Service — powered by Nodemailer (SMTP)
  */
-const axios  = require('axios');
+const nodemailer = require('nodemailer');
 const moment = require('moment-timezone');
 const cfg    = require('../config');
 const logger = require('../logger');
-
-const BREVO_URL = 'https://api.brevo.com/v3/smtp/email';
 
 // Parent-notification campaigns → email content. Used by sendParentCampaignEmail
 // so a summary email is always sent after a parent AI call, whether answered or not.
@@ -40,6 +36,18 @@ const PARENT_TEMPLATES = {
 };
 
 class EmailService {
+
+  constructor() {
+    this.transporter = nodemailer.createTransport({
+      host: cfg.smtp.host,
+      port: cfg.smtp.port,
+      secure: cfg.smtp.secure,
+      auth: {
+        user: cfg.smtp.user,
+        pass: cfg.smtp.pass,
+      },
+    });
+  }
 
   // ── Public senders ───────────────────────────────────────────────────
 
@@ -118,8 +126,9 @@ class EmailService {
       ].join('\r\n');
 
       return {
-        name: 'consultation.ics',
+        filename: 'consultation.ics',
         content: Buffer.from(ics).toString('base64'),
+        encoding: 'base64',
       };
     } catch (e) {
       logger.error('Failed to generate ICS attachment', e);
@@ -155,9 +164,7 @@ class EmailService {
     const attachment = this._buildIcsAttachment(lead, t);
 
     // Subject
-    const subject = isBusiness
-      ? `Business Partnership Consultation Confirmed – ${lead.fullName}`
-      : `✅ Consultation Confirmed – ${t}`;
+    const counselorEmail = cfg.company.counselorEmail || cfg.smtp.from;
 
     // Send email to contact (and CC parent if not business)
     const resStudent = await this._send({
@@ -168,52 +175,12 @@ class EmailService {
       attachment,
     });
 
-    // Notify assigned counselor/admin
-    const counselorEmail = cfg.company.counselorEmail || cfg.brevo.fromEmail;
+    // Send email to counselor independently
     if (counselorEmail && counselorEmail !== lead.email) {
-      const adminSubject = isBusiness
-        ? `📅 Assigned Counselor Copy: Business Partnership Consultation Confirmed – ${lead.fullName} – ${t}`
-        : `📅 Assigned Counselor Copy: Consultation Confirmed – ${lead.fullName} – ${t}`;
-
-      const adminHtml = isBusiness
-        ? `
-          <div style="font-family:sans-serif;padding:20px;color:#333;">
-            <h2 style="color:#1a3c6e;">Business Partner Meeting Notification</h2>
-            <p>A Business Partnership meeting has been successfully booked with <strong>${lead.fullName}</strong>.</p>
-            <div style="background:#eff6ff;padding:15px;border-radius:8px;border-left:4px solid #2563eb;margin:15px 0;line-height:1.6;">
-              <strong>Business Contact Name:</strong> ${lead.fullName}<br>
-              <strong>Company Name:</strong> ${lead.companyName || lead.qualification?.companyName || 'HGI'}<br>
-              <strong>Business Campaign:</strong> Business Partner Opportunity<br>
-              <strong>Email:</strong> ${lead.email}<br>
-              <strong>Phone:</strong> ${lead.phone}<br>
-              <strong>Date & Time:</strong> ${t}<br>
-              <strong>Time Zone:</strong> Eastern Time (ET)<br>
-              <strong>Meeting Link (LiveKit Guest):</strong> <a href="${lead.meeting?.meetLink}">${lead.meeting?.meetLink}</a><br>
-              <strong>Host Join Link:</strong> <a href="${lead.meeting?.hostMeetLink || lead.meeting?.meetLink}">${lead.meeting?.hostMeetLink || lead.meeting?.meetLink}</a>
-            </div>
-            <p style="font-size:12px;color:#888;">This is a notification copy sent directly to you as the Business Development Manager.</p>
-          </div>
-        `
-        : `
-          <div style="font-family:sans-serif;padding:20px;color:#333;">
-            <h2 style="color:#1a3c6e;">Assigned Counselor Notification</h2>
-            <p>A meeting has been successfully booked with <strong>${lead.fullName}</strong>.</p>
-            <div style="background:#eff6ff;padding:15px;border-radius:8px;border-left:4px solid #2563eb;margin:15px 0;line-height:1.6;">
-              <strong>Student:</strong> ${lead.fullName}<br>
-              <strong>Email:</strong> ${lead.email}<br>
-              <strong>Phone:</strong> ${lead.phone}<br>
-              <strong>Date & Time:</strong> ${t}<br>
-              <strong>Meeting Link (LiveKit Guest):</strong> <a href="${lead.meeting?.meetLink}">${lead.meeting?.meetLink}</a><br>
-              <strong>Counselor Join Link:</strong> <a href="${lead.meeting?.hostMeetLink || lead.meeting?.meetLink}">${lead.meeting?.hostMeetLink || lead.meeting?.meetLink}</a>
-            </div>
-            <p style="font-size:12px;color:#888;">This is a notification copy sent directly to you as the counselor.</p>
-          </div>
-        `;
-
-      this._send({
+      await this._send({
         to:      counselorEmail,
-        subject: adminSubject,
-        html:    adminHtml,
+        subject: `[Counselor Copy] ${subject}`,
+        html,
         attachment,
       }).catch(e => logger.error('Counselor notification copy failed', e));
     }
@@ -359,13 +326,107 @@ ${t.help ? `<p>${t.help}</p>` : ''}
     const html = await this._wrap(body, lead);
     const attachment = this._buildIcsAttachment(lead, t);
 
-    return this._send({
+    // Send to student
+    const resStudent = await this._send({
       to:      lead.email,
       cc:      lead.parentEmail,
       subject,
       html,
       attachment,
     });
+
+    // Send to counselor independently
+    const counselorEmail = cfg.company.counselorEmail || cfg.smtp.from;
+    if (counselorEmail && counselorEmail !== lead.email) {
+      await this._send({
+        to:      counselorEmail,
+        subject: `[Counselor Copy] ${subject}`,
+        html,
+        attachment,
+      }).catch(e => logger.error('Counselor reminder copy failed', e));
+    }
+
+    return resStudent;
+  }
+
+  async sendMeetingRescheduled(lead, oldTimeStr = null) {
+    if (!lead.email) return { ok: false, error: `Lead ${lead._id} missing email address` };
+    if (!lead.meeting?.scheduledAt) return { ok: false, error: `Lead ${lead._id} missing meeting.scheduledAt` };
+    
+    const t = moment(lead.meeting.scheduledAt)
+      .tz('America/New_York')
+      .format('dddd, MMMM Do [at] h:mm A [ET]');
+      
+    const subject = `🔄 Consultation Rescheduled – ${t}`;
+    const body = `
+      <h2>Meeting Rescheduled 🔄</h2>
+      <p>Hi ${lead.parentName || lead.fullName},</p>
+      <p>Your free admissions consultation has been successfully rescheduled${oldTimeStr ? ' from ' + oldTimeStr : ''}. Here are the updated details:</p>
+      <div class="box" style="background:#eff6ff;padding:15px;border-radius:8px;border-left:4px solid #2563eb;margin:15px 0;line-height:1.6;">
+        📅 <strong>Updated Date & Time:</strong> ${t}<br>
+        🎥 Format: Video Meeting<br><br>
+        ${lead.meeting?.meetLink ? `<a href="${lead.meeting.meetLink}#config.prejoinPageEnabled=true" style="color:#2563eb;font-weight:700">🔗 Click to Join Video Meeting</a>` : ''}
+      </div>
+      <p>Need to reschedule again? Just reply to this email at least 24 hours in advance.</p>
+    `;
+    
+    const html = await this._wrap(body, lead);
+    const attachment = this._buildIcsAttachment(lead, t);
+    
+    const resStudent = await this._send({
+      to:      lead.email,
+      cc:      lead.parentEmail,
+      subject,
+      html,
+      attachment,
+    });
+
+    const counselorEmail = cfg.company.counselorEmail || cfg.smtp.from;
+    if (counselorEmail && counselorEmail !== lead.email) {
+      await this._send({
+        to:      counselorEmail,
+        subject: `[Counselor Copy] ${subject}`,
+        html,
+        attachment,
+      }).catch(e => logger.error('Counselor rescheduled copy failed', e));
+    }
+
+    return resStudent;
+  }
+
+  async sendMeetingCancelled(lead, reason = null) {
+    if (!lead.email) return { ok: false, error: `Lead ${lead._id} missing email address` };
+    
+    const subject = `❌ Consultation Cancelled – ${lead.fullName}`;
+    const body = `
+      <h2>Meeting Cancelled ❌</h2>
+      <p>Hi ${lead.parentName || lead.fullName},</p>
+      <p>Your free admissions consultation has been cancelled.</p>
+      ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
+      <div class="box" style="background:#fef2f2;padding:15px;border-radius:8px;border-left:4px solid #ef4444;margin:15px 0;line-height:1.6;">
+        <p>If you'd like to rebook at a more convenient time, please reply to this email and we'll be happy to assist you.</p>
+      </div>
+    `;
+    
+    const html = await this._wrap(body, lead);
+    
+    const resStudent = await this._send({
+      to:      lead.email,
+      cc:      lead.parentEmail,
+      subject,
+      html,
+    });
+
+    const counselorEmail = cfg.company.counselorEmail || cfg.smtp.from;
+    if (counselorEmail && counselorEmail !== lead.email) {
+      await this._send({
+        to:      counselorEmail,
+        subject: `[Counselor Copy] ${subject}`,
+        html,
+      }).catch(e => logger.error('Counselor cancelled copy failed', e));
+    }
+
+    return resStudent;
   }
 
   async sendSuccessStories(lead) {
@@ -471,15 +532,9 @@ ${t.help ? `<p>${t.help}</p>` : ''}
 
   // ── Core Brevo API call ──────────────────────────────────────────────
 
-  async _send({ to, cc, subject, html, attachment }) {
-    // Validate required config
-    if (!cfg.brevo.apiKey) {
-      const err = 'BREVO_API_KEY not configured in environment';
-      logger.error(err);
-      return { ok: false, error: err };
-    }
-    if (!cfg.brevo.fromEmail) {
-      const err = 'BREVO_FROM_EMAIL not configured in environment';
+  async _send({ to, cc, bcc, subject, html, attachment }) {
+    if (!cfg.smtp.host || !cfg.smtp.user || !cfg.smtp.pass) {
+      const err = 'SMTP configuration missing in environment';
       logger.error(err);
       return { ok: false, error: err };
     }
@@ -495,37 +550,32 @@ ${t.help ? `<p>${t.help}</p>` : ''}
       logger.error(err);
       return { ok: false, error: err };
     }
-
-    const toArr = [{ email: to }];
-    const ccArr = cc ? [{ email: cc }] : undefined;
-
-    const payload = {
-      sender:  { name: cfg.brevo.fromName, email: cfg.brevo.fromEmail },
-      to:      toArr,
-      cc:      ccArr,
-      subject,
-      htmlContent: html,
-    };
-
-    if (attachment) {
-      payload.attachment = Array.isArray(attachment) ? attachment : [attachment];
+    if (bcc && !bcc.includes('@')) {
+      const err = `Invalid bcc email: "${bcc}"`;
+      logger.error(err);
+      return { ok: false, error: err };
     }
 
     try {
-      const res = await axios.post(BREVO_URL, payload, {
-        headers: {
-          'api-key':      cfg.brevo.apiKey,
-          'Content-Type': 'application/json',
-          'Accept':       'application/json',
-        },
-        timeout: 10_000,
-      });
-      const msgId = res.data.messageId || res.data.messageIds?.[0] || '—';
-      logger.info(`Email sent via Brevo → ${to}  "${subject}"  [${msgId}]`);
-      return { ok: true, messageId: msgId };
-    } catch (err) {
-      const detail = err.response?.data?.message || err.message;
-      logger.error('Brevo email failed', { to, subject, detail, status: err.response?.status });
+      const mailOptions = {
+        from: cfg.smtp.from,
+        to,
+        cc,
+        bcc,
+        subject,
+        html,
+      };
+
+      if (attachment) {
+        mailOptions.attachments = Array.isArray(attachment) ? attachment : [attachment];
+      }
+
+      const info = await this.transporter.sendMail(mailOptions);
+      logger.info(`Email sent via SMTP → ${to}  "${subject}"  [${info.messageId}]`);
+      return { ok: true, messageId: info.messageId };
+    } catch (error) {
+      const detail = error.message || error;
+      logger.error('SMTP email failed', { to, subject, detail });
       return { ok: false, error: detail };
     }
   }
