@@ -164,6 +164,10 @@ class EmailService {
     const attachment = this._buildIcsAttachment(lead, t);
 
     // Subject
+    const subject = isBusiness
+      ? `Business Partnership Consultation Confirmed – ${lead.fullName}`
+      : `✅ Consultation Confirmed – ${t}`;
+
     const counselorEmail = cfg.company.counselorEmail || cfg.smtp.from;
 
     // Send email to contact (and CC parent if not business)
