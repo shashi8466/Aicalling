@@ -533,7 +533,6 @@ ${t.help ? `<p>${t.help}</p>` : ''}
       return { ok: false, error: 'No to address' };
     }
 
-    try {
     // 1. Try Gmail SMTP if GMAIL_APP_PASSWORD is available
     if (cfg.gmail?.appPassword) {
       try {
