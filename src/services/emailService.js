@@ -163,12 +163,13 @@ class EmailService {
     const counselorEmail = cfg.company.counselorEmail || cfg.brevo.fromEmail;
 
     let resStudent = { ok: false, error: 'No student email' };
+    const parentCc = (!isBusiness && lead.parentEmail && lead.parentEmail.toLowerCase() !== (lead.email || '').toLowerCase()) ? lead.parentEmail : undefined;
     
-    // Send email to contact (and CC parent if not business)
+    // Send email to contact (and CC parent if different from student email)
     if (lead.email) {
       resStudent = await this._send({
         to:      lead.email,
-        cc:      isBusiness ? undefined : lead.parentEmail,
+        cc:      parentCc,
         subject,
         html,
         attachment,
