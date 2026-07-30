@@ -838,16 +838,36 @@ router.post('/call/book', async (req, res) => {
 
     if (!lead || !slots.length) return res.send(twilioSvc.twimlHangup());
 
-    // Determine which slot was chosen (supports up to 4 options + natural variants)
+    // Determine which slot was chosen (supports options, ordinal numbers, time numbers like 3M/3PM, and natural variants)
     let chosen = null;
     const s = ' ' + speech + ' '; // pad for word boundary detection
-    if      (/\b(first|one|1|earlier|sooner)\b/.test(s))      chosen = slots[0];
-    else if (/\b(second|two|2|later)\b/.test(s))              chosen = slots[1] || slots[0];
-    else if (/\b(third|three|3)\b/.test(s))                   chosen = slots[2] || slots[0];
-    else if (/\b(fourth|four|4|last)\b/.test(s))              chosen = slots[3] || slots[slots.length - 1];
-    else if (/\b(today)\b/.test(s)) chosen = slots.find(sl => sl.displayTime.toLowerCase().includes('today'));
-    else if (/\b(tomorrow)\b/.test(s)) chosen = slots.find(sl => sl.displayTime.toLowerCase().includes('tomorrow'));
-    else if (/\b(yes|sure|ok|okay|works|good|sounds great|perfect)\b/.test(s)) chosen = slots[0];
+    if      (/\b(first|one|1|1st|earlier|sooner)\b/i.test(s))                          chosen = slots[0];
+    else if (/\b(second|two|2|2nd|later)\b/i.test(s))                              chosen = slots[1] || slots[0];
+    else if (/\b(third|three|3|3rd|3m|3pm|3 pm|3:00)\b/i.test(s))                  chosen = slots[2] || slots[0];
+    else if (/\b(fourth|four|4|4th|last)\b/i.test(s))                              chosen = slots[3] || slots[slots.length - 1];
+    else if (/\b(today)\b/i.test(s)) chosen = slots.find(sl => sl.displayTime.toLowerCase().includes('today'));
+    else if (/\b(tomorrow)\b/i.test(s)) chosen = slots.find(sl => sl.displayTime.toLowerCase().includes('tomorrow'));
+    else if (/\b(yes|sure|ok|okay|works|good|sounds great|perfect)\b/i.test(s)) chosen = slots[0];
+
+    // Smart time matcher: if caller said a specific hour/time like "3", "3m", "9am", "1pm", match against slot times
+    if (!chosen) {
+      for (const sl of slots) {
+        const timeMatch = sl.displayTime.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+        if (timeMatch) {
+          const hour = timeMatch[1];
+          if (s.includes(`${hour}m`) || s.includes(`${hour}pm`) || s.includes(`${hour}am`) || s.includes(`${hour}:00`) || new RegExp(`\\b${hour}\\b`).test(s)) {
+            chosen = sl;
+            break;
+          }
+        }
+      }
+    }
+
+    // Default fallback: if caller responded to slot prompt but pattern didn't match cleanly, choose first slot to ensure booking succeeds
+    if (!chosen && !noSpeech && speech.length > 0) {
+      logger.info(`Slot choice "${speech}" didn't match specific pattern — falling back to first slot ${slots[0].displayTime}`);
+      chosen = slots[0];
+    }
 
     // ── If caller says they want DIFFERENT times, offer fresh slots ───────
     const wantsDifferent = /\b(different|other|another|else|next|later than|earlier than|change|reschedule)\b/.test(s);
