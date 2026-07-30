@@ -207,8 +207,8 @@ async function boot() {
 
     // 3. HTTP server
     await new Promise((resolve, reject) => {
-      const server = app.listen(cfg.server.port, () => {
-        logger.info(`🚀 Agent listening on http://localhost:${cfg.server.port}`);
+      const server = app.listen(cfg.server.port, '0.0.0.0', () => {
+        logger.info(`🚀 Agent listening on port ${cfg.server.port} (0.0.0.0)`);
         resolve();
       });
       // Handle listen errors (e.g. port already in use) gracefully instead of
