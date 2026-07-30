@@ -528,16 +528,59 @@ ${t.help ? `<p>${t.help}</p>` : ''}
     });
   }
 
-  // ── Core Brevo API call ──────────────────────────────────────────────
+  // ── Core API/SMTP call ──────────────────────────────────────────────
 
   async _send({ to, cc, bcc, subject, html, attachment }) {
-    if (!cfg.brevo.apiKey) {
-      const err = 'BREVO_API_KEY missing in environment';
-      logger.error(err);
-      return { ok: false, error: err };
+    if (!to) {
+      logger.error('Email failed: No "to" address provided.');
+      return { ok: false, error: 'No to address' };
     }
 
     try {
+      // If the sender is a Gmail account and they provided an app password, use Nodemailer
+      // to bypass DMARC/spoofing policies that cause Brevo to silently drop the emails.
+      if (cfg.brevo.fromEmail.toLowerCase().includes('@gmail.com') && cfg.gmail?.appPassword) {
+        const nodemailer = require('nodemailer');
+        const transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: {
+            user: cfg.brevo.fromEmail,
+            pass: cfg.gmail.appPassword,
+          },
+        });
+
+        const mailOptions = {
+          from: `"${cfg.brevo.fromName}" <${cfg.brevo.fromEmail}>`,
+          to,
+          subject,
+          html,
+          replyTo: cfg.brevo.fromEmail,
+        };
+
+        if (cc && cc.includes('@')) mailOptions.cc = cc;
+        if (bcc && bcc.includes('@')) mailOptions.bcc = bcc;
+        
+        if (attachment) {
+          const attArray = Array.isArray(attachment) ? attachment : [attachment];
+          mailOptions.attachments = attArray.map(att => ({
+            filename: att.name,
+            content: Buffer.from(att.content, 'base64'),
+            contentType: 'text/calendar',
+          }));
+        }
+
+        const info = await transporter.sendMail(mailOptions);
+        logger.info(`Email sent via Gmail SMTP to ${to} (Message ID: ${info.messageId})`);
+        return { ok: true, data: info };
+      }
+
+      // Fallback to Brevo API
+      if (!cfg.brevo.apiKey) {
+        const err = 'BREVO_API_KEY missing in environment';
+        logger.error(err);
+        return { ok: false, error: err };
+      }
+
       const payload = {
         sender: { email: cfg.brevo.fromEmail, name: cfg.brevo.fromName },
         to: [{ email: to }],

@@ -90,6 +90,10 @@ module.exports = {
     website:        process.env.COMPANY_WEBSITE || 'https://testpreppundits.com',
   },
 
+  gmail: {
+    appPassword: process.env.GMAIL_APP_PASSWORD || null,
+  },
+
   call: {
     maxAttempts:       parseInt(process.env.CALL_MAX_ATTEMPTS)       || 3,
     retryDelayMinutes: parseInt(process.env.CALL_RETRY_DELAY_MINUTES) || 60,
