@@ -297,24 +297,14 @@ ${t.help ? `<p>${t.help}</p>` : ''}
       body = `
         <h2>See you in 1 Hour! ⏰</h2>
         <p>Hi ${lead.parentName || lead.fullName}! This is a friendly reminder that your free admissions consultation is starting in 1 hour.</p>
-        <div class="box">
-          📞 Format: Phone Call<br>
-          ⏱️ Duration: 10 minutes<br><br>
-          📱 Our Admissions Team will call you at your scheduled consultation time using the phone number you provided during registration.<br>
-          Please keep your phone nearby and available during your scheduled consultation.
-        </div>
+        ${this._meetingDetailsBox(t)}
       `;
     } else if (reminderType === '10m') {
-      subject = `🚨 Starting in 10 Mins: Join Your Consultation – ${t}`;
+      subject = `🚨 Starting in 10 Mins: Your Consultation – ${t}`;
       body = `
         <h2>Starting in 10 Minutes! 🚨</h2>
         <p>Hi ${lead.parentName || lead.fullName}! We are ready for you. Your free admissions consultation is starting in 10 minutes.</p>
-        <div class="box">
-          📞 Format: Phone Call<br>
-          ⏱️ Duration: 10 minutes<br><br>
-          📱 Our Admissions Team will call you at your scheduled consultation time using the phone number you provided during registration.<br>
-          Please keep your phone nearby and available during your scheduled consultation.
-        </div>
+        ${this._meetingDetailsBox(t)}
       `;
     }
 
@@ -357,15 +347,7 @@ ${t.help ? `<p>${t.help}</p>` : ''}
       <h2>Meeting Rescheduled 🔄</h2>
       <p>Hi ${lead.parentName || lead.fullName},</p>
       <p>Your free admissions consultation has been successfully rescheduled${oldTimeStr ? ' from ' + oldTimeStr : ''}. Here are the updated details:</p>
-      <div class="box" style="background:#eff6ff;padding:15px;border-radius:8px;border-left:4px solid #2563eb;margin:15px 0;line-height:1.6;">
-        📅 <strong>Updated Date & Time:</strong> ${t}<br>
-        📞 Format: Phone Call<br>
-        ⏱️ Duration: 10 minutes<br>
-        👨‍🏫 Counselor: Admissions Team<br><br>
-        📱 Our Admissions Team will call you at your scheduled consultation time using the phone number you provided during registration.<br>
-        Please keep your phone nearby and available during your scheduled consultation.
-      </div>
-      <p>Need to reschedule again? Just reply to this email at least 24 hours in advance.</p>
+      ${this._meetingDetailsBox(t)}
     `;
     
     const html = await this._wrap(body, lead);
@@ -864,23 +846,27 @@ ${this._programCards(l.courseInterest)}
 `;
   }
 
+  _meetingDetailsBox(t) {
+    return `
+<div class="box" style="background:#eff6ff;padding:16px;border-radius:8px;border-left:4px solid #2563eb;margin:16px 0;line-height:1.7;">
+  📅 <strong>Meeting Date &amp; Time:</strong> ${t}<br>
+  📞 <strong>Format:</strong> Phone Call<br>
+  ⏱️ <strong>Duration:</strong> 10 minutes<br>
+  👨‍🏫 <strong>Counselor:</strong> Admissions Team<br><br>
+  📱 <strong>Our Admissions Team will call you at your scheduled consultation time using the phone number you provided during registration.</strong><br><br>
+  Please keep your phone nearby and available during your scheduled consultation.<br><br>
+  If you need to reschedule or have any questions before the call, please contact our support team.
+</div>`;
+  }
+
   _businessMeetingConfBody(l, t) {
     const c = cfg.company;
-    const meetLink = l.meeting?.meetLink;
     const companyName = l.companyName || l.qualification?.companyName || 'HGI';
     return `
 <h2>Business Partnership Consultation Confirmed – ${l.fullName}</h2>
 <p>Your Business Partnership consultation has been successfully scheduled.</p>
 
-<div class="box">
-  <strong>Business Contact Name:</strong> ${l.fullName}<br>
-  <strong>Company Name:</strong> ${companyName}<br>
-  <strong>Meeting Date & Time:</strong> ${t}<br>
-  <strong>Time Zone:</strong> Eastern Time (ET)<br>
-  <strong>Meeting Link:</strong> <a href="${meetLink}">${meetLink}</a><br>
-  <strong>Business Development Manager:</strong> Business Partnership Team<br>
-  <strong>Support Contact:</strong> Info@testpreppundits.com | ${c.counselorPhone}
-</div>
+${this._meetingDetailsBox(t)}
 
 <p><strong>Discussion Agenda:</strong></p>
 <ul>
@@ -889,8 +875,6 @@ ${this._programCards(l.courseInterest)}
   <li>Training, support, and resource provisions</li>
   <li>Next steps for onboarding and launch</li>
 </ul>
-
-<p>Join instructions: Click the meeting link above at the scheduled time. Please join from a quiet environment with a working microphone and camera.</p>
 
 <div class="sig">
   <strong>Regards,</strong><br><br>
@@ -902,18 +886,11 @@ ${this._programCards(l.courseInterest)}
 
   _meetingConfBody(l, t) {
     const c = cfg.company;
-    const meetLink = l.meeting?.meetLink;
     return `
 <h2>Your Consultation is Confirmed! ✅</h2>
 <p>Hi ${l.parentName || l.fullName}! Great news — your free admissions consultation is all set. We can't wait to connect with you!</p>
 
-<div class="box">
-  📞 Format: Phone Call<br>
-  ⏱️ Duration: 10 minutes<br>
-  👨‍🏫 Counselor: Admissions Team<br><br>
-  📱 Our Admissions Team will call you at your scheduled consultation time using the phone number you provided during registration.<br>
-  Please keep your phone nearby and available during your scheduled consultation.
-</div>
+${this._meetingDetailsBox(t)}
 
 <p><strong>Please bring to the meeting:</strong></p>
 <ul>
@@ -922,10 +899,6 @@ ${this._programCards(l.courseInterest)}
   <li>Questions about programs, pricing, or schedule options</li>
   <li>Preferred days/times for tutoring sessions</li>
 </ul>
-
-<p>Need to reschedule? Just reply at least <strong>24 hours in advance</strong> and we'll find a new time that works.</p>
-
-
 
 <div class="sig">
   <strong>Regards,</strong><br><br>
@@ -967,22 +940,13 @@ ${this._programCards(l.courseInterest)}
 
   _reminderBody(l, t) {
     const c = cfg.company;
-    const meetLink = l.meeting?.meetLink;
     return `
 <h2>See you tomorrow! ⏰</h2>
 <p>Hi ${l.parentName || l.fullName}! This is a friendly reminder about <strong>${l.fullName}'s</strong> admissions consultation tomorrow.</p>
 
-<div class="box">
-  📅 <strong>Tomorrow: ${t}</strong><br>
-  📞 Format: Phone Call<br>
-  ⏱️ Duration: 10 minutes<br>
-  📱 Our Admissions Team will call you at your scheduled consultation time using the phone number you provided during registration.<br>
-  Please keep your phone nearby and available during your scheduled consultation.
-</div>
+${this._meetingDetailsBox(t)}
 
-<p>We're looking forward to discussing the best path for ${l.fullName}'s goals. If anything comes up, please let us know at least <strong>2 hours in advance</strong>.</p>
-
-
+<p>We're looking forward to discussing the best path for ${l.fullName}'s goals.</p>
 
 <div class="sig">
   <strong>Regards,</strong><br><br>
