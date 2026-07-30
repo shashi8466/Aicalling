@@ -243,7 +243,8 @@ async function boot() {
     followUpEngine.start();
     tzScheduler.start();
     emailCallbackPoller.start();
-    require('./services/imapService').connect();
+    // IMAP polling has been replaced with Brevo Inbound Webhooks
+    // require('./services/imapService').connect();
     meetingReminderPoller.start();
     billingPoller.start();
     transcriptionProcessor.start();

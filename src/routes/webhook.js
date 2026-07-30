@@ -23,8 +23,10 @@ const sheetsSvc      = require('../services/sheetsService');
 const { scoreLead, detectSentiment } = require('../services/leadScoring');
 const campaignSvc    = require('../services/campaignService');
 const campaignReg    = require('../campaigns/registry');
+const twilioService = require('../services/twilioService');
 const billingSvc     = require('../services/billingService');
 const logger         = require('../logger');
+const poller         = require('../jobs/emailCallbackPoller');
 const cfg            = require('../config');
 
 // In-memory conversation store  { leadId → { history, slots } }
@@ -1242,6 +1244,29 @@ router.post('/email/brevo', async (req, res) => {
     }
   } catch (err) {
     logger.error('webhook/email/brevo error', { msg: err.message });
+  }
+});
+
+// ── Brevo Inbound Email Webhook ────────────────────────────────────────────
+// Receives inbound parsed emails from Brevo
+router.post('/email/inbound/brevo', async (req, res) => {
+  res.sendStatus(200);
+  try {
+    const items = req.body.items || [req.body];
+    for (const item of items) {
+      if (!item) continue;
+      const subject = item.Subject || '';
+      const body = item.RawTextBody || item.RawHtmlBody || '';
+      const fromEmail = item.From?.Address || item.from || '';
+      const fromName = item.From?.Name || fromEmail.split('@')[0];
+
+      if (fromEmail) {
+        logger.info(`Received inbound email from ${fromEmail} via Brevo Webhook`);
+        await poller.processEmail(subject, body, fromEmail, fromName, item);
+      }
+    }
+  } catch (err) {
+    logger.error('webhook/email/inbound/brevo error', { msg: err.message });
   }
 });
 
