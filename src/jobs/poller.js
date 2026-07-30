@@ -159,19 +159,8 @@ async function _placeCall(lead) {
 }
 
 async function retryPendingLeads() {
-  try {
-    const pending = await Lead.find({
-      status:            'queued',
-      nextRetryAt:       { $lte: new Date() },
-      totalCallAttempts: { $lt: cfg.call.maxAttempts },
-    });
-    for (const lead of pending) {
-      logger.info(`Retrying pending lead: ${lead.fullName}`);
-      await _placeCall(lead);
-    }
-  } catch (err) {
-    logger.error('retryPendingLeads error', { msg: err.message });
-  }
+  // Automatic AI call retries disabled - waiting for manual calls
+  return;
 }
 
 async function unstickStaleCalls() {
