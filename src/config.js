@@ -85,7 +85,7 @@ module.exports = {
 
   company: {
     counselorName:  process.env.COUNSELOR_NAME  || 'Admissions Team',
-    counselorEmail: process.env.COUNSELOR_EMAIL || process.env.SMTP_FROM || process.env.SMTP_USER || '',
+    counselorEmail: process.env.COUNSELOR_EMAIL || process.env.BREVO_FROM_EMAIL || '',
     counselorPhone: process.env.COUNSELOR_PHONE || '',
     website:        process.env.COMPANY_WEBSITE || 'https://testpreppundits.com',
   },

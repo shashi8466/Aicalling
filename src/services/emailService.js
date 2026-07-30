@@ -542,6 +542,7 @@ ${t.help ? `<p>${t.help}</p>` : ''}
         to: [{ email: to }],
         subject,
         htmlContent: html,
+        replyTo: { email: cfg.brevo.fromEmail, name: cfg.brevo.fromName },
       };
 
       if (cc && cc.includes('@')) payload.cc = [{ email: cc }];
@@ -681,7 +682,7 @@ td{border-collapse:collapse}
     const c = cfg.company;
     return `
 <h2>Hi ${l.parentName || l.fullName}! 👋</h2>
-<p>Thank you for reaching out to <strong>Test Prep Pundits</strong>! I am Annie, your AI Assistant from Test Prep Pundits, and I'm genuinely excited to help <strong>${l.fullName}</strong> reach their academic goals.</p>
+<p>Thank you for reaching out to <strong>Test Prep Pundits</strong>! I am Annie, from Test Prep Pundits, and I'm genuinely excited to help <strong>${l.fullName}</strong> reach their academic goals.</p>
 
 <div class="box">
   📞 <strong>We'll be calling you shortly</strong> at <strong>${l.phone}</strong> to learn more and answer any questions.<br>
@@ -894,7 +895,7 @@ ${this._programCards(l.courseInterest)}
     const c = cfg.company;
     return `
 <h2>We tried to reach you! 📞</h2>
-<p>Hi, this is Annie, your AI Assistant from Test Prep Pundits. I recently called regarding <strong>${l.courseInterest || 'our test prep programs'}</strong> for ${l.fullName} but wasn't able to connect.</p>
+<p>Hi, this is Annie, from Test Prep Pundits. I recently called regarding <strong>${l.courseInterest || 'our test prep programs'}</strong> for ${l.fullName} but wasn't able to connect.</p>
 
 <div class="box">
   📌 <strong>Let's find a time that works for you!</strong><br>
@@ -1219,7 +1220,7 @@ ${this._programCards(l.courseInterest)}
     const c = cfg.company;
     return `
 <h2>Hi ${l.parentName || l.fullName}! I wanted to check in 👋</h2>
-<p>Hi, this is Annie, your AI Assistant from Test Prep Pundits. I've been following up because I genuinely believe ${l.fullName} has what it takes to hit an incredible score — and I don't want them to miss the window.</p>
+<p>Hi, this is Annie, from Test Prep Pundits. I've been following up because I genuinely believe ${l.fullName} has what it takes to hit an incredible score — and I don't want them to miss the window.</p>
 
 <div class="box">
   📌 <strong>Where ${l.fullName} stands right now:</strong><br><br>
@@ -1238,7 +1239,7 @@ ${this._programCards(l.courseInterest)}
 
 <p>I'd love to hop on a quick 15-minute call to answer any remaining questions. Just reply to this email or call me directly.</p>
 
-<a href="mailto:${c.counselorEmail}?subject=Quick Question – ${l.fullName}" class="btn">Reply to Annie, your AI Assistant →</a>
+<a href="mailto:${c.counselorEmail}?subject=Quick Question – ${l.fullName}" class="btn">Reply to Annie →</a>
 
 <div class="sig">
   <strong>Regards,</strong><br><br>

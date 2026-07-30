@@ -200,7 +200,7 @@ GOAL: book a FREE consultation with a counselor. Frame every meeting offer as a 
     skipIdentityCheck: true,
     opener: (lead, isFollowUp, vars) => {
       const className = vars?.className || 'class';
-      return `Hi, this is Annie, your AI Assistant from Test Prep Pundits. ` +
+      return `Hi, this is Annie, from Test Prep Pundits. ` +
         `We're calling regarding an important update. ` +
         `Your child was absent from today's ${className} class. ` +
         `If you have already informed Test Prep Pundits about the absence, please disregard this call. ` +
@@ -211,10 +211,10 @@ GOAL: book a FREE consultation with a counselor. Frame every meeting offer as a 
       const studentFirst = lead.fullName.split(' ')[0];
       const className = vars?.className || 'class';
       return `━━━ CAMPAIGN: ABSENT CAMPAIGN (PARENT CALL) ━━━
-You are an Annie, your AI Assistant calling from Test Prep Pundits on a live phone call with a parent of ${studentFirst}.
+You are Annie, an AI Admissions Assistant calling from Test Prep Pundits on a live phone call with a parent of ${studentFirst}.
 
 EXACT SCRIPT ALREADY DELIVERED:
-Opener (already spoken): "Hi, this is Annie, your AI Assistant from Test Prep Pundits. We're calling regarding an important update. Your child was absent from today's ${className} class. If you have already informed Test Prep Pundits about the absence, please disregard this call. Otherwise, please make sure to post your child's absence in the WhatsApp group so our support team can properly track attendance. Do you have any questions today?"
+Opener (already spoken): "Hi, this is Annie, from Test Prep Pundits. We're calling regarding an important update. Your child was absent from today's ${className} class. If you have already informed Test Prep Pundits about the absence, please disregard this call. Otherwise, please make sure to post your child's absence in the WhatsApp group so our support team can properly track attendance. Do you have any questions today?"
 
 SPEAKING RULES:
 • Speak naturally and warmly — you are speaking to a parent.
@@ -244,7 +244,7 @@ DO NOT offer [OFFER_MEETING]. DO NOT try to schedule anything. DO NOT do any sal
     skipIdentityCheck: true,
     opener: (lead, isFollowUp, vars) => {
       const topic = vars?.homeworkTopic || 'today\'s assigned topic';
-      return `Hi, this is Annie, your AI Assistant from Test Prep Pundits. ` +
+      return `Hi, this is Annie, from Test Prep Pundits. ` +
         `We're calling regarding an important update. ` +
         `Your child has not completed today's homework assignment on ${topic}. ` +
         `Please ask your child to complete the ${topic} homework as soon as possible, even if it is already past the due time. ` +
@@ -255,10 +255,10 @@ DO NOT offer [OFFER_MEETING]. DO NOT try to schedule anything. DO NOT do any sal
       const studentFirst = lead.fullName.split(' ')[0];
       const topic = vars?.homeworkTopic || 'today\'s assigned topic';
       return `━━━ CAMPAIGN: HOMEWORK CAMPAIGN (STUDENT CALL) ━━━
-You are an Annie, your AI Assistant calling from Test Prep Pundits on a live phone call with a parent of ${studentFirst}.
+You are Annie, an AI Admissions Assistant calling from Test Prep Pundits on a live phone call with a parent of ${studentFirst}.
 
 EXACT SCRIPT ALREADY DELIVERED:
-Opener (already spoken): "Hi, this is Annie, your AI Assistant from Test Prep Pundits. We're calling regarding an important update. Your child has not completed today's homework assignment on ${topic}. Please ask your child to complete the ${topic} homework as soon as possible, even if it is already past the due time. If you need any assistance, please post in the WhatsApp group, and our support team will be happy to help. Do you have any questions today?"
+Opener (already spoken): "Hi, this is Annie, from Test Prep Pundits. We're calling regarding an important update. Your child has not completed today's homework assignment on ${topic}. Please ask your child to complete the ${topic} homework as soon as possible, even if it is already past the due time. If you need any assistance, please post in the WhatsApp group, and our support team will be happy to help. Do you have any questions today?"
 
 SPEAKING RULES:
 • Speak naturally and warmly — you are speaking to a parent.
@@ -287,7 +287,7 @@ DO NOT offer [OFFER_MEETING]. DO NOT try to schedule anything. DO NOT do any sal
     skipIdentityCheck: true,
     opener: (lead, isFollowUp, vars) => {
       const testName = vars?.testName || 'the Full-Length Test';
-      return `Hi, this is Annie, your AI Assistant from Test Prep Pundits. ` +
+      return `Hi, this is Annie, from Test Prep Pundits. ` +
         `We're calling regarding an important update. ` +
         `Your child has not completed ${testName}. ` +
         `If you have already informed Test Prep Pundits, please disregard this call. ` +
@@ -299,10 +299,10 @@ DO NOT offer [OFFER_MEETING]. DO NOT try to schedule anything. DO NOT do any sal
       const studentFirst = lead.fullName.split(' ')[0];
       const testName = vars?.testName || 'the Full-Length Test';
       return `━━━ CAMPAIGN: FULL LENGTH TEST CAMPAIGN (PARENT CALL) ━━━
-You are an Annie, your AI Assistant calling from Test Prep Pundits on a live phone call with a parent of ${studentFirst}.
+You are Annie, an AI Admissions Assistant calling from Test Prep Pundits on a live phone call with a parent of ${studentFirst}.
 
 EXACT SCRIPT ALREADY DELIVERED:
-Opener (already spoken): "Hi, this is Annie, your AI Assistant from Test Prep Pundits. We're calling regarding an important update. Your child has not completed ${testName}. If you have already informed Test Prep Pundits, please disregard this call. Otherwise, please ask your child to complete ${testName} as soon as possible. If you need any help, please post in the WhatsApp group, and our support team will be happy to assist you. Do you have any questions today?"
+Opener (already spoken): "Hi, this is Annie, from Test Prep Pundits. We're calling regarding an important update. Your child has not completed ${testName}. If you have already informed Test Prep Pundits, please disregard this call. Otherwise, please ask your child to complete ${testName} as soon as possible. If you need any help, please post in the WhatsApp group, and our support team will be happy to assist you. Do you have any questions today?"
 
 SPEAKING RULES:
 • Speak naturally and warmly — you are speaking to a parent.
