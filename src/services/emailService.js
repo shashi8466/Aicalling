@@ -1,7 +1,7 @@
 /**
  * Email Service — powered by Nodemailer (SMTP)
  */
-const nodemailer = require('nodemailer');
+const axios = require('axios');
 const moment = require('moment-timezone');
 const cfg    = require('../config');
 const logger = require('../logger');
@@ -38,15 +38,7 @@ const PARENT_TEMPLATES = {
 class EmailService {
 
   constructor() {
-    this.transporter = nodemailer.createTransport({
-      host: cfg.smtp.host,
-      port: cfg.smtp.port,
-      secure: cfg.smtp.secure,
-      auth: {
-        user: cfg.smtp.user,
-        pass: cfg.smtp.pass,
-      },
-    });
+    // No initialization needed for Brevo API
   }
 
   // ── Public senders ───────────────────────────────────────────────────
@@ -126,9 +118,8 @@ class EmailService {
       ].join('\r\n');
 
       return {
-        filename: 'consultation.ics',
+        name: 'consultation.ics',
         content: Buffer.from(ics).toString('base64'),
-        encoding: 'base64',
       };
     } catch (e) {
       logger.error('Failed to generate ICS attachment', e);
@@ -168,7 +159,7 @@ class EmailService {
       ? `Business Partnership Consultation Confirmed – ${lead.fullName}`
       : `✅ Consultation Confirmed – ${t}`;
 
-    const counselorEmail = cfg.company.counselorEmail || cfg.smtp.from;
+    const counselorEmail = cfg.company.counselorEmail || cfg.brevo.fromEmail;
 
     // Send email to contact (and CC parent if not business)
     const resStudent = await this._send({
@@ -340,7 +331,7 @@ ${t.help ? `<p>${t.help}</p>` : ''}
     });
 
     // Send to counselor independently
-    const counselorEmail = cfg.company.counselorEmail || cfg.smtp.from;
+    const counselorEmail = cfg.company.counselorEmail || cfg.brevo.fromEmail;
     if (counselorEmail && counselorEmail !== lead.email) {
       await this._send({
         to:      counselorEmail,
@@ -385,7 +376,7 @@ ${t.help ? `<p>${t.help}</p>` : ''}
       attachment,
     });
 
-    const counselorEmail = cfg.company.counselorEmail || cfg.smtp.from;
+    const counselorEmail = cfg.company.counselorEmail || cfg.brevo.fromEmail;
     if (counselorEmail && counselorEmail !== lead.email) {
       await this._send({
         to:      counselorEmail,
@@ -421,7 +412,7 @@ ${t.help ? `<p>${t.help}</p>` : ''}
       html,
     });
 
-    const counselorEmail = cfg.company.counselorEmail || cfg.smtp.from;
+    const counselorEmail = cfg.company.counselorEmail || cfg.brevo.fromEmail;
     if (counselorEmail && counselorEmail !== lead.email) {
       await this._send({
         to:      counselorEmail,
@@ -537,49 +528,39 @@ ${t.help ? `<p>${t.help}</p>` : ''}
   // ── Core Brevo API call ──────────────────────────────────────────────
 
   async _send({ to, cc, bcc, subject, html, attachment }) {
-    if (!cfg.smtp.host || !cfg.smtp.user || !cfg.smtp.pass) {
-      const err = 'SMTP configuration missing in environment';
-      logger.error(err);
-      return { ok: false, error: err };
-    }
-
-    // Validate email addresses
-    if (!to || !to.includes('@')) {
-      const err = `Invalid recipient email: "${to}"`;
-      logger.error(err);
-      return { ok: false, error: err };
-    }
-    if (cc && !cc.includes('@')) {
-      const err = `Invalid cc email: "${cc}"`;
-      logger.error(err);
-      return { ok: false, error: err };
-    }
-    if (bcc && !bcc.includes('@')) {
-      const err = `Invalid bcc email: "${bcc}"`;
+    if (!cfg.brevo.apiKey) {
+      const err = 'BREVO_API_KEY missing in environment';
       logger.error(err);
       return { ok: false, error: err };
     }
 
     try {
-      const mailOptions = {
-        from: cfg.smtp.from,
-        to,
-        cc,
-        bcc,
+      const payload = {
+        sender: { email: cfg.brevo.fromEmail, name: cfg.brevo.fromName },
+        to: [{ email: to }],
         subject,
-        html,
+        htmlContent: html,
       };
 
+      if (cc && cc.includes('@')) payload.cc = [{ email: cc }];
+      if (bcc && bcc.includes('@')) payload.bcc = [{ email: bcc }];
+      
       if (attachment) {
-        mailOptions.attachments = Array.isArray(attachment) ? attachment : [attachment];
+        payload.attachment = Array.isArray(attachment) ? attachment : [attachment];
       }
 
-      const info = await this.transporter.sendMail(mailOptions);
-      logger.info(`Email sent via SMTP → ${to}  "${subject}"  [${info.messageId}]`);
-      return { ok: true, messageId: info.messageId };
+      const res = await axios.post('https://api.brevo.com/v3/smtp/email', payload, {
+        headers: {
+          'api-key': cfg.brevo.apiKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      logger.info(`Email sent via Brevo → ${to} "${subject}" [${res.data?.messageId}]`);
+      return { ok: true, messageId: res.data?.messageId };
     } catch (error) {
-      const detail = error.message || error;
-      logger.error('SMTP email failed', { to, subject, detail });
+      const detail = error.response?.data?.message || error.message || error;
+      logger.error('Brevo API email failed', { to, subject, detail });
       return { ok: false, error: detail };
     }
   }

@@ -26,14 +26,11 @@ module.exports = {
     provider: process.env.LLM_PROVIDER || 'openai',
   },
 
-  // SMTP email configuration
-  smtp: {
-    host:   process.env.SMTP_HOST,
-    port:   parseInt(process.env.SMTP_PORT) || 465,
-    secure: process.env.SMTP_SECURE === 'true',
-    user:   process.env.SMTP_USER,
-    pass:   process.env.SMTP_PASS,
-    from:   process.env.SMTP_FROM || 'Info@testpreppundits.com',
+  // Brevo email configuration
+  brevo: {
+    apiKey:    process.env.BREVO_API_KEY,
+    fromEmail: process.env.BREVO_FROM_EMAIL || 'Info@testpreppundits.com',
+    fromName:  process.env.BREVO_FROM_NAME  || 'Test Prep Pundits Admissions',
   },
 
   // IMAP email polling configuration

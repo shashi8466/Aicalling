@@ -704,8 +704,7 @@ router.post('/leads/:id/email', async (req, res) => {
   const leadId = req.params.id;
   try {
     const cfg2 = require('../config');
-    if (!cfg2.smtp.host) return res.status(200).json({ ok: false, error: 'Email service not configured: SMTP_HOST missing.' });
-    if (!cfg2.smtp.user) return res.status(200).json({ ok: false, error: 'Email service not configured: SMTP_USER missing.' });
+    if (!cfg2.brevo.apiKey) return res.status(200).json({ ok: false, error: 'Email service not configured: BREVO_API_KEY missing.' });
     if (!type) return res.status(400).json({ ok: false, error: 'Email type required.' });
 
     const lead = await Lead.findById(leadId);
