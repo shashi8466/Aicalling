@@ -127,18 +127,8 @@ async function processFollowUp(fu) {
     case 'ai-call-week4':
     case 'ai-call-day3':
     case 'nurture-ai-call': {
-      const { getCurrentUrl } = require('../utils/tunnel');
-      const baseUrl = getCurrentUrl() || cfg.server.baseUrl;
-      if (baseUrl && !baseUrl.includes('localhost')) {
-        try {
-          await _placeFollowUpCall(lead, baseUrl);
-          result = 'ai-call-initiated';
-        } catch (e) {
-          result = `ai-call-failed:${e.message}`;
-        }
-      } else {
-        result = 'ai-call-skipped:no-public-url';
-      }
+      logger.info(`FollowUpEngine: Automated AI calling is temporarily disabled. Skipping auto call for ${lead.fullName}`);
+      result = 'ai-call-skipped:auto-calling-disabled';
       break;
     }
 

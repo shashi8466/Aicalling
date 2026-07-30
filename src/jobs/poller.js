@@ -81,7 +81,7 @@ async function processRow(row) {
 
     const lead = await Lead.create({
       ...row,
-      status:       'queued',
+      status:       'new',
       leadScore:    score,
       leadCategory: category,
     });
@@ -89,19 +89,16 @@ async function processRow(row) {
     logger.info(`Lead created: ${lead.fullName} | ${lead.phone} | Score=${score} [${category}]`);
 
     await sheetsSvc.updateRow(lead.sheetRowIndex, {
-      status:  'Queued',
+      status:  'New',
       score,
-      summary: 'Lead received. Welcome email sent. Call pending.',
+      summary: 'Lead received. Welcome email sent. Awaiting manual call.',
     });
 
     emailSvc.sendNewLeadWelcome(lead).catch(err =>
       logger.error('Welcome email failed', { msg: err.message, leadId: lead._id })
     );
 
-    const delayMs = category === 'hot' ? 2 * 60_000 : 3 * 60_000;
-    const timer = setTimeout(() => _placeCall(lead), delayMs);
-    retryTimers.push(timer);
-
+    // Automatic AI call disabled - lead waits for counselor/admin manual call
     return 'created';
   } catch (err) {
     logger.error('processRow error', { msg: err.message, email: row.email });

@@ -140,73 +140,8 @@ async function checkAndPlaceCalls() {
         const currentHour = nowLocal.hour();
         const currentDateStr = nowLocal.format('YYYY-MM-DD');
 
-        // Check if morning or evening call is due
-        const lastMorningDate = lead.lastMorningCall ? moment(lead.lastMorningCall).tz(tz).format('YYYY-MM-DD') : null;
-        const lastEveningDate = lead.lastEveningCall ? moment(lead.lastEveningCall).tz(tz).format('YYYY-MM-DD') : null;
-
-        // Morning Call: 10:00 AM local time (we check hour 10 & 11 to give a 2-hour window)
-        const isMorningDue = (currentHour >= 10 && currentHour < 12) && (lastMorningDate !== currentDateStr);
-
-        // Evening Call: 6:00 PM local time (we check hour 18 & 19 to give a 2-hour window)
-        const isEveningDue = (currentHour >= 18 && currentHour < 20) && (lastEveningDate !== currentDateStr);
-
-        if (isMorningDue) {
-          logger.info(`tzScheduler: Placing Morning Call (10:00 AM local) to ${lead.fullName} (${lead.phone})`);
-          
-          // Mark morning call timestamp
-          lead.lastMorningCall = new Date();
-          lead.lastCallAt = new Date();
-          lead.totalCallAttempts = (lead.totalCallAttempts || 0) + 1;
-          lead.status = 'calling';
-          lead.callAttempts = lead.callAttempts || [];
-          lead.callAttempts.push({
-            attemptNumber: lead.totalCallAttempts,
-            startTime: new Date(),
-            status: 'initiated'
-          });
-          await lead.save();
-
-          try {
-            const { callSid } = await twilioSvc.call(lead, baseUrl);
-            lead.callAttempts[lead.callAttempts.length - 1].callSid = callSid;
-            await lead.save();
-            logger.info(`tzScheduler: Morning call connected. SID=${callSid}`);
-          } catch (callErr) {
-            logger.error(`tzScheduler: Twilio Morning Call failed for ${lead.fullName}`, { msg: callErr.message });
-            lead.status = 'queued';
-            lead.totalCallAttempts = Math.max(0, lead.totalCallAttempts - 1);
-            lead.callAttempts.pop();
-            await lead.save();
-          }
-        } else if (isEveningDue) {
-          logger.info(`tzScheduler: Placing Evening Call (6:00 PM local) to ${lead.fullName} (${lead.phone})`);
-
-          // Mark evening call timestamp
-          lead.lastEveningCall = new Date();
-          lead.lastCallAt = new Date();
-          lead.totalCallAttempts = (lead.totalCallAttempts || 0) + 1;
-          lead.status = 'calling';
-          lead.callAttempts = lead.callAttempts || [];
-          lead.callAttempts.push({
-            attemptNumber: lead.totalCallAttempts,
-            startTime: new Date(),
-            status: 'initiated'
-          });
-          await lead.save();
-
-          try {
-            const { callSid } = await twilioSvc.call(lead, baseUrl);
-            lead.callAttempts[lead.callAttempts.length - 1].callSid = callSid;
-            await lead.save();
-            logger.info(`tzScheduler: Evening call connected. SID=${callSid}`);
-          } catch (callErr) {
-            logger.error(`tzScheduler: Twilio Evening Call failed for ${lead.fullName}`, { msg: callErr.message });
-            lead.status = 'queued';
-            lead.totalCallAttempts = Math.max(0, lead.totalCallAttempts - 1);
-            lead.callAttempts.pop();
-            await lead.save();
-          }
-        }
+        // Automatic Morning (10:00 AM) and Evening (6:00 PM) AI calls have been temporarily disabled.
+        // All new and unbooked leads wait for manual calls initiated by counselors or admins.
       } catch (leadErr) {
         logger.error(`tzScheduler: Error processing lead ${lead.fullName}`, { msg: leadErr.message });
       }
