@@ -947,7 +947,7 @@ ${this._meetingDetailsBox(t)}
     const c = cfg.company;
     return `
 <h2>We tried to reach you! 📞</h2>
-<p>Hi, this is Annie, from Test Prep Pundits. I recently called regarding <strong>${l.courseInterest || 'our test prep programs'}</strong> for ${l.fullName} but wasn't able to connect.</p>
+<p>Hi, this is Annie, your AI Assistant from Test Prep Pundits. I recently called regarding <strong>${l.courseInterest || 'our test prep programs'}</strong> for ${l.fullName} but wasn't able to connect.</p>
 
 <div class="box">
   📌 <strong>Let's find a time that works for you!</strong><br>
@@ -1263,7 +1263,7 @@ ${this._meetingDetailsBox(t)}
     const c = cfg.company;
     return `
 <h2>Hi ${l.parentName || l.fullName}! I wanted to check in 👋</h2>
-<p>Hi, this is Annie, from Test Prep Pundits. I've been following up because I genuinely believe ${l.fullName} has what it takes to hit an incredible score — and I don't want them to miss the window.</p>
+<p>Hi, this is Annie, your AI Assistant from Test Prep Pundits. I've been following up because I genuinely believe ${l.fullName} has what it takes to hit an incredible score — and I don't want them to miss the window.</p>
 
 <div class="box">
   📌 <strong>Where ${l.fullName} stands right now:</strong><br><br>
