@@ -100,6 +100,8 @@ class SheetsService {
    * }
    */
   async updateRow(rowIndex, opts = {}) {
+    if (!rowIndex || isNaN(parseInt(rowIndex, 10))) return;
+
     const {
       status      = '',
       score       = '',
@@ -137,7 +139,7 @@ class SheetsService {
    * Columns A–G: Name, Grade, Email, Phone, Parent Name, Parent Email, Course Interest
    */
   async updateLeadFields(rowIndex, lead = {}) {
-    if (!rowIndex) return;
+    if (!rowIndex || isNaN(parseInt(rowIndex, 10))) return;
     try {
       const tabName = await this.getTabName();
       const data = [];
