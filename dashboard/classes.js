@@ -425,7 +425,13 @@ function updateLaunchCampaignFields() {
     const container = document.getElementById('launchCampaignVarsFields');
     let html = '';
     
-    if (type === 'parent-homework') {
+    if (type === 'sat-summer-challenge') {
+        html += `
+            <div style="font-size:12px;color:var(--muted);background:var(--panel2);padding:10px 12px;border-radius:6px;border:1px solid var(--border);">
+                ☀️ The AI will announce the <strong>SAT Summer Digital Challenge</strong> script to the selected student(s) and reward details ($10 Visa Gift Card).
+            </div>
+        `;
+    } else if (type === 'parent-homework') {
         html += `
             <div class="form-group" style="margin-bottom:12px;">
                 <label style="display:block;margin-bottom:4px;font-size:12px;color:var(--muted)">Homework Topic <span style="color:var(--hot)">*</span></label>

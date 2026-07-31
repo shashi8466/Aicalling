@@ -36,7 +36,7 @@ const sessions = new Map();
 // The 3 parent-notification campaigns always send a summary email to the parent
 // after the call, whatever the outcome (answered / no-answer / busy / voicemail /
 // failed / canceled).
-const PARENT_CAMPAIGN_TYPES = ['parent-absent', 'parent-homework', 'parent-flt'];
+const PARENT_CAMPAIGN_TYPES = ['parent-absent', 'parent-homework', 'parent-flt', 'sat-summer-challenge'];
 // Dedup guard so exactly one parent email is sent per call (keyed by CallSid).
 const _parentEmailSent = new Set();
 // messageId → { leadId, at } — correlates Brevo open/click events back to a lead.
@@ -412,7 +412,7 @@ router.post('/call/respond', async (req, res) => {
     // ── PARENT NOTIFICATION CAMPAIGNS — dedicated handler (no meeting/slot logic) ──
     // parent-absent, parent-homework, parent-flt are pure notification calls.
     // They must NEVER enter the meeting booking / decline / slot machinery below.
-    const PARENT_CAMPAIGN_TYPES = ['parent-absent', 'parent-homework', 'parent-flt'];
+    const PARENT_CAMPAIGN_TYPES = ['parent-absent', 'parent-homework', 'parent-flt', 'sat-summer-challenge'];
     const isParentCampaign = PARENT_CAMPAIGN_TYPES.includes(session.campaignType) ||
                              PARENT_CAMPAIGN_TYPES.includes(session.campaign?.type);
 
@@ -753,7 +753,7 @@ router.post('/call/continue', async (req, res) => {
         sessions.set(leadId, session);
 
         // Parent notification campaigns are allowed to end without a meeting booked
-        const PARENT_TYPES_CONT = ['parent-absent', 'parent-homework', 'parent-flt'];
+        const PARENT_TYPES_CONT = ['parent-absent', 'parent-homework', 'parent-flt', 'sat-summer-challenge'];
         const isParentCont = PARENT_TYPES_CONT.includes(session.campaignType) ||
                              PARENT_TYPES_CONT.includes(session.campaign?.type);
 

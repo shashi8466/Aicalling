@@ -33,6 +33,14 @@ const PARENT_TEMPLATES = {
     action: `Please encourage your child to complete the test at the earliest convenience.`,
     help:   `If you need any assistance, our support team is always happy to help.`,
   },
+  'sat-summer-challenge': {
+    name: 'SAT Summer Digital Challenge',
+    subject: s => `SAT Summer Digital Challenge Announcement for ${s}`,
+    intro:  s => `Our AI assistant contacted you regarding the SAT Summer Digital Challenge.`,
+    reason: `We're excited to announce our SAT Summer Digital Challenge! Complete the entire SAT syllabus by August 9, 2026 with 70% or higher accuracy and at least 5 hours of video lessons watched to win a $10 Visa Gift Card!`,
+    action: `Log in to learn, practice, improve, and win!`,
+    help:   `If you have any questions, our support team is happy to help.`,
+  },
 };
 
 class EmailService {
@@ -62,7 +70,7 @@ class EmailService {
           ({ type } = await campaignSvc.resolveForLead(lead));
         }
         const pundits = ['sat-batch', 'act-batch', 'ap-course', 'business-partner',
-                         'parent-absent', 'parent-homework', 'parent-flt'];
+                         'parent-absent', 'parent-homework', 'parent-flt', 'sat-summer-challenge'];
         if (pundits.includes(type)) {
           logoPath = 'logos/logo1.png';
           companyName = type === 'business-partner' ? 'HGI' : 'Test Prep Pundits';

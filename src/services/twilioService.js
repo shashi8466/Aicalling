@@ -68,9 +68,11 @@ class TwilioService {
    * Uses Twilio's SSML helper API (raw XML strings would be escaped).
    */
   _speak(parent, text) {
+    // Phonetic replacement: spell out S-A-T letter by letter for TTS audio across all calls
+    const spokenText = String(text).replace(/\b(SAT|Sat|S\.A\.T\.)\b/g, 'S-A-T');
     const say = parent.say({ voice: VOICE, language: LANG });
     // Split on question marks so we can insert a natural pause after each question
-    const parts = String(text).split(/(?<=\?)\s+/).filter(Boolean);
+    const parts = spokenText.split(/(?<=\?)\s+/).filter(Boolean);
     parts.forEach((p, i) => {
       say.prosody({ rate: '92%' }, p);
       if (i < parts.length - 1) say.break({ strength: 'strong', time: '600ms' });

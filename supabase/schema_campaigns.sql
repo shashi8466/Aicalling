@@ -52,5 +52,6 @@ INSERT INTO campaigns (name, type, program, goal, description, status, is_defaul
   ('College Admissions Counseling','college-admissions','College Admissions', 'Invite students seeking undergraduate admissions guidance and schedule a free consultation.', 'Outreach for college admissions counseling.', 'active', TRUE),
   ('Scholarship Webinar',        'scholarship-webinar', 'Scholarships',       'Invite students and parents to the scholarship webinar and schedule a follow-up consultation.', 'Promote the scholarship webinar.', 'active', TRUE),
   ('Free Mock Test',             'free-mock-test',      'Mock Test',          'Invite students to take a free mock test and schedule a results-review consultation.', 'Promote the free mock test.', 'active', TRUE),
-  ('Parent Counseling Session',  'parent-counseling',   'Parent Counseling',  'Invite parents to a counseling session and schedule a free consultation.', 'Parent-focused counseling outreach.', 'active', TRUE)
+  ('Parent Counseling Session',  'parent-counseling',   'Parent Counseling',  'Invite parents to a counseling session and schedule a free consultation.', 'Parent-focused counseling outreach.', 'active', TRUE),
+  ('SAT Summer Digital Challenge','sat-summer-challenge','SAT',               'Announce the SAT Summer Digital Challenge and reward criteria.', 'Outreach for SAT Summer Digital Challenge.', 'active', TRUE)
 ON CONFLICT (type) WHERE is_default DO NOTHING;
