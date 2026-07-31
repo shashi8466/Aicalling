@@ -230,6 +230,10 @@ class EmailService {
    * @returns {ok, messageId?, error?, to}
    */
   async sendParentCampaignEmail(lead, { campaignType, answered = false } = {}) {
+    if (campaignType === 'sat-summer-challenge' && answered) {
+      return this.sendSatSummerChallengeEmail1(lead);
+    }
+
     const t = PARENT_TEMPLATES[campaignType];
     if (!t) return { ok: false, error: `Not a parent notification campaign: ${campaignType}` };
 
@@ -255,6 +259,166 @@ class EmailService {
     const html = await this._wrap(body, lead, campaignType);
     const res = await this._send({ to, subject, html });
     return { ...res, to };
+  }
+
+  async sendSatSummerChallengeEmail1(lead) {
+    const to = (lead.email && lead.email.includes('@'))
+      ? lead.email
+      : ((lead.parentEmail && lead.parentEmail.includes('@')) ? lead.parentEmail : '');
+    if (!to || !to.includes('@')) {
+      return { ok: false, error: `No recipient email on file for lead ${lead._id}` };
+    }
+
+    const studentName = lead.fullName || 'Student';
+    const subject = `🏆 Turn Your Summer Break into S-A-T Success!`;
+    const body = `
+<h2>Hello ${studentName},</h2>
+<p>Thank you for speaking with <strong>Annie</strong>, your AI Assistant from <strong>Test Prep Pundits</strong>.</p>
+<p>We're excited to invite you to participate in our <strong>S-A-T Summer Digital Challenge!</strong></p>
+
+<h2 style="color:#1a3c6e;margin-top:20px;font-size:18px;">TURN YOUR SUMMER BREAK INTO S-A-T SUCCESS!</h2>
+<p>Complete the <strong>entire S-A-T syllabus</strong> with:</p>
+<ul style="margin:10px 0 16px 20px;line-height:1.8;">
+  <li>✅ <strong>70% or higher accuracy</strong></li>
+  <li>✅ <strong>At least 5 hours of video lessons watched</strong></li>
+</ul>
+
+<p>Complete the challenge by <strong>August 9, 2026</strong>, and you'll receive a:</p>
+<div class="box" style="background:#f0fdf4;border-left:4px solid #22c55e;padding:16px 20px;border-radius:0 10px 10px 0;margin:18px 0;">
+  🎁 <strong>$10 Visa Gift Card</strong>
+</div>
+
+<p style="font-size:16px;font-weight:700;color:#1a3c6e;margin:16px 0;">Learn. Practice. Improve. Win!</p>
+<p>We're excited to see your progress.</p>
+<p>Good luck!</p>
+
+<div class="sig" style="margin-top:28px;padding-top:16px;border-top:1px solid #e5e7eb;">
+  <strong>Best Regards,</strong><br><br>
+  <strong>Test Prep Pundits</strong>
+</div>`;
+
+    const html = await this._wrap(body, lead, 'sat-summer-challenge');
+    const res = await this._send({ to, subject, html });
+    if (res.ok) {
+      await this.scheduleSatSummerChallengeReminders(lead);
+    }
+    return { ...res, to };
+  }
+
+  async sendSatSummerChallengeEmail2(lead) {
+    const to = (lead.email && lead.email.includes('@'))
+      ? lead.email
+      : ((lead.parentEmail && lead.parentEmail.includes('@')) ? lead.parentEmail : '');
+    if (!to || !to.includes('@')) {
+      return { ok: false, error: `No recipient email on file for lead ${lead._id}` };
+    }
+
+    const studentName = lead.fullName || 'Student';
+    const subject = `⏰ Don't Miss the S-A-T Summer Digital Challenge!`;
+    const body = `
+<h2>Hello ${studentName},</h2>
+<p>Just a reminder that our <strong>S-A-T Summer Digital Challenge</strong> is still running.</p>
+
+<p><strong>To qualify:</strong></p>
+<ul style="margin:10px 0 16px 20px;line-height:1.8;">
+  <li>✅ Complete the entire S-A-T syllabus</li>
+  <li>✅ Achieve at least 70% accuracy</li>
+  <li>✅ Watch at least 5 hours of video lessons</li>
+</ul>
+
+<div class="box" style="background:#eff6ff;border-left:4px solid #2563eb;padding:16px 20px;border-radius:0 10px 10px 0;margin:18px 0;">
+  <strong>Deadline:</strong> August 9, 2026<br>
+  <strong>Reward:</strong> 🎁 <strong>$10 Visa Gift Card</strong>
+</div>
+
+<p>Keep learning and stay consistent.</p>
+<p style="font-size:16px;font-weight:700;color:#1a3c6e;margin:16px 0;">Learn. Practice. Improve. Win!</p>
+
+<div class="sig" style="margin-top:28px;padding-top:16px;border-top:1px solid #e5e7eb;">
+  <strong>Best Regards,</strong><br><br>
+  <strong>Test Prep Pundits</strong>
+</div>`;
+
+    const html = await this._wrap(body, lead, 'sat-summer-challenge');
+    const res = await this._send({ to, subject, html });
+    return { ...res, to };
+  }
+
+  async sendSatSummerChallengeEmail3(lead) {
+    const to = (lead.email && lead.email.includes('@'))
+      ? lead.email
+      : ((lead.parentEmail && lead.parentEmail.includes('@')) ? lead.parentEmail : '');
+    if (!to || !to.includes('@')) {
+      return { ok: false, error: `No recipient email on file for lead ${lead._id}` };
+    }
+
+    const studentName = lead.fullName || 'Student';
+    const subject = `🚨 Final Reminder – S-A-T Summer Challenge Ends Soon!`;
+    const body = `
+<h2>Hello ${studentName},</h2>
+<p>The <strong>S-A-T Summer Digital Challenge</strong> is ending soon.</p>
+
+<p>Don't miss your chance to win a:</p>
+<div class="box" style="background:#fef2f2;border-left:4px solid #ef4444;padding:16px 20px;border-radius:0 10px 10px 0;margin:18px 0;">
+  🎁 <strong>$10 Visa Gift Card</strong>
+</div>
+
+<p><strong>Complete before:</strong> August 9, 2026</p>
+
+<p><strong>Requirements:</strong></p>
+<ul style="margin:10px 0 16px 20px;line-height:1.8;">
+  <li>✅ Complete the entire S-A-T syllabus</li>
+  <li>✅ 70%+ accuracy</li>
+  <li>✅ 5+ hours of video lessons</li>
+</ul>
+
+<p>Finish strong!</p>
+<p style="font-size:16px;font-weight:700;color:#1a3c6e;margin:16px 0;">Learn. Practice. Improve. Win!</p>
+
+<div class="sig" style="margin-top:28px;padding-top:16px;border-top:1px solid #e5e7eb;">
+  <strong>Best Regards,</strong><br><br>
+  <strong>Test Prep Pundits</strong>
+</div>`;
+
+    const html = await this._wrap(body, lead, 'sat-summer-challenge');
+    const res = await this._send({ to, subject, html });
+    return { ...res, to };
+  }
+
+  async scheduleSatSummerChallengeReminders(lead) {
+    try {
+      const FollowUp = require('../models/FollowUp');
+      const leadId = lead._id || lead.id;
+
+      // Email 2 (3 days later)
+      const dateEmail2 = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+      const existing2 = await FollowUp.findOne({ leadId, followupType: 'sat-summer-challenge-email2' });
+      if (!existing2) {
+        await FollowUp.create({
+          leadId,
+          followupType: 'sat-summer-challenge-email2',
+          scheduledDate: dateEmail2,
+        });
+        logger.info(`Scheduled SAT Summer Challenge Email 2 for lead ${leadId} on ${dateEmail2.toISOString()}`);
+      }
+
+      // Email 3 (5 days before August 9, 2026 deadline = August 4, 2026 13:00 UTC)
+      let dateEmail3 = new Date('2026-08-04T13:00:00Z');
+      if (dateEmail3 <= new Date()) {
+        dateEmail3 = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+      }
+      const existing3 = await FollowUp.findOne({ leadId, followupType: 'sat-summer-challenge-email3' });
+      if (!existing3) {
+        await FollowUp.create({
+          leadId,
+          followupType: 'sat-summer-challenge-email3',
+          scheduledDate: dateEmail3,
+        });
+        logger.info(`Scheduled SAT Summer Challenge Email 3 for lead ${leadId} on ${dateEmail3.toISOString()}`);
+      }
+    } catch (err) {
+      logger.error('Failed to schedule SAT Summer Challenge reminders:', err);
+    }
   }
 
   _parentAnsweredBody(t, parentName, studentName) {

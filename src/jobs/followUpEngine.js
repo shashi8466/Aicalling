@@ -119,6 +119,18 @@ async function processFollowUp(fu) {
       break;
     }
 
+    case 'sat-summer-challenge-email2': {
+      const r = await emailSvc.sendSatSummerChallengeEmail2(lead);
+      result = r.ok ? `sat-challenge-email2-sent:${r.messageId}` : `email-failed:${r.error}`;
+      break;
+    }
+
+    case 'sat-summer-challenge-email3': {
+      const r = await emailSvc.sendSatSummerChallengeEmail3(lead);
+      result = r.ok ? `sat-challenge-email3-sent:${r.messageId}` : `email-failed:${r.error}`;
+      break;
+    }
+
     case 'ai-call-day2':
     case 'ai-call-day4':
     case 'ai-call-day6':
