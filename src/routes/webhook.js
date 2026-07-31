@@ -1137,7 +1137,9 @@ router.post('/call/status', async (req, res) => {
       // Deduped on CallSid so an AMD-voicemail email already sent isn't overwritten.
       const _ct = await _resolveCampaignType(req.query.campaignId, lead);
       if (PARENT_CAMPAIGN_TYPES.includes(_ct)) {
-        await _sendParentCampaignEmailOnce(lead, _ct, 'completed', CallSid);
+        setImmediate(() => {
+          _sendParentCampaignEmailOnce(lead, _ct, 'completed', CallSid).catch(e => logger.error('Parent email failed', e));
+        });
       }
     }
 
@@ -1148,7 +1150,9 @@ router.post('/call/status', async (req, res) => {
 
       const _ct = await _resolveCampaignType(req.query.campaignId, lead);
       if (PARENT_CAMPAIGN_TYPES.includes(_ct)) {
-        await _sendParentCampaignEmailOnce(lead, _ct, 'canceled', CallSid);
+        setImmediate(() => {
+          _sendParentCampaignEmailOnce(lead, _ct, 'canceled', CallSid).catch(e => logger.error('Parent email failed', e));
+        });
       }
     }
 

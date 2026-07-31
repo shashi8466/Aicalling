@@ -706,12 +706,47 @@ ${t.help ? `<p>${t.help}</p>` : ''}
       return { ok: false, error: 'No to address' };
     }
 
-    // 1. Try Gmail SMTP if GMAIL_APP_PASSWORD is available
+    // 1. Primary: Try Brevo HTTP API (fast, reliable REST API over port 443)
+    if (cfg.brevo.apiKey) {
+      const payload = {
+        sender: { email: cfg.brevo.fromEmail, name: cfg.brevo.fromName },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+        replyTo: { email: cfg.brevo.fromEmail, name: cfg.brevo.fromName },
+      };
+
+      if (cc && cc.includes('@')) payload.cc = [{ email: cc }];
+      if (bcc && bcc.includes('@')) payload.bcc = [{ email: bcc }];
+      
+      if (attachment) {
+        payload.attachment = Array.isArray(attachment) ? attachment : [attachment];
+      }
+
+      try {
+        const res = await axios.post('https://api.brevo.com/v3/smtp/email', payload, {
+          headers: {
+            'api-key': cfg.brevo.apiKey,
+            'Content-Type': 'application/json',
+          },
+          timeout: 8000,
+        });
+
+        logger.info(`Email sent via Brevo → ${to} "${subject}" [${res.data?.messageId}]`);
+        return { ok: true, messageId: res.data?.messageId };
+      } catch (error1) {
+        logger.warn(`Brevo API attempt failed (${error1.message}), trying fallback...`);
+      }
+    }
+
+    // 2. Fallback: Try Gmail SMTP if GMAIL_APP_PASSWORD is available (with strict 3s connection timeout)
     if (cfg.gmail?.appPassword) {
       try {
         const nodemailer = require('nodemailer');
         const transporter = nodemailer.createTransport({
           service: 'gmail',
+          connectionTimeout: 3000, // strict 3s timeout to prevent webhooks hanging
+          socketTimeout: 3000,
           auth: {
             user: cfg.brevo.fromEmail,
             pass: cfg.gmail.appPassword,
@@ -742,64 +777,13 @@ ${t.help ? `<p>${t.help}</p>` : ''}
         logger.info(`Email sent via Gmail SMTP to ${to} (Message ID: ${info.messageId})`);
         return { ok: true, data: info };
       } catch (gmailErr) {
-        logger.warn('Gmail SMTP send failed, falling back to Brevo API...', { msg: gmailErr.message });
+        logger.warn('Gmail SMTP send failed', { msg: gmailErr.message });
       }
     }
 
-    // 2. Try Brevo HTTP API with explicit 10s timeout and retry logic
-    if (!cfg.brevo.apiKey) {
-      const err = 'BREVO_API_KEY missing in environment';
-      logger.error(err);
-      return { ok: false, error: err };
-    }
-
-    const payload = {
-      sender: { email: cfg.brevo.fromEmail, name: cfg.brevo.fromName },
-      to: [{ email: to }],
-      subject,
-      htmlContent: html,
-      replyTo: { email: cfg.brevo.fromEmail, name: cfg.brevo.fromName },
-    };
-
-    if (cc && cc.includes('@')) payload.cc = [{ email: cc }];
-    if (bcc && bcc.includes('@')) payload.bcc = [{ email: bcc }];
-    
-    if (attachment) {
-      payload.attachment = Array.isArray(attachment) ? attachment : [attachment];
-    }
-
-    // Attempt 1 with 10s timeout
-    try {
-      const res = await axios.post('https://api.brevo.com/v3/smtp/email', payload, {
-        headers: {
-          'api-key': cfg.brevo.apiKey,
-          'Content-Type': 'application/json',
-        },
-        timeout: 10000,
-      });
-
-      logger.info(`Email sent via Brevo → ${to} "${subject}" [${res.data?.messageId}]`);
-      return { ok: true, messageId: res.data?.messageId };
-    } catch (error1) {
-      logger.warn(`Brevo API attempt 1 failed (${error1.message}), retrying in 1.5s...`);
-      // Retry once after 1.5s delay
-      await new Promise(r => setTimeout(r, 1500));
-      try {
-        const res2 = await axios.post('https://api.brevo.com/v3/smtp/email', payload, {
-          headers: {
-            'api-key': cfg.brevo.apiKey,
-            'Content-Type': 'application/json',
-          },
-          timeout: 10000,
-        });
-        logger.info(`Email sent via Brevo (retry) → ${to} "${subject}" [${res2.data?.messageId}]`);
-        return { ok: true, messageId: res2.data?.messageId };
-      } catch (error2) {
-        const detail = error2.response?.data?.message || error2.message || error2;
-        logger.error('Brevo API email failed after retry', { to, subject, detail });
-        return { ok: false, error: detail };
-      }
-    }
+    const err = 'Both Brevo API and Gmail SMTP failed to send email';
+    logger.error(err);
+    return { ok: false, error: err };
   }
 
   // ── HTML wrapper ─────────────────────────────────────────────────────
