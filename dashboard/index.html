@@ -6429,6 +6429,18 @@
       if (bar) bar.classList.remove('visible');
     }
 
+    function stopCall(id) {
+      if (!confirm('Stop the active call?')) return;
+      try {
+        api('/leads/' + id + '/stop-call', { method: 'POST' });
+        toast('🛑 Call stopped', 'success');
+        loadLeads();
+        if (typeof loadClassStudents === 'function' && typeof currentClassId !== 'undefined' && currentClassId) {
+          loadClassStudents();
+        }
+      } catch (e) { toast('❌ ' + e.message, 'error'); }
+    }
+
     function openBulkDeleteModal(ctx) {
       document.getElementById('bulkDeleteContext').value = ctx;
       let set = _selectedLeads;
@@ -8875,12 +8887,44 @@
       if (!email) { toast('Email is required', 'error'); return; }
       if (!phone) { toast('Phone is required', 'error'); return; }
 
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) { toast('Invalid email format', 'error'); return; }
+
+      const phoneRegex = /^\+?[\d\s\-\(\)]{7,20}$/;
+      if (!phoneRegex.test(phone)) { toast('Invalid phone number format', 'error'); return; }
+
+      const btn = document.getElementById('leadFormSaveBtn');
+      btn.disabled = true;
+      btn.textContent = 'Validating…';
+
+      try {
+        // Duplicate check
+        const searchRes = await api('/leads?search=' + encodeURIComponent(email));
+        const dupEmail = searchRes.find(l => l.email.toLowerCase() === email.toLowerCase() && l._id !== id);
+        if (dupEmail) {
+            toast('A lead with this email already exists', 'error');
+            btn.disabled = false;
+            btn.textContent = id ? '💾 Update Lead' : '💾 Save Lead';
+            return;
+        }
+
+        const phoneRes = await api('/leads?search=' + encodeURIComponent(phone));
+        const dupPhone = phoneRes.find(l => (l.phone || '').replace(/\D/g, '') === phone.replace(/\D/g, '') && l._id !== id);
+        if (dupPhone) {
+            toast('A lead with this phone number already exists', 'error');
+            btn.disabled = false;
+            btn.textContent = id ? '💾 Update Lead' : '💾 Save Lead';
+            return;
+        }
+      } catch (e) {
+          console.error("Validation error", e);
+      }
+
       const payload = { fullName, email, phone, grade, courseInterest, status, parentName, parentEmail, notes, state, timeZone, meetingStatus, nextScheduledCall };
       // Assign/clear campaign. On edit, send null to clear; on create, only send when chosen.
       if (id) payload.campaignId = campaignId || null;
       else if (campaignId) payload.campaignId = campaignId;
-      const btn = document.getElementById('leadFormSaveBtn');
-      btn.disabled = true;
+      
       btn.textContent = 'Saving…';
 
       try {
@@ -8909,6 +8953,7 @@
         closeLeadForm();
         await loadLeads();
         if (CLP_CAMPAIGN_ID) await refreshCampaignLeads();
+        if (typeof loadClassStudents === 'function') await loadClassStudents();
       } catch (e) {
         toast('❌ ' + e.message, 'error');
       } finally {
@@ -10481,7 +10526,7 @@
   });
 
   </script>
-  <script src="/classes.js?v=3"></script>
+  <script src="/classes.js?v=4"></script>
 </body>
 
 </html>

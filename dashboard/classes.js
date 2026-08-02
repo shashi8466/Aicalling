@@ -208,7 +208,8 @@ function renderClassStudentsTable() {
                       ? `<button class="btn btn-sm" style="background:var(--hot);color:#fff" onclick="event.stopPropagation(); stopCall('${s.id}')">⏹ Stop</button>`
                       : `<button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); callLead('${s.id}')">📞 Call</button>`
                     }
-                    <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); removeStudentFromClass('${s.id}')">Remove</button>
+                    ${(window._currentUser?.role === 'admin') ? `<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openEditLead('${s.id}')">✏️ Edit</button>` : ''}
+                    <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); removeStudentFromClass('${s.id}')">🗑️ Remove</button>
                 </td>
             </tr>
         `;
