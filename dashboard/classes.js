@@ -208,7 +208,7 @@ function renderClassStudentsTable() {
                       ? `<button class="btn btn-sm" style="background:var(--hot);color:#fff" onclick="event.stopPropagation(); stopCall('${s.id}')">⏹ Stop</button>`
                       : `<button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); callLead('${s.id}')">📞 Call</button>`
                     }
-                    ${(window._currentUser?.role === 'admin' || window._currentUser?.role === 'counselor') ? `<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openEditLead('${s.id}')">✏️ Edit</button>` : ''}
+                    <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openEditLead('${s.id}')">✏️ Edit</button>
                     <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); removeStudentFromClass('${s.id}')">🗑️ Remove</button>
                 </td>
             </tr>
@@ -478,19 +478,24 @@ async function confirmLaunchCampaign() {
         if (!campaignVars.testName) return toast('Test Name is required', 'error');
     }
     
-    const leadIds = launchTarget === 'all' 
-        ? currentClassStudents.map(s => s.id) 
-        : Array.from(cdpSelectedLeads);
+    const payload = { campaignId, campaignVars };
+    if (launchTarget === 'all') {
+        payload.classId = currentClassId;
+    } else {
+        payload.leadIds = Array.from(cdpSelectedLeads);
+    }
         
     try {
         const res = await fetch('/api/leads/bulk-call', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ leadIds, campaignId, campaignVars })
+            body: JSON.stringify(payload)
         });
         if (!res.ok) throw new Error(await res.text());
         closeLaunchCampaignModal();
-        toast(`Launched ${campaignId} for ${leadIds.length} students!`, 'success');
+        
+        const count = launchTarget === 'all' ? currentClassStudents.length : payload.leadIds.length;
+        toast(`Launched ${campaignId} for ${count} students!`, 'success');
         clearCdpBulkSelect();
     } catch (e) {
         toast('Error launching campaign: ' + e.message, 'error');

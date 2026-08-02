@@ -432,12 +432,20 @@ router.post('/leads/:id/call', async (req, res) => {
 
 router.post('/leads/bulk-call', async (req, res) => {
   try {
-    const { leadIds, campaignId, campaignVars } = req.body;
-    if (!Array.isArray(leadIds) || !leadIds.length) {
-      return res.status(400).json({ error: 'leadIds array is required' });
+    const { leadIds, classId, campaignId, campaignVars } = req.body;
+    
+    let targetIds = leadIds;
+    if (classId) {
+      const StudentClass = require('../models/StudentClass');
+      const students = await StudentClass.getStudentsInClass(classId);
+      targetIds = students.map(s => s.id);
+    }
+    
+    if (!Array.isArray(targetIds) || !targetIds.length) {
+      return res.status(400).json({ error: 'leadIds array or classId is required, and must not be empty' });
     }
 
-    res.json({ ok: true, message: `Queued ${leadIds.length} leads for AI calling.` });
+    res.json({ ok: true, message: `Queued ${targetIds.length} leads for AI calling.` });
     
     // Background execution: Sequential dialing
     setTimeout(async () => {
@@ -447,7 +455,7 @@ router.post('/leads/bulk-call', async (req, res) => {
       
       const twilioSvc = require('../services/twilioService');
       
-      for (const id of leadIds) {
+      for (const id of targetIds) {
         try {
           const lead = await Lead.findById(id);
           if (lead && lead.phone && /^\+[1-9]\d{6,14}$/.test(lead.phone)) {
