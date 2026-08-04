@@ -821,7 +821,10 @@ router.post('/leads/bulk', async (req, res) => {
 
         const existing = await Lead.findOne(query);
         if (existing) {
-          throw new Error(`A lead with this email or phone already exists`);
+          results.successCount++;
+          results.createdLeadIds = results.createdLeadIds || [];
+          results.createdLeadIds.push(existing._id);
+          continue;
         }
 
         const newLead = await Lead.create({
