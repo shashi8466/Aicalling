@@ -813,13 +813,15 @@ router.post('/leads/bulk', async (req, res) => {
         const email = data.email?.trim().toLowerCase();
         if (!email) throw new Error('Email is required');
         
-        const query = { email };
-        if (campaignId) query.campaignId = campaignId;
-        else query.campaignId = null;
+        const phone = data.phone?.trim();
+        const query = { $or: [{ email }] };
+        if (phone) {
+          query.$or.push({ phone });
+        }
 
         const existing = await Lead.findOne(query);
         if (existing) {
-          throw new Error(`A lead with email "${email}" already exists`);
+          throw new Error(`A lead with this email or phone already exists`);
         }
 
         const newLead = await Lead.create({

@@ -9309,7 +9309,7 @@
         try {
           const workbook = XLSX.read(data, { type: 'binary' });
           const firstSheet = workbook.SheetNames[0];
-          const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], { defval: "" });
+          const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], { defval: "", raw: false });
           
           if (!rows || rows.length === 0) {
             toast('File is empty or could not be parsed.', 'error');
