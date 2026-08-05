@@ -85,4 +85,18 @@ router.delete('/:id/students/:leadId', async (req, res) => {
   }
 });
 
+// Bulk remove students from class
+router.post('/:id/students/remove', async (req, res) => {
+  try {
+    const { leadIds } = req.body;
+    if (!Array.isArray(leadIds) || !leadIds.length) {
+      return res.status(400).json({ error: 'leadIds array is required' });
+    }
+    await StudentClass.removeStudents(req.params.id, leadIds);
+    res.json({ ok: true, message: `Removed ${leadIds.length} students from class.` });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;

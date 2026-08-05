@@ -9360,12 +9360,20 @@
         const lead = {
           fullName: row[map.fullName] ? String(row[map.fullName]).trim() : '',
           email: row[map.email] ? String(row[map.email]).trim() : '',
-          phone: row[map.phone] ? String(row[map.phone]).trim() : '',
+          phone: (() => {
+            let p = row[map.phone] ? String(row[map.phone]).trim() : '';
+            // If Excel stripped the '+', restore it for common country codes (India, US, UK, etc)
+            if (p.match(/^(91\d{10}|1\d{10}|44\d{10}|61\d{9})$/)) {
+              p = '+' + p;
+            }
+            return p;
+          })(),
           grade: row[map.grade] ? String(row[map.grade]).trim() : '',
           courseInterest: row[map.courseInterest] ? String(row[map.courseInterest]).trim() : '',
           parentName: row[map.parentName] ? String(row[map.parentName]).trim() : '',
           parentEmail: row[map.parentEmail] ? String(row[map.parentEmail]).trim() : '',
-          status: 'new'
+          status: 'new',
+          rowIndex: i + 2
         };
 
         const errors = [];
@@ -9436,10 +9444,16 @@
         
         let msg = `✅ Successfully imported ${data.successCount} leads.`;
         if (data.failedCount > 0) {
-          msg += `\n❌ ${data.failedCount} failed to import (usually duplicates).`;
+          msg += `\n❌ ${data.failedCount} failed to import (usually duplicates).\n`;
+          const details = data.errors.map(err => `• Row ${err.row}: ${err.name} - ${err.error}`).join('\n');
+          // If there are too many errors, truncate
+          const truncatedDetails = details.length > 300 ? details.substring(0, 300) + '... (see console for more)' : details;
+          toast(msg + truncatedDetails, 'warn');
+          console.log('Import Errors:', data.errors);
+        } else {
+          toast(msg, 'success');
         }
         
-        toast(msg, data.failedCount === 0 ? 'success' : 'warn');
         closeImportLeadsModal();
         
         if (data.createdLeadIds && data.createdLeadIds.length > 0 && typeof leadTargetClassId !== 'undefined' && leadTargetClassId) {

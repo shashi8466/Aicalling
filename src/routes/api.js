@@ -817,10 +817,30 @@ router.post('/leads/bulk', async (req, res) => {
         const query = { $or: [{ email }] };
         if (phone) {
           query.$or.push({ phone });
+          if (phone.startsWith('+')) {
+            query.$or.push({ phone: phone.slice(1) });
+          } else {
+            query.$or.push({ phone: '+' + phone });
+          }
         }
 
-        const existing = await Lead.findOne(query);
+        const existingMatches = await Lead.find(query);
+        let existing = null;
+        if (existingMatches && existingMatches.length > 0) {
+            const cleanName = (name) => (name||'').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const targetName = cleanName(data.fullName);
+            existing = existingMatches.find(m => cleanName(m.fullName) === targetName);
+            if (!existing && !targetName) existing = existingMatches[0];
+        }
+
         if (existing) {
+          if (phone && phone.startsWith('+') && existing.phone !== phone) {
+            try {
+              await Lead.findByIdAndUpdate(existing._id, { phone });
+            } catch (e) {
+              // Ignore update error
+            }
+          }
           results.successCount++;
           results.createdLeadIds = results.createdLeadIds || [];
           results.createdLeadIds.push(existing._id);
@@ -849,8 +869,21 @@ router.post('/leads/bulk', async (req, res) => {
         results.createdLeadIds.push(newLead._id);
       } catch (e) {
         results.failedCount++;
-        results.errors.push({ email: data.email, error: e.message });
+        let errMsg = e.message;
+        if (errMsg.includes('leads_email_key') || errMsg.includes('unique constraint')) {
+          errMsg = 'Email already exists (To allow siblings with the same email, drop the unique email constraint in Supabase SQL editor).';
+        }
+        results.errors.push({ 
+          name: data.fullName || 'Unknown', 
+          email: data.email || '', 
+          row: data.rowIndex || '?', 
+          error: errMsg 
+        });
       }
+    }
+
+    if (results.createdLeadIds) {
+      results.createdLeadIds = [...new Set(results.createdLeadIds)];
     }
 
     res.status(200).json(results);

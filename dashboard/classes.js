@@ -283,16 +283,28 @@ async function removeSelectedStudentsFromClass() {
     if (!confirm(`Remove ${cdpSelectedLeads.size} students from the class?`)) return;
     
     const ids = Array.from(cdpSelectedLeads);
-    for (const id of ids) {
-        try {
-            await fetch(`/api/classes/${currentClassId}/students/${id}`, {
-                method: 'DELETE'
-            });
-        } catch(e) {
-            console.error('Failed to remove', id);
+    let hasError = false;
+    
+    try {
+        const res = await fetch(`/api/classes/${currentClassId}/students/remove`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ leadIds: ids })
+        });
+        if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(txt);
         }
+    } catch(e) {
+        console.error('Failed to remove students', e);
+        hasError = true;
     }
-    toast('Removed students from class', 'success');
+    
+    if (hasError) {
+        toast('Some students failed to be removed (check console)', 'error');
+    } else {
+        toast('Removed students from class', 'success');
+    }
     clearCdpBulkSelect();
     loadClassStudents();
 }

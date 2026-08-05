@@ -81,6 +81,17 @@ class StudentClass {
     return true;
   }
 
+  static async removeStudents(classId, leadIds) {
+    if (!leadIds || !leadIds.length) return true;
+    const { error } = await supabase
+      .from('class_students')
+      .delete()
+      .eq('class_id', classId)
+      .in('lead_id', leadIds);
+    if (error) throw new Error(error.message);
+    return true;
+  }
+
   static async getStudentsInClass(classId) {
     // Get class_students join with leads
     const { data, error } = await supabase
