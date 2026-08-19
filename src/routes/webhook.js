@@ -267,6 +267,14 @@ router.post('/call/start', async (req, res) => {
     sessionObj.history.push({ role: 'assistant', content: opener });
     sessions.set(leadId, sessionObj);
 
+    // One-way announcement campaigns (e.g. 'student-flt-posted') speak the opener
+    // verbatim and hang up immediately — no <Gather>, no waiting for a reply.
+    if (campaign.hangupAfterOpener) {
+      sessions.delete(leadId);
+      res.send(twilioSvc.twimlHangup(opener));
+      return;
+    }
+
     res.send(twilioSvc.twimlStart(opener, respondUrl(cfg.server.baseUrl, leadId)));
   } catch (err) {
     logger.error('webhook/start error', { msg: err.message });

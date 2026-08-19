@@ -468,6 +468,14 @@ function updateLaunchCampaignFields() {
                 <div style="font-size:11px;color:var(--muted);margin-top:4px;">The AI will say: "This is a reminder that you have not completed [test name]..."</div>
             </div>
         `;
+    } else if (type === 'student-flt-posted') {
+        html += `
+            <div class="form-group" style="margin-bottom:12px;">
+                <label style="display:block;margin-bottom:4px;font-size:12px;color:var(--muted)">Test Name <span style="color:var(--hot)">*</span></label>
+                <input type="text" id="lc_studentTestName" placeholder="e.g. Digital SAT Full-Length Test 5, ACT Practice Test 3..." style="width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:8px 12px;border-radius:6px;">
+                <div style="font-size:11px;color:var(--muted);margin-top:4px;">The AI will call the student directly and say: "...[test name] link has been posted in your WhatsApp group..."</div>
+            </div>
+        `;
     }
     container.innerHTML = html;
 }
@@ -486,6 +494,10 @@ async function confirmLaunchCampaign() {
         if (!campaignVars.className) return toast('Class Name is required', 'error');
     } else if (campaignId === 'parent-flt') {
         const el = document.getElementById('lc_testName');
+        campaignVars.testName = el ? el.value.trim() : '';
+        if (!campaignVars.testName) return toast('Test Name is required', 'error');
+    } else if (campaignId === 'student-flt-posted') {
+        const el = document.getElementById('lc_studentTestName');
         campaignVars.testName = el ? el.value.trim() : '';
         if (!campaignVars.testName) return toast('Test Name is required', 'error');
     }

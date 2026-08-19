@@ -324,6 +324,47 @@ DO NOT offer [OFFER_MEETING]. DO NOT try to schedule anything. DO NOT do any sal
     },
   },
 
+  // Separate, student-facing sibling of 'parent-flt' — announces that the test link
+  // has already been POSTED (encouraging tone), vs. parent-flt's "not completed yet"
+  // reminder tone to the PARENT. Does not touch or share config with parent-flt.
+  //
+  // This is a ONE-WAY announcement: a standard AI self-introduction, followed by
+  // the exact script content verbatim (no "do you have any questions" prompt added),
+  // then the call hangs up immediately — no Gather, no waiting for a reply.
+  // `hangupAfterOpener: true` is read by src/routes/webhook.js's /call/start
+  // handler to route this campaign through twilioSvc.twimlHangup() instead of
+  // the normal twimlStart() + <Gather> flow every other campaign uses.
+  'student-flt-posted': {
+    type: 'student-flt-posted',
+    name: 'Full Length Test Announcement (Student)',
+    program: 'Student Outreach',
+    skipIdentityCheck: true,
+    hangupAfterOpener: true,
+    opener: (lead, isFollowUp, vars) => {
+      const testName = vars?.testName || 'the Full-Length Test';
+      return `Hi, this is Annie, your AI Assistant from Test Prep Pundits. ` +
+        `Hello Everyone! This is a quick update for all of you. ` +
+        `I have posted ${testName} link in your WhatsApp group. You can take the test at your convenient time. ` +
+        `Please make sure to complete it as soon as possible. This is an important part of your preparation. ` +
+        `If you have any issues accessing the test, feel free to reach out. ` +
+        `All the best! Thanks, Team Test Prep Pundits.`;
+    },
+    // Not used in normal operation — the call ends right after the opener above
+    // (see hangupAfterOpener). Kept only so this campaign has the same shape as
+    // every other registry entry, in case something ever calls it unconditionally.
+    systemContext: (lead, vars) => {
+      const testName = vars?.testName || 'the Full-Length Test';
+      return `━━━ CAMPAIGN: FULL LENGTH TEST ANNOUNCEMENT (STUDENT CALL) ━━━
+This is a one-way announcement call — the opener below is read verbatim, then the
+call ends immediately (hangupAfterOpener: true). This system prompt is not used
+in normal operation since no reply is ever gathered.
+
+Opener (already spoken, then call ends): "Hi, this is Annie, your AI Assistant from Test Prep Pundits. Hello Everyone! This is a quick update for all of you. I have posted ${testName} link in your WhatsApp group. You can take the test at your convenient time. Please make sure to complete it as soon as possible. This is an important part of your preparation. If you have any issues accessing the test, feel free to reach out. All the best! Thanks, Team Test Prep Pundits."
+
+DO NOT offer [OFFER_MEETING]. DO NOT try to schedule anything. DO NOT do any sales pitch.`;
+    },
+  },
+
   'business-partner': {
     type: 'business-partner',
     name: 'Business Partner Opportunity',
