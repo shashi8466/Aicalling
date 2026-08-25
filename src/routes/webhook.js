@@ -225,10 +225,15 @@ router.post('/call/start', async (req, res) => {
     campaign = campaignReg.getCampaign(campaignType, campaignRow);
     logger.info(`Campaign resolved: ${campaignType} for lead ${lead.fullName}`);
     
+    const lastAttempt = lead.callAttempts && lead.callAttempts.length > 0 ? lead.callAttempts[lead.callAttempts.length - 1] : null;
+    const dbCampaignVars = lastAttempt && lastAttempt.campaignVars ? lastAttempt.campaignVars : {};
+
     const campaignVars = {
+      ...dbCampaignVars,
       homeworkTopic: req.query.homeworkTopic,
       testName: req.query.testName,
-      className: req.query.className
+      className: req.query.className,
+      customScript: req.query.customScript || dbCampaignVars.customScript
     };
 
     const sessionObj = {

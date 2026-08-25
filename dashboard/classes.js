@@ -420,11 +420,15 @@ function openLaunchCampaignModal(targetType) {
     launchTarget = targetType;
     let count = 0;
     if (targetType === 'all') count = currentClassStudents.length;
-    else count = cdpSelectedLeads.size;
+    else if (targetType === 'selected') count = cdpSelectedLeads.size;
+    else if (targetType === 'crm-bulk') count = (typeof _selectedLeads !== 'undefined' ? _selectedLeads : new Set()).size;
+    else if (targetType === 'clp-bulk') count = (typeof _clpSelected !== 'undefined' ? _clpSelected : new Set()).size;
+    else if (targetType === 'pclp-bulk') count = (typeof _pclpSelected !== 'undefined' ? _pclpSelected : new Set()).size;
+    else if (targetType === 'individual') count = 1;
     
-    if (count === 0) return toast('No students to launch campaign for', 'error');
+    if (count === 0) return toast('No students/leads to launch campaign for', 'error');
     
-    document.getElementById('launchCampaignInfo').textContent = `Launching campaign for ${count} student(s)`;
+    document.getElementById('launchCampaignInfo').textContent = `Launching campaign for ${count} student(s) / lead(s)`;
     document.getElementById('launchCampaignModal').style.display = 'flex';
     updateLaunchCampaignFields();
 }
@@ -476,7 +480,18 @@ function updateLaunchCampaignFields() {
                 <div style="font-size:11px;color:var(--muted);margin-top:4px;">The AI will call the student directly and say: "...[test name] link has been posted in your WhatsApp group..."</div>
             </div>
         `;
+    } else if (type === 'custom-script') {
+        html += `
+            <div class="form-group" style="margin-bottom:12px;">
+                <label style="display:block;margin-bottom:4px;font-size:12px;color:var(--muted)">Custom Script / Message <span style="color:var(--hot)">*</span></label>
+                <textarea id="lc_customScript" placeholder="Type exactly what you want the AI to say..." style="width:100%;min-height:100px;background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:8px 12px;border-radius:6px;resize:vertical;"></textarea>
+                <div style="font-size:11px;color:var(--muted);margin-top:4px;">
+                    The AI will speak this script exactly as written and then immediately hang up the call. It will not listen for replies or answer questions.
+                </div>
+            </div>
+        `;
     }
+    
     container.innerHTML = html;
 }
 
@@ -500,13 +515,25 @@ async function confirmLaunchCampaign() {
         const el = document.getElementById('lc_studentTestName');
         campaignVars.testName = el ? el.value.trim() : '';
         if (!campaignVars.testName) return toast('Test Name is required', 'error');
+    } else if (campaignId === 'custom-script') {
+        const el = document.getElementById('lc_customScript');
+        campaignVars.customScript = el ? el.value.trim() : '';
+        if (!campaignVars.customScript) return toast('Custom Script is required', 'error');
     }
     
     const payload = { campaignId, campaignVars };
     if (launchTarget === 'all') {
         payload.classId = currentClassId;
-    } else {
+    } else if (launchTarget === 'selected') {
         payload.leadIds = Array.from(cdpSelectedLeads);
+    } else if (launchTarget === 'crm-bulk') {
+        payload.leadIds = Array.from(typeof _selectedLeads !== 'undefined' ? _selectedLeads : []);
+    } else if (launchTarget === 'clp-bulk') {
+        payload.leadIds = Array.from(typeof _clpSelected !== 'undefined' ? _clpSelected : []);
+    } else if (launchTarget === 'pclp-bulk') {
+        payload.leadIds = Array.from(typeof _pclpSelected !== 'undefined' ? _pclpSelected : []);
+    } else if (launchTarget === 'individual') {
+        payload.leadIds = [window.individualCallLeadId];
     }
         
     try {
@@ -518,9 +545,20 @@ async function confirmLaunchCampaign() {
         if (!res.ok) throw new Error(await res.text());
         closeLaunchCampaignModal();
         
-        const count = launchTarget === 'all' ? currentClassStudents.length : payload.leadIds.length;
-        toast(`Launched ${campaignId} for ${count} students!`, 'success');
-        clearCdpBulkSelect();
+        let count = 0;
+        if (launchTarget === 'all') count = currentClassStudents.length;
+        else count = payload.leadIds.length;
+        
+        toast(`Launched ${campaignId} for ${count} students/leads!`, 'success');
+        
+        // Clear appropriate selection
+        if (launchTarget === 'selected') clearCdpBulkSelect();
+        else if (launchTarget === 'crm-bulk' && window.clearBulkSelect) window.clearBulkSelect();
+        else if (launchTarget === 'clp-bulk' && window.clearClpBulkSelect) window.clearClpBulkSelect();
+        else if (launchTarget === 'pclp-bulk' && window.clearPclpBulkSelect) window.clearPclpBulkSelect();
+        
+        // Refresh leads
+        if (window.loadLeads && launchTarget === 'individual') window.loadLeads();
     } catch (e) {
         toast('Error launching campaign: ' + e.message, 'error');
     }

@@ -4711,11 +4711,13 @@
           <div class="form-group" style="margin-bottom:12px;">
             <label style="display:block;margin-bottom:4px;font-size:12px;color:var(--muted)">Campaign Type</label>
             <select id="launchCampaignType" style="width:100%" onchange="updateLaunchCampaignFields()">
+              <option value="">Use Lead's Assigned Campaign (Default)</option>
               <option value="sat-summer-challenge">SAT Summer Digital Challenge (Student)</option>
               <option value="parent-homework">Homework Campaign (Student)</option>
               <option value="parent-absent">Absent Campaign (Student)</option>
               <option value="parent-flt">Full Length Test Campaign (Student)</option>
               <option value="student-flt-posted">Full Length Test Announcement — Direct to Student</option>
+              <option value="custom-script">Custom Campaign</option>
             </select>
           </div>
           <div id="launchCampaignVarsFields" style="margin-top:16px;"></div>
@@ -6521,26 +6523,17 @@
 
     async function bulkAiCall() {
       if (!_selectedLeads.size) { toast('Select at least one lead', 'error'); return; }
-      if (!confirm(`Are you sure you want to trigger AI calls for ${ _selectedLeads.size } selected leads?`)) return;
-      const leadIds = [..._selectedLeads];
-      try {
-        await api('/leads/bulk-call', { method: 'POST', body: JSON.stringify({ leadIds }) });
-        toast(`✅ Bulk AI calling initiated for ${leadIds.length} lead(s)`, 'success');
-        clearBulkSelect();
-        await loadLeads();
-      } catch (e) { toast('❌ ' + e.message, 'error'); }
+      openLaunchCampaignModal('crm-bulk');
     }
 
     async function bulkAiCallClp() {
-      if (!_selectedCampaignLeads.size) { toast('Select at least one lead', 'error'); return; }
-      if (!confirm(`Are you sure you want to trigger AI calls for ${ _selectedCampaignLeads.size } selected leads?`)) return;
-      const leadIds = [..._selectedCampaignLeads];
-      try {
-        await api('/leads/bulk-call', { method: 'POST', body: JSON.stringify({ leadIds, campaignId: _currentCampaignId }) });
-        toast(`✅ Bulk AI calling initiated for ${leadIds.length} lead(s)`, 'success');
-        clearBulkSelectClp();
-        openCampaign(_currentCampaignId);
-      } catch (e) { toast('❌ ' + e.message, 'error'); }
+      if (!_clpSelected.size) { toast('Select at least one lead', 'error'); return; }
+      openLaunchCampaignModal('clp-bulk');
+    }
+
+    async function bulkAiCallPclp() {
+      if (!_pclpSelected.size) { toast('Select at least one parent', 'error'); return; }
+      openLaunchCampaignModal('pclp-bulk');
     }
 
     // ─── Populate campaign filter on leads page ──────────
@@ -8127,24 +8120,20 @@
 
       const campLabel = campaignType && campaignType !== 'demo-test-followup'
         ? ` using the ${campaignType.replace(/-/g, ' ')} script` : '';
-      const ok = confirm(`📞 Place a call to ${lead.fullName} at ${lead.phone}?${campLabel ? '\n\n✅ ' + campLabel : ''}`);
-      if (!ok) return;
-      toast('Placing call…', 'info');
-      try {
-        const body = {};
-        if (campaignType) body.campaignType = campaignType;
-        const r = await api('/leads/' + id + '/call', { method: 'POST', body: JSON.stringify(body) });
-        toast(`📞 ${r.message || 'Call placed'}`, 'success');
-        closeModal();
-        setTimeout(() => {
-          loadLeads();
-          if (CLP_CAMPAIGN_ID) refreshCampaignLeads();
-          if (PCLP_CAMPAIGN_ID) refreshParentCampaignLeads();
-        }, 2000);
-      } catch (e) {
-        toast('❌ ' + e.message, 'error');
-        console.error('Call failed:', e);
+      
+      // Store the individual lead ID for the launch modal payload
+      window.individualCallLeadId = id;
+      
+      // Pre-select the campaign type if it's one of the options, otherwise default to lead's assigned
+      const sel = document.getElementById('launchCampaignType');
+      if (sel) {
+          const hasOption = Array.from(sel.options).some(o => o.value === campaignType);
+          if (hasOption) sel.value = campaignType;
+          else sel.value = ''; // Use Lead's Assigned Campaign
       }
+      
+      // Open the modal instead of instant-dialing, allowing user to pick "Custom Script" or proceed
+      openLaunchCampaignModal('individual');
     }
 
     async function stopCall(id) {
@@ -10541,7 +10530,7 @@
   });
 
   </script>
-  <script src="/classes.js?v=6"></script>
+  <script src="/classes.js?v=9"></script>
 </body>
 
 </html>

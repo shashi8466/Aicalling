@@ -387,11 +387,16 @@ router.post('/leads/:id/call', async (req, res) => {
     // Falls back to the lead's own campaignId → DB lookup → demo default.
     const campaignSvc = require('../services/campaignService');
     const campaignReg = require('../campaigns/registry');
-    let campaignId = (req.body && req.body.campaignId) || null;
+    let campaignId = (req.body && req.body.campaignId) || (req.body && req.body.campaignType) || null;
     let campaignVars = (req.body && req.body.campaignVars) || null;
     // If not supplied by caller, try to resolve from the lead's stored campaignId
     if (!campaignId && lead.campaignId) {
       campaignId = lead.campaignId;
+    }
+    
+    // Save campaignVars on the lead object to avoid Twilio URL length limits
+    if (campaignVars) {
+      lead.campaignVars = campaignVars;
     }
 
     lead.status = 'calling';
@@ -402,6 +407,8 @@ router.post('/leads/:id/call', async (req, res) => {
       attemptNumber: lead.totalCallAttempts,
       startTime:     new Date().toISOString(),
       status:        'initiated',
+      campaignId:    campaignId,
+      campaignVars:  campaignVars,
     });
     await lead.save();
 
@@ -445,14 +452,16 @@ router.post('/leads/bulk-call', async (req, res) => {
       return res.status(400).json({ error: 'leadIds array or classId is required, and must not be empty' });
     }
 
+    const { getCurrentUrl } = require('../utils/tunnel');
+    const baseUrl = getCurrentUrl() || cfg.server.baseUrl;
+    if (!baseUrl || baseUrl.includes('localhost') || baseUrl.includes('your-ngrok')) {
+      return res.status(503).json({ error: 'Public tunnel is not active. Cannot place call — Twilio webhooks would fail.' });
+    }
+
     res.json({ ok: true, message: `Queued ${targetIds.length} leads for AI calling.` });
     
     // Background execution: Sequential dialing
     setTimeout(async () => {
-      const { getCurrentUrl } = require('../utils/tunnel');
-      const baseUrl = getCurrentUrl() || cfg.server.baseUrl;
-      if (!baseUrl || baseUrl.includes('localhost')) return;
-      
       const twilioSvc = require('../services/twilioService');
       
       for (const id of targetIds) {
@@ -463,7 +472,13 @@ router.post('/leads/bulk-call', async (req, res) => {
             lead.totalCallAttempts = (lead.totalCallAttempts || 0) + 1;
             lead.lastCallAt = new Date().toISOString();
             lead.callAttempts = lead.callAttempts || [];
-            lead.callAttempts.push({ attemptNumber: lead.totalCallAttempts, startTime: new Date().toISOString(), status: 'initiated' });
+            lead.callAttempts.push({ 
+              attemptNumber: lead.totalCallAttempts, 
+              startTime: new Date().toISOString(), 
+              status: 'initiated',
+              campaignId: campaignId || lead.campaignId,
+              campaignVars: campaignVars
+            });
             await lead.save();
             const result = await twilioSvc.call(lead, baseUrl, campaignId || lead.campaignId, campaignVars);
             lead.callAttempts[lead.callAttempts.length - 1].callSid = result.callSid;

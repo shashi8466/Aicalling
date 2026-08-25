@@ -25,6 +25,19 @@ function firstName(lead) {
 
 // ── Campaign definitions ────────────────────────────────────────────────────
 const CAMPAIGNS = {
+  // Custom Campaign (Dynamically provides script from UI)
+  'custom-script': {
+    type: 'custom-script',
+    name: 'Custom Campaign',
+    program: 'Multiple',
+    skipIdentityCheck: true,
+    hangupAfterOpener: true,
+    opener: (lead, isFollowUp, vars) => (vars && vars.customScript) ? vars.customScript : 'Hello.',
+    voicemail: (lead, vars) => (vars && vars.customScript) ? vars.customScript : 'Hello.',
+    turn0Line: () => '',
+    systemContext: () => ''
+  },
+
   // 1) EXISTING FLOW — must stay identical to prior hard-coded behaviour.
   'demo-test-followup': {
     type: 'demo-test-followup',

@@ -22,7 +22,7 @@ class TwilioService {
     if (campaignId) params.set('campaignId', campaignId);
     if (campaignVars) {
       for (const [k, v] of Object.entries(campaignVars)) {
-        if (v) params.set(k, v);
+        if (v && k !== 'customScript') params.set(k, v);
       }
     }
 
