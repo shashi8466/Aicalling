@@ -372,8 +372,19 @@ router.post('/leads/:id/call', async (req, res) => {
     const lead = await Lead.findById(req.params.id);
     if (!lead) return res.status(404).json({ error: 'Lead not found' });
 
-    if (!lead.phone || !/^\+[1-9]\d{6,14}$/.test(lead.phone)) {
+    let formattedPhone = lead.phone ? lead.phone.replace(/[^\d+]/g, '') : '';
+    if (formattedPhone.length === 10 && /^\d{10}$/.test(formattedPhone)) formattedPhone = '+1' + formattedPhone;
+    else if (formattedPhone.length === 11 && /^1\d{10}$/.test(formattedPhone)) formattedPhone = '+' + formattedPhone;
+    else if (formattedPhone.startsWith('00')) formattedPhone = '+' + formattedPhone.substring(2);
+    else if (!formattedPhone.startsWith('+') && /^\d+$/.test(formattedPhone)) formattedPhone = '+' + formattedPhone;
+
+    if (!formattedPhone || !/^\+[1-9]\d{6,14}$/.test(formattedPhone)) {
       return res.status(400).json({ error: `Invalid phone number "${lead.phone}". Must be E.164 (e.g. +14155551234).` });
+    }
+    
+    // Save normalized phone back to lead
+    if (lead.phone !== formattedPhone) {
+      lead.phone = formattedPhone;
     }
 
     const { getCurrentUrl } = require('../utils/tunnel');
@@ -467,7 +478,17 @@ router.post('/leads/bulk-call', async (req, res) => {
       for (const id of targetIds) {
         try {
           const lead = await Lead.findById(id);
-          if (lead && lead.phone && /^\+[1-9]\d{6,14}$/.test(lead.phone)) {
+          if (lead && lead.phone) {
+            let formattedPhone = lead.phone.replace(/[^\d+]/g, '');
+            if (formattedPhone.length === 10 && /^\d{10}$/.test(formattedPhone)) formattedPhone = '+1' + formattedPhone;
+            else if (formattedPhone.length === 11 && /^1\d{10}$/.test(formattedPhone)) formattedPhone = '+' + formattedPhone;
+            else if (formattedPhone.startsWith('00')) formattedPhone = '+' + formattedPhone.substring(2);
+            else if (!formattedPhone.startsWith('+') && /^\d+$/.test(formattedPhone)) formattedPhone = '+' + formattedPhone;
+
+            if (/^\+[1-9]\d{6,14}$/.test(formattedPhone)) {
+              if (lead.phone !== formattedPhone) {
+                lead.phone = formattedPhone;
+              }
             lead.status = 'calling';
             lead.totalCallAttempts = (lead.totalCallAttempts || 0) + 1;
             lead.lastCallAt = new Date().toISOString();
@@ -497,6 +518,7 @@ router.post('/leads/bulk-call', async (req, res) => {
               // If attempt is missing, or status is completed/failed/etc., the call is over
               if (!lastAttempt || lastAttempt.status === 'completed' || updatedLead.status !== 'calling') {
                 callActive = false;
+              }
               }
             }
           }
