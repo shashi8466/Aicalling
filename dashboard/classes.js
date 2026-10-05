@@ -204,7 +204,7 @@ function renderClassStudentsTable() {
                 <td>${s.phone || '-'}</td>
                 <td><span class="score-badge">${s.status || '-'}</span></td>
                 <td style="text-align:right">
-                    ${s.status === 'calling'
+                    ${(s.status === 'calling' || s.status === 'queued')
                       ? `<button class="btn btn-sm" style="background:var(--hot);color:#fff" onclick="event.stopPropagation(); stopCall('${s.id}')">⏹ Stop</button>`
                       : `<button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); callLead('${s.id}')">📞 Call</button>`
                     }
@@ -557,8 +557,11 @@ async function confirmLaunchCampaign() {
         else if (launchTarget === 'clp-bulk' && window.clearClpBulkSelect) window.clearClpBulkSelect();
         else if (launchTarget === 'pclp-bulk' && window.clearPclpBulkSelect) window.clearPclpBulkSelect();
         
-        // Refresh leads
+        // Refresh leads and class details
         if (window.loadLeads && launchTarget === 'individual') window.loadLeads();
+        if (typeof refreshClassDetails === 'function' && typeof currentClassId !== 'undefined' && currentClassId) {
+            refreshClassDetails();
+        }
     } catch (e) {
         toast('Error launching campaign: ' + e.message, 'error');
     }

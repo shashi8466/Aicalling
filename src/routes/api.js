@@ -475,6 +475,12 @@ router.post('/leads/bulk-call', async (req, res) => {
     setTimeout(async () => {
       const twilioSvc = require('../services/twilioService');
       
+      try {
+        await Lead.updateMany({ _id: { $in: targetIds } }, { $set: { status: 'queued' } });
+      } catch (e) {
+        logger.error(`Failed to set queued status: ${e.message}`);
+      }
+
       for (const id of targetIds) {
         try {
           const lead = await Lead.findById(id);
@@ -498,7 +504,9 @@ router.post('/leads/bulk-call', async (req, res) => {
               startTime: new Date().toISOString(), 
               status: 'initiated',
               campaignId: campaignId || lead.campaignId,
-              campaignVars: campaignVars
+              campaignVars: campaignVars,
+              classId: classId || null,
+              counselor: req.user ? req.user.email : 'system'
             });
             await lead.save();
             const result = await twilioSvc.call(lead, baseUrl, campaignId || lead.campaignId, campaignVars);
@@ -519,11 +527,24 @@ router.post('/leads/bulk-call', async (req, res) => {
               if (!lastAttempt || lastAttempt.status === 'completed' || updatedLead.status !== 'calling') {
                 callActive = false;
               }
-              }
             }
           }
         } catch(err) {
           logger.error(`Bulk call failed for lead ${id}: ${err.message}`);
+          try {
+            const leadToUpdate = await Lead.findById(id);
+            if (leadToUpdate && leadToUpdate.status === 'calling') {
+              leadToUpdate.status = 'failed';
+              if (leadToUpdate.callAttempts && leadToUpdate.callAttempts.length > 0) {
+                const lastAttempt = leadToUpdate.callAttempts[leadToUpdate.callAttempts.length - 1];
+                lastAttempt.status = 'failed';
+                lastAttempt.error = err.message;
+              }
+              await leadToUpdate.save();
+            }
+          } catch(e) {
+             logger.error(`Failed to update lead ${id} after call failure: ${e.message}`);
+          }
         }
         await new Promise(r => setTimeout(r, 2000)); // 2 seconds delay before next call
       }
@@ -725,7 +746,7 @@ router.post('/leads/:id/stop-call', async (req, res) => {
       }
     }
 
-    if (lead.status === 'calling') lead.status = 'contacted';
+    if (lead.status === 'calling' || lead.status === 'queued') lead.status = 'contacted';
     if (lastAttempt && !['completed','canceled'].includes(lastAttempt.status)) {
       lastAttempt.status  = 'canceled';
       lastAttempt.endTime = new Date().toISOString();
@@ -1232,6 +1253,11 @@ router.get('/calls', async (req, res) => {
           aiSummary:     c.aiSummary,
           sentiment:     c.sentiment,
           hasTranscript: !!c.transcript,
+          error:         c.error,
+          classId:       c.classId,
+          counselor:     c.counselor,
+          campaignId:    c.campaignId,
+          campaignVars:  c.campaignVars,
         });
       });
     });

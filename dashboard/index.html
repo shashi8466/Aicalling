@@ -6578,7 +6578,7 @@
           <td data-label="Calls">${l.totalCallAttempts || 0}</td>
           <td data-label="Actions" style="white-space:nowrap" onclick="event.stopPropagation()">
             <div style="display:flex;gap:4px;flex-wrap:wrap">
-              ${l.status === 'calling'
+              ${(l.status === 'calling' || l.status === 'queued')
             ? `<button class="btn btn-sm" style="background:var(--hot);color:#fff" onclick="stopCall('${l._id}')">🛑 Stop Call</button>`
             : phoneValid
               ? `<button class="btn btn-primary btn-sm" onclick="callLead('${l._id}')">📞 Call</button>`
@@ -6884,7 +6884,7 @@
       if (!el) return;
       const total = leads.length;
       const contacted = leads.filter(l => l.totalCallAttempts > 0).length;
-      const calling = leads.filter(l => l.status === 'calling').length;
+      const calling = leads.filter(l => (l.status === 'calling' || l.status === 'queued')).length;
       const avgScore = total ? Math.round(leads.reduce((s, l) => s + (l.leadScore || 0), 0) / total) : 0;
       el.innerHTML =
         kpiChip('👨‍👩‍👧', total, 'Total Parents', '#8b5cf6') +
@@ -6931,7 +6931,7 @@
           <td data-label="Calls">${l.totalCallAttempts || 0}</td>
           <td data-label="Actions" style="white-space:nowrap" onclick="event.stopPropagation()">
             <div style="display:flex;gap:4px;flex-wrap:wrap">
-              ${l.status === 'calling'
+              ${(l.status === 'calling' || l.status === 'queued')
             ? `<button class="btn btn-sm" style="background:var(--hot);color:#fff" onclick="stopCall('${l._id}')">🛑 Stop</button>`
             : phoneValid
               ? `<button class="btn btn-primary btn-sm" onclick="callLead('${l._id}')">📞 Call</button>`
@@ -7129,7 +7129,7 @@
           <td data-label="Calls">${l.totalCallAttempts || 0}</td>
           <td data-label="Actions" style="white-space:nowrap" onclick="event.stopPropagation()">
             <div style="display:flex;gap:4px;flex-wrap:wrap">
-              ${l.status === 'calling'
+              ${(l.status === 'calling' || l.status === 'queued')
             ? `<button class="btn btn-sm" style="background:var(--hot);color:#fff" onclick="stopCall('${l._id}')">🛑 Stop</button>`
             : phoneValid
               ? `<button class="btn btn-primary btn-sm" onclick="callLead('${l._id}')">📞 Call</button>`
@@ -7239,14 +7239,23 @@
         if (!CALLS.length) { el.innerHTML = '<div class="empty"><div class="icon">📞</div>No call activity yet</div>'; return; }
         el.innerHTML = `
       <table>
-        <thead><tr><th>Lead</th><th>Phone</th><th>Date</th><th>Duration</th><th>Status</th><th>Sentiment</th><th>Recording</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Lead</th><th>Phone</th><th>Context</th><th>Date</th><th>Duration</th><th>Status</th><th>Sentiment</th><th>Recording</th><th>Actions</th></tr></thead>
         <tbody>${CALLS.map(c => `
-          <tr>
-            <td data-label="Lead"><strong>${esc(c.leadName)}</strong> · attempt #${c.attemptNumber}</td>
+          <tr ${c.error ? 'style="background:rgba(239, 68, 68, 0.05)"' : ''}>
+            <td data-label="Lead">
+              <strong>${esc(c.leadName)}</strong> · attempt #${c.attemptNumber}
+              ${c.error ? `<div style="color:var(--danger);font-size:11px;margin-top:4px">⚠️ ${esc(c.error)}</div>` : ''}
+            </td>
             <td data-label="Phone" style="font-family:monospace;font-size:12px">${esc(c.leadPhone)}</td>
+            <td data-label="Context">
+              <div style="font-size:12px;color:var(--text)">${c.campaignId ? esc(c.campaignId.replace(/-/g, ' ')) : 'Manual'}</div>
+              ${c.classId ? `<div style="font-size:11px;color:var(--muted)">Group Call</div>` : `<div style="font-size:11px;color:var(--muted)">Lead Call</div>`}
+              ${c.counselor ? `<div style="font-size:11px;color:var(--muted)">By: ${esc(c.counselor)}</div>` : ''}
+              ${c.campaignVars?.customScript ? `<div style="font-size:11px;color:var(--muted);max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(c.campaignVars.customScript)}">"${esc(c.campaignVars.customScript)}"</div>` : ''}
+            </td>
             <td data-label="Date">${c.startTime ? new Date(c.startTime).toLocaleString() : '—'}</td>
             <td data-label="Duration">${c.duration ? c.duration + 's' : '—'}</td>
-            <td data-label="Status"><span class="status-badge">${c.status || '—'}</span></td>
+            <td data-label="Status"><span class="status-badge ${c.status === 'failed' ? 'error' : ''}">${c.status || '—'}</span></td>
             <td data-label="Sentiment">${sentEmoji(c.sentiment)} ${c.sentiment || '—'}</td>
             <td data-label="Recording">${c.recordingUrl ? '🎙️ Yes' : '—'}</td>
             <td data-label="Actions" style="white-space:nowrap;display:flex;gap:6px">
@@ -7975,7 +7984,7 @@
 
         body += `
       <div class="action-bar">
-        ${l.status === 'calling'
+        ${(l.status === 'calling' || l.status === 'queued')
             ? `<button class="btn" style="background:var(--hot);color:#fff" onclick="stopCall('${l._id}')">🛑 Stop Call</button>`
             : `<button class="btn btn-primary" onclick="callLead('${l._id}')">📞 Call Now</button>`
           }
@@ -8144,7 +8153,13 @@
         const r = await api('/leads/' + id + '/stop-call', { method: 'POST' });
         toast(`🛑 ${r.message || 'Call stopped'}`, 'success');
         closeModal();
-        setTimeout(loadLeads, 1000);
+        setTimeout(() => {
+          loadLeads();
+          const activeView = document.querySelector('.view.active')?.id || '';
+          if (activeView === 'view-classes' && typeof refreshClassDetails === 'function' && typeof currentClassId !== 'undefined' && currentClassId) {
+            refreshClassDetails();
+          }
+        }, 1000);
       } catch (e) {
         toast('❌ ' + e.message, 'error');
       }
@@ -10012,6 +10027,9 @@
             loadLeads();
             loadMeetings();
             if (activeView === 'view-billing') loadBilling();
+            if (activeView === 'view-classes' && typeof refreshClassDetails === 'function' && typeof currentClassId !== 'undefined' && currentClassId) {
+              refreshClassDetails();
+            }
           };
           sse.onerror = () => {
             sse.close();
@@ -10030,6 +10048,10 @@
           loadLeads();
           loadMeetings().catch(() => {});
           loadCallbacks().catch(() => {});
+          const activeView = document.querySelector('.view.active')?.id || '';
+          if (activeView === 'view-classes' && typeof refreshClassDetails === 'function' && typeof currentClassId !== 'undefined' && currentClassId) {
+            refreshClassDetails();
+          }
         }
       }, 30000);
     })();
