@@ -529,7 +529,8 @@ router.post('/leads/bulk-call', async (req, res) => {
               }
             }
           }
-        } catch(err) {
+        }
+      } catch(err) {
           logger.error(`Bulk call failed for lead ${id}: ${err.message}`);
           try {
             const leadToUpdate = await Lead.findById(id);
