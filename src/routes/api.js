@@ -481,14 +481,15 @@ router.post('/leads/:id/call', async (req, res) => {
 router.post('/leads/bulk-call', async (req, res) => {
   try {
     const { leadIds, classId, campaignId, campaignVars } = req.body;
-    
+    const { supabase } = require('../db/supabase');
+
     let targetIds = leadIds;
     if (classId) {
       const StudentClass = require('../models/StudentClass');
       const students = await StudentClass.getStudentsInClass(classId);
       targetIds = students.map(s => s.id);
     }
-    
+
     if (!Array.isArray(targetIds) || !targetIds.length) {
       return res.status(400).json({ error: 'leadIds array or classId is required, and must not be empty' });
     }
@@ -496,17 +497,17 @@ router.post('/leads/bulk-call', async (req, res) => {
     const { getCurrentUrl } = require('../utils/tunnel');
     const baseUrl = getCurrentUrl() || cfg.server.baseUrl;
     if (!baseUrl || baseUrl.includes('localhost') || baseUrl.includes('your-ngrok')) {
-      return res.status(503).json({ error: 'Public tunnel is not active. Cannot place call — Twilio webhooks would fail.' });
+      return res.status(503).json({ error: 'Public tunnel is not active. Cannot place call — webhooks would fail.' });
     }
 
     res.json({ ok: true, message: `Queued ${targetIds.length} leads for AI calling.` });
-    
+
     // Background execution: Sequential dialing
     setTimeout(async () => {
-      const twilioSvc = require('../services/twilioService');
-      
+      const callSvc = require('../services/twilioService'); // shim → telnyxService
+
+      // Mark all as queued
       try {
-        const { supabase } = require('../db/supabase');
         await supabase.from('leads').update({ status: 'queued' }).in('id', targetIds);
       } catch (e) {
         logger.error(`Failed to set queued status: ${e.message}`);
@@ -514,80 +515,111 @@ router.post('/leads/bulk-call', async (req, res) => {
 
       for (const id of targetIds) {
         try {
-          const lead = await Lead.findById(id);
-          if (lead && lead.phone) {
-            let formattedPhone = lead.phone.replace(/[^\d+]/g, '');
-            if (formattedPhone.length === 10 && /^\d{10}$/.test(formattedPhone)) formattedPhone = '+1' + formattedPhone;
-            else if (formattedPhone.length === 11 && /^1\d{10}$/.test(formattedPhone)) formattedPhone = '+' + formattedPhone;
-            else if (formattedPhone.startsWith('00')) formattedPhone = '+' + formattedPhone.substring(2);
-            else if (!formattedPhone.startsWith('+') && /^\d+$/.test(formattedPhone)) formattedPhone = '+' + formattedPhone;
+          // Fetch lead from Supabase
+          const { data: lead, error: fetchErr } = await supabase
+            .from('leads')
+            .select('*')
+            .eq('id', id)
+            .single();
 
-            if (/^\+[1-9]\d{6,14}$/.test(formattedPhone)) {
-              if (lead.phone !== formattedPhone) {
-                lead.phone = formattedPhone;
-              }
-            lead.status = 'calling';
-            lead.totalCallAttempts = (lead.totalCallAttempts || 0) + 1;
-            lead.lastCallAt = new Date().toISOString();
-            lead.callAttempts = lead.callAttempts || [];
-            lead.callAttempts.push({ 
-              attemptNumber: lead.totalCallAttempts, 
-              startTime: new Date().toISOString(), 
-              status: 'initiated',
-              campaignId: campaignId || lead.campaignId,
-              campaignVars: campaignVars,
-              classId: classId || null,
-              counselor: req.user ? req.user.email : 'system'
-            });
-            await lead.save();
-            const result = await twilioSvc.call(lead, baseUrl, campaignId || lead.campaignId, campaignVars);
-            lead.callAttempts[lead.callAttempts.length - 1].callSid = result.callSid;
-            await lead.save();
+          if (fetchErr || !lead) {
+            logger.error(`Bulk call: lead ${id} not found`);
+            continue;
+          }
 
-            // Wait for this call to finish before moving to the next lead
-            let callActive = true;
-            let checks = 0;
-            while (callActive && checks < 120) { // Max 10 minutes (120 * 5s)
-              await new Promise(resolve => setTimeout(resolve, 5000));
-              checks++;
-              const updatedLead = await Lead.findById(id);
-              if (!updatedLead) break;
-              
-              const lastAttempt = updatedLead.callAttempts[updatedLead.callAttempts.length - 1];
-              // If attempt is missing, or status is completed/failed/etc., the call is over
-              if (!lastAttempt || lastAttempt.status === 'completed' || updatedLead.status !== 'calling') {
-                callActive = false;
-              }
+          if (!lead.phone) {
+            logger.warn(`Bulk call: lead ${id} has no phone number — skipping`);
+            continue;
+          }
+
+          // Normalise phone
+          let formattedPhone = lead.phone.replace(/[^\d+]/g, '');
+          if (formattedPhone.length === 10 && /^\d{10}$/.test(formattedPhone)) formattedPhone = '+1' + formattedPhone;
+          else if (formattedPhone.length === 11 && /^1\d{10}$/.test(formattedPhone)) formattedPhone = '+' + formattedPhone;
+          else if (formattedPhone.startsWith('00')) formattedPhone = '+' + formattedPhone.substring(2);
+          else if (!formattedPhone.startsWith('+') && /^\d+$/.test(formattedPhone)) formattedPhone = '+' + formattedPhone;
+
+          if (!/^\+[1-9]\d{6,14}$/.test(formattedPhone)) {
+            logger.warn(`Bulk call: lead ${id} has invalid phone "${lead.phone}" — skipping`);
+            continue;
+          }
+
+          // Build a lead object that works with callSvc (supports both _id and id)
+          const leadObj = { ...lead, _id: lead.id, phone: formattedPhone };
+
+          // Update lead status → calling
+          const now = new Date().toISOString();
+          const totalAttempts = (lead.total_call_attempts || 0) + 1;
+          const callAttempts  = Array.isArray(lead.call_attempts) ? [...lead.call_attempts] : [];
+          callAttempts.push({
+            attemptNumber: totalAttempts,
+            startTime:     now,
+            status:        'initiated',
+            campaignId:    campaignId || lead.campaign_id,
+            campaignVars:  campaignVars,
+            classId:       classId || null,
+            counselor:     req.user ? req.user.email : 'system',
+          });
+
+          await supabase.from('leads').update({
+            status:              'calling',
+            phone:               formattedPhone,
+            total_call_attempts: totalAttempts,
+            last_call_at:        now,
+            call_attempts:       callAttempts,
+          }).eq('id', id);
+
+          // Place the call via Telnyx
+          const result = await callSvc.call(leadObj, baseUrl, campaignId || lead.campaign_id, campaignVars);
+
+          // Store call SID
+          callAttempts[callAttempts.length - 1].callSid = result.callSid;
+          await supabase.from('leads').update({ call_attempts: callAttempts }).eq('id', id);
+
+          // Wait for call to finish (poll Supabase, max 10 minutes)
+          let callActive = true;
+          let checks = 0;
+          while (callActive && checks < 120) {
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            checks++;
+            const { data: updated } = await supabase.from('leads').select('status, call_attempts').eq('id', id).single();
+            if (!updated) break;
+            const last = Array.isArray(updated.call_attempts) && updated.call_attempts.length
+              ? updated.call_attempts[updated.call_attempts.length - 1]
+              : null;
+            if (!last || last.status === 'completed' || updated.status !== 'calling') {
+              callActive = false;
             }
           }
-        }
-      } catch(err) {
+
+        } catch (err) {
           logger.error(`Bulk call failed for lead ${id}: ${err.message}`);
           try {
-            const leadToUpdate = await Lead.findById(id);
-            if (leadToUpdate && leadToUpdate.status === 'calling') {
-              leadToUpdate.status = 'failed';
-              if (leadToUpdate.callAttempts && leadToUpdate.callAttempts.length > 0) {
-                const lastAttempt = leadToUpdate.callAttempts[leadToUpdate.callAttempts.length - 1];
-                lastAttempt.status = 'failed';
-                lastAttempt.error = err.message;
+            const { data: lt } = await supabase.from('leads').select('status, call_attempts').eq('id', id).single();
+            if (lt && lt.status === 'calling') {
+              const attempts = Array.isArray(lt.call_attempts) ? [...lt.call_attempts] : [];
+              if (attempts.length) {
+                attempts[attempts.length - 1].status = 'failed';
+                attempts[attempts.length - 1].error  = err.message;
               }
-              await leadToUpdate.save();
+              await supabase.from('leads').update({ status: 'failed', call_attempts: attempts }).eq('id', id);
             }
-          } catch(e) {
-             logger.error(`Failed to update lead ${id} after call failure: ${e.message}`);
+          } catch (e) {
+            logger.error(`Failed to update lead ${id} after call failure: ${e.message}`);
           }
         }
-        await new Promise(r => setTimeout(r, 2000)); // 2 seconds delay before next call
+
+        await new Promise(r => setTimeout(r, 2000)); // 2-second gap between calls
       }
     }, 100);
 
-  } catch(e) {
+  } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
 // ═══════════════════════════════════════════════════════════════════════
+
 //   BULK EMAIL
 // ═══════════════════════════════════════════════════════════════════════
 
