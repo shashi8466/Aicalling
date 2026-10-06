@@ -155,6 +155,19 @@ function mapHangupStatus(cause, answered) {
   }
 }
 
+// Wrap text in SSML so acronyms are spelled out letter by letter — "SAT" is
+// spoken "ess-ay-tee", never the word "sat". Upstream text may already have
+// been rewritten to "S-A-T" / "S.A.T.", so all spellings are normalised.
+function toSsml(text) {
+  const escaped = text.trim()
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  const spelled = escaped.replace(/\bS-A-T\b|\bS\.A\.T\b\.?|\bSAT\b/g,
+    '<say-as interpret-as="characters">SAT</say-as>');
+  return `<speak>${spelled}</speak>`;
+}
+
 async function driveTwilioFlow(callControlId, state, urlPath, twilioBody = {}) {
   // Once the call is gone, only the final status callback may still run.
   if (state.ended && !urlPath.startsWith('/webhook/call/status')) return;
@@ -252,11 +265,21 @@ async function driveTwilioFlow(callControlId, state, urlPath, twilioBody = {}) {
     state.hangupAfterSpeak = hangup && !gatherNode;
 
     if (sayText) {
-      await telnyxPost(`/calls/${callControlId}/actions/speak`, {
-        payload: sayText.trim(),
-        voice: sayVoice,
-        language: sayLanguage
-      });
+      try {
+        await telnyxPost(`/calls/${callControlId}/actions/speak`, {
+          payload: toSsml(sayText),
+          payload_type: 'ssml',
+          voice: sayVoice,
+          language: sayLanguage
+        });
+      } catch (e) {
+        // SSML rejected — fall back to plain text so the call still speaks.
+        await telnyxPost(`/calls/${callControlId}/actions/speak`, {
+          payload: sayText.trim(),
+          voice: sayVoice,
+          language: sayLanguage
+        });
+      }
     } else if (hangup) {
       await hangupCall(callControlId);
     }
