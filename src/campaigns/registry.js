@@ -25,17 +25,27 @@ function firstName(lead) {
 
 // ── Campaign definitions ────────────────────────────────────────────────────
 const CAMPAIGNS = {
-  // Custom Campaign (Dynamically provides script from UI)
   'custom-script': {
     type: 'custom-script',
     name: 'Custom Campaign',
     program: 'Multiple',
     skipIdentityCheck: true,
-    hangupAfterOpener: true,
     opener: (lead, isFollowUp, vars) => (vars && vars.customScript) ? vars.customScript : 'Hello.',
     voicemail: (lead, vars) => (vars && vars.customScript) ? vars.customScript : 'Hello.',
     turn0Line: () => '',
-    systemContext: () => ''
+    systemContext: (lead, vars) => {
+      const script = vars?.customScript || '';
+      return `━━━ CAMPAIGN: CUSTOM CAMPAIGN ━━━
+You are an AI Assistant calling from Test Prep Pundits.
+This is a custom campaign. The following is the exact script/instructions provided for this call:
+"${script}"
+
+INSTRUCTIONS:
+- You have already spoken the script as the opening line.
+- If the script implies this is just a test call or a one-way announcement (e.g. no questions asked), you should immediately say goodbye and use the [END_CALL] action.
+- If the script mentions booking a consultation, scheduling a meeting, or asks a question, continue the conversation and use [OFFER_MEETING] when appropriate to book the consultation according to the script.
+- Follow the tone and instructions provided in the custom script.`;
+    }
   },
 
   // 1) EXISTING FLOW — must stay identical to prior hard-coded behaviour.

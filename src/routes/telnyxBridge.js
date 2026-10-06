@@ -74,6 +74,9 @@ router.post('/', async (req, res) => {
       logger.info(`[CALL] TTS completed for call_control_id=${callControlId}`);
       if (state.redirectUrl) {
         await driveTwilioFlow(callControlId, state, state.redirectUrl);
+      } else if (state.hangupAfterSpeak) {
+        logger.info(`[CALL] Hanging up after speak as requested by TwiML`);
+        await telnyxPost(`/calls/${callControlId}/actions/hangup`, {});
       }
     } else if (eventType === 'call.hangup' || eventType === 'call.completed') {
       activeCalls.delete(callSessionId);
@@ -139,11 +142,16 @@ async function driveTwilioFlow(callControlId, state, urlPath, twilioBody = {}) {
 
     logger.info(`[CALL] Parsed TwiML Response`);
 
+    let sayVoice = 'Polly.Joanna-Neural';
+    let sayLanguage = 'en-US';
+
     if (responseNode.Say) {
       if (Array.isArray(responseNode.Say)) {
         sayText += responseNode.Say.map(extractText).join(' ');
+        sayVoice = responseNode.Say[0]?.$?.voice || sayVoice;
       } else {
         sayText += extractText(responseNode.Say);
+        sayVoice = responseNode.Say.$?.voice || sayVoice;
       }
     }
     
@@ -151,11 +159,12 @@ async function driveTwilioFlow(callControlId, state, urlPath, twilioBody = {}) {
       gatherNode = responseNode.Gather;
       if (gatherNode.Say) {
         sayText += ' ' + extractText(gatherNode.Say);
+        sayVoice = gatherNode.Say.$?.voice || sayVoice;
       }
     }
     
     sayText = sayText.trim();
-    logger.info(`[CALL] Extracted speak payload: "${sayText}"`);
+    logger.info(`[CALL] Extracted speak payload: "${sayText}" with voice: ${sayVoice}`);
 
     if (responseNode.Redirect) {
       redirectUrl = typeof responseNode.Redirect === 'string' ? responseNode.Redirect : responseNode.Redirect._;
@@ -167,20 +176,22 @@ async function driveTwilioFlow(callControlId, state, urlPath, twilioBody = {}) {
 
     state.nextActionUrl = gatherNode?.$?.action || null;
     state.redirectUrl = redirectUrl || null;
+    // If the XML wants to hang up after speaking, save that to state so we know to hang up on speak.ended
+    state.hangupAfterSpeak = hangup && !gatherNode;
 
     if (sayText && gatherNode) {
       await telnyxPost(`/calls/${callControlId}/actions/gather_using_speak`, {
         payload: sayText.trim(),
-        voice: 'female',
-        language: 'en-US',
+        voice: sayVoice,
+        language: sayLanguage,
         minimum_digits: 1,
         maximum_digits: 11, // allow dtmf optionally
       });
     } else if (sayText && !gatherNode) {
       await telnyxPost(`/calls/${callControlId}/actions/speak`, {
         payload: sayText.trim(),
-        voice: 'female',
-        language: 'en-US'
+        voice: sayVoice,
+        language: sayLanguage
       });
     } else if (hangup) {
       await telnyxPost(`/calls/${callControlId}/actions/hangup`, {});
