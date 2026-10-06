@@ -2,8 +2,8 @@ require('dotenv').config();
 
 module.exports = {
   twilio: {
-    accountSid:  process.env.TWILIO_ACCOUNT_SID || process.env.TELNYX_API_KEY,
-    authToken:   process.env.TWILIO_AUTH_TOKEN || process.env.TELNYX_PUBLIC_KEY,
+    accountSid:  process.env.TWILIO_ACCOUNT_SID,
+    authToken:   process.env.TWILIO_AUTH_TOKEN,
     phoneNumber: process.env.TWILIO_PHONE_NUMBER || process.env.TELNYX_PHONE_NUMBER,
   },
 

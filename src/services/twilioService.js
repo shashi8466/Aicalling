@@ -3,16 +3,37 @@
  * – Initiates outbound calls
  * – Builds TwiML responses for conversation turns
  * – Voicemail detection
+ *
+ * NOTE: The Twilio client is lazy-initialized so the app does not crash at
+ * startup when Twilio credentials are absent (e.g. when using Telnyx).
+ * The client is only created on first actual use.
  */
 const twilio = require('twilio');
 const cfg    = require('../config');
 const logger = require('../logger');
 
-const client = twilio(cfg.twilio.accountSid, cfg.twilio.authToken);
-const VR     = twilio.twiml.VoiceResponse;
+// Lazy client — created only when first needed
+let _client = null;
+function getClient() {
+  if (!_client) {
+    const sid = cfg.twilio.accountSid;
+    const token = cfg.twilio.authToken;
+    if (!sid || !sid.startsWith('AC')) {
+      throw new Error(
+        'Twilio accountSid is missing or invalid. ' +
+        'Set TWILIO_ACCOUNT_SID in your environment, or switch to the Telnyx calling service.'
+      );
+    }
+    _client = twilio(sid, token);
+  }
+  return _client;
+}
 
-const VOICE  = 'Polly.Joanna-Neural';  // natural US English female voice
-const LANG   = 'en-US';
+const VR    = twilio.twiml.VoiceResponse;
+
+const VOICE = 'Polly.Joanna-Neural';  // natural US English female voice
+const LANG  = 'en-US';
+
 
 class TwilioService {
 
@@ -26,7 +47,7 @@ class TwilioService {
       }
     }
 
-    const call = await client.calls.create({
+    const call = await getClient().calls.create({
       to:   lead.phone,
       from: cfg.twilio.phoneNumber,
 
@@ -211,7 +232,7 @@ class TwilioService {
     const leadId = lead._id.toString();
     const params = new URLSearchParams({ leadId, followUp: '1' });
 
-    const call = await client.calls.create({
+    const call = await getClient().calls.create({
       to:   lead.phone,
       from: cfg.twilio.phoneNumber,
       url:    `${baseUrl}/webhook/call/start?${params}`,
@@ -234,12 +255,12 @@ class TwilioService {
   }
 
   /** Expose client for AMD hangup */
-  _client() { return client; }
+  _client() { return getClient(); }
 
   /** Forcefully end an in-progress call by SID (admin Stop Call) */
   async endCall(callSid) {
     if (!callSid) throw new Error('No callSid provided');
-    return client.calls(callSid).update({ status: 'completed' });
+    return getClient().calls(callSid).update({ status: 'completed' });
   }
 
   /** End call gracefully */
