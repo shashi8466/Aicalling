@@ -18,6 +18,7 @@ const logger = require('./logger');
 const poller = require('./jobs/poller');
 
 const webhookRouter    = require('./routes/webhook');
+const telnyxBridgeRouter = require('./routes/telnyxBridge');
 const livekitWebhookRouter = require('./routes/livekitWebhook');
 const apiRouter        = require('./routes/api');
 const crmRouter        = require('./routes/crm');
@@ -62,6 +63,7 @@ app.use((req, res, next) => {
 // ── Routes ──────────────────────────────────────────────────────────────────
 // Twilio webhooks — NO auth (Twilio posts without our JWT)
 app.use('/webhook', webhookRouter);
+app.use('/webhook/telnyx-bridge', telnyxBridgeRouter);
 
 // LiveKit server webhooks (room/track/egress events) — NO auth, LiveKit signs the payload itself
 app.use('/webhook/livekit', livekitWebhookRouter);

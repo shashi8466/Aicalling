@@ -33,21 +33,17 @@ const VOICE  = 'Polly.Joanna-Neural';
 const LANG   = 'en-US';
 
 // ── HTTP client ────────────────────────────────────────────────────────
-function telnyxPost(path, body) {
-  return axios.post(`${TELNYX_BASE}${path}`, body, {
+function telnyxPost(path, payload) {
+  return axios.post(`${TELNYX_BASE}${path}`, payload, {
     headers: {
       'Authorization': `Bearer ${TELNYX_API_KEY}`,
       'Content-Type':  'application/json',
+      'Accept': 'application/json'
     },
-  });
-}
-
-function telnyxPatch(path, body) {
-  return axios.patch(`${TELNYX_BASE}${path}`, body, {
-    headers: {
-      'Authorization': `Bearer ${TELNYX_API_KEY}`,
-      'Content-Type':  'application/json',
-    },
+  }).catch(err => {
+    const details = err.response?.data;
+    const msg = details ? JSON.stringify(details) : err.message;
+    throw new Error(`Telnyx API Error: ${msg}`);
   });
 }
 
@@ -64,40 +60,30 @@ class TelnyxService {
     validateConfig();
 
     const leadId = (lead._id || lead.id).toString();
-    const params = new URLSearchParams({ leadId });
-    if (campaignId) params.set('campaignId', campaignId);
-    if (campaignVars) {
-      for (const [k, v] of Object.entries(campaignVars)) {
-        if (v && k !== 'customScript') params.set(k, v);
-      }
-    }
+    const paramObj = { leadId };
+    if (campaignId) paramObj.campaignId = campaignId;
+    if (campaignVars) Object.assign(paramObj, campaignVars);
 
-    const webhookUrl = `${baseUrl}/webhook/call/start?${params}`;
-    const statusUrl  = `${baseUrl}/webhook/call/status?${params}`;
+    const clientStateObj = {
+      phone: lead.phone,
+      params: paramObj
+    };
 
     const payload = {
-      to:           lead.phone,
-      from:         TELNYX_PHONE,
-      from_display_name: cfg.company?.counselorName || 'Test Prep Pundits',
-      webhook_url:  webhookUrl,
-      // TeXML application — if set, Telnyx fetches webhookUrl like Twilio would
-      // If TELNYX_APP_ID is set, use it; otherwise use webhook_url directly
-      ...(TELNYX_APP_ID       ? { connection_id: TELNYX_APP_ID }       : {}),
-      ...(TELNYX_CONNECTION   ? { voice_settings: { connection_id: TELNYX_CONNECTION } } : {}),
-      answering_machine_detection: 'premium',
-      answering_machine_detection_config: {
-        silence_timeout: 5000,
-        maximum_words:   10,
-      },
+      to:   lead.phone,
+      from: TELNYX_PHONE,
+      connection_id: TELNYX_APP_ID,
+      client_state: Buffer.from(JSON.stringify(clientStateObj)).toString('base64'),
+      answering_machine_detection: 'premium'
     };
 
     const response = await telnyxPost('/calls', payload);
     const callData = response.data?.data || {};
     const callControlId = callData.call_control_id || callData.id;
-    const callSid       = callControlId; // use Telnyx call_control_id as our "SID"
+    const callSid  = callControlId;
 
-    logger.info(`[Telnyx] Outbound call placed → ${lead.phone}  call_control_id=${callControlId}`);
-    return { callSid, callControlId, status: callData.call_leg_id ? 'initiated' : 'queued' };
+    logger.info(`[Telnyx] Outbound call placed → ${lead.phone}  SID=${callSid}`);
+    return { callSid, callControlId, status: 'initiated' };
   }
 
   // ── Follow-up call ────────────────────────────────────────────────────
@@ -105,28 +91,36 @@ class TelnyxService {
     validateConfig();
 
     const leadId = (lead._id || lead.id).toString();
-    const params = new URLSearchParams({ leadId, followUp: '1' });
+    const clientStateObj = {
+      phone: lead.phone,
+      params: { leadId, followUp: '1' }
+    };
 
     const payload = {
-      to:          lead.phone,
-      from:        TELNYX_PHONE,
-      webhook_url: `${baseUrl}/webhook/call/start?${params}`,
-      answering_machine_detection: 'premium',
+      to:   lead.phone,
+      from: TELNYX_PHONE,
+      connection_id: TELNYX_APP_ID,
+      client_state: Buffer.from(JSON.stringify(clientStateObj)).toString('base64'),
+      answering_machine_detection: 'premium'
     };
 
     const response = await telnyxPost('/calls', payload);
     const callData = response.data?.data || {};
     const callControlId = callData.call_control_id || callData.id;
-    logger.info(`[Telnyx] Follow-up call placed → ${lead.phone}  id=${callControlId}`);
-    return { callSid: callControlId, callControlId, status: 'initiated' };
+    const callSid  = callControlId;
+
+    logger.info(`[Telnyx] Follow-up call placed → ${lead.phone}  SID=${callSid}`);
+    return { callSid, callControlId: callSid, status: 'initiated' };
   }
 
   // ── End call (admin stop) ─────────────────────────────────────────────
-  async endCall(callControlId) {
-    if (!callControlId) throw new Error('No callControlId provided');
+  async endCall(callSid) {
+    if (!callSid) throw new Error('No callSid provided');
     validateConfig();
-    await telnyxPost(`/calls/${callControlId}/actions/hangup`, {});
-    logger.info(`[Telnyx] Hung up call ${callControlId}`);
+    
+    // Update call status to completed
+    await telnyxPost(`/calls/${callSid}/actions/hangup`, {});
+    logger.info(`[Telnyx] Hung up call ${callSid}`);
   }
 
   // ── Expose "client" shim — used by webhook AMD hangup ─────────────────
