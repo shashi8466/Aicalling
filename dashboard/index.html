@@ -3595,6 +3595,9 @@
                 <select id="leadCampaignFilter" onchange="filterLeads()" style="display:none">
                   <option value="">All Campaigns</option>
                 </select>
+                <select id="leadCounselorFilter" onchange="filterLeads()" style="display:none" class="admin-only-btn">
+                  <option value="">All Counselors</option>
+                </select>
                 <button class="btn btn-primary btn-sm" onclick="openAddLead()">➕ Add Lead</button>
                 <button class="btn btn-secondary btn-sm" onclick="openImportLeadsModal()">⬆ Import Leads</button>
               </div>
@@ -3613,6 +3616,11 @@
               <button class="bulk-clear" onclick="clearBulkSelect()">✕ Clear</button>
             </div>
             <div id="leadsTable"></div>
+            <div id="leadsPagination" style="padding: 16px; display: flex; justify-content: center; gap: 8px; align-items: center; display: none;">
+              <button class="btn btn-secondary btn-sm" id="btnPrevPage" onclick="changeLeadPage(-1)" disabled>Previous</button>
+              <span id="pageIndicator" style="line-size: 13px; color: var(--muted); font-weight: 500;">Page 1</span>
+              <button class="btn btn-secondary btn-sm" id="btnNextPage" onclick="changeLeadPage(1)">Next</button>
+            </div>
           </div>
         </section>
 
@@ -5427,6 +5435,18 @@
             el.style.display = '';
           });
           document.querySelectorAll('.admin-only-btn').forEach(el => el.style.display = 'inline-block');
+          // Load counselors into filter
+          api('/counselors').then(c => {
+            const sel = document.getElementById('leadCounselorFilter');
+            if (sel) {
+              c.forEach(cslr => {
+                const opt = document.createElement('option');
+                opt.value = cslr.id;
+                opt.textContent = cslr.name;
+                sel.appendChild(opt);
+              });
+            }
+          }).catch(()=>{});
         }
 
         // Update sidebar brand
@@ -5954,7 +5974,7 @@
       };
       document.getElementById('pageTitle').textContent = titles[name] || name;
       if (name === 'overview') loadOverview();
-      if (name === 'leads') renderLeadsTable();
+      if (name === 'leads') loadLeads();
       if (name === 'calls') loadCalls();
       if (name === 'meetings') loadMeetings();
       if (name === 'analytics') loadAnalytics();
@@ -6143,8 +6163,16 @@
 
         renderFunnel(s);
         renderDistribution(s);
+        
+        try {
+          if (!window.LEADS || window.LEADS.length === 0) {
+            const res = await api('/leads?limit=15');
+            window.LEADS = res.leads || res;
+          }
+        } catch (e) {}
+
         renderActivity();
-        renderTable('recentLeadsTable', LEADS.slice(0, 8), false);
+        renderTable('recentLeadsTable', (window.LEADS || []).slice(0, 8), false);
       } catch (e) { toast(e.message, 'error'); }
     }
 
@@ -6243,7 +6271,7 @@
     function renderActivity() {
       const el = document.getElementById('activityFeed');
       if (!el) return;
-      const items = LEADS.slice(0, 8).flatMap(l => {
+      const items = (window.LEADS || []).slice(0, 8).flatMap(l => {
         const evts = [];
         const last = l.callAttempts ? l.callAttempts[l.callAttempts.length - 1] : undefined;
         if (last?.status === 'completed' && last.endTime)
@@ -6340,50 +6368,77 @@
     }
 
     // ─── Leads ──────────────────────────────────────────
+    let _currentPage = 1;
+    let _currentLimit = 50;
+
     async function loadLeads() {
       try {
-        LEADS = await api('/leads');
-        // Best-effort campaign cache so lead rows can show their campaign badge.
         if (!CAMPAIGNS.length) { try { const d = await api('/campaigns'); CAMPAIGNS = d.campaigns || []; } catch (_) { } }
-        document.getElementById('navLeadCount').textContent = LEADS.length;
         populateCampaignLeadFilter();
-        renderLeadsKpis();
-        renderLeadsTable();
-        loadOverview();
+        await filterLeads(false);
+        
+        // Fetch KPIs from stats api
+        const s = await api('/stats');
+        renderLeadsKpis(s);
+        document.getElementById('navLeadCount').textContent = s.total || 0;
       } catch (e) { toast(e.message, 'error'); }
     }
 
-    function renderLeadsKpis() {
+    function renderLeadsKpis(s) {
       const el = document.getElementById('leadsKpis');
       if (!el) return;
-      const total = LEADS.length;
-      const hot = LEADS.filter(l => l.leadCategory === 'hot').length;
-      const contacted = LEADS.filter(l => l.totalCallAttempts > 0).length;
-      const meetings = LEADS.filter(l => ['meeting-scheduled', 'meeting-completed'].includes(l.status)).length;
-      const enrolled = LEADS.filter(l => l.status === 'enrolled').length;
-      const avgScore = total ? Math.round(LEADS.reduce((s, l) => s + (l.leadScore || 0), 0) / total) : 0;
       el.innerHTML =
-        kpiChip('👥', total, 'Total Leads', '#3b82f6') +
-        kpiChip('🔥', hot, 'Hot Leads', '#ef4444') +
-        kpiChip('📞', contacted, 'Contacted', '#f59e0b') +
-        kpiChip('📅', meetings, 'Meetings', '#10b981') +
-        kpiChip('🎓', enrolled, 'Enrolled', '#ec4899') +
-        kpiChip('⭐', avgScore, 'Avg Score', '#8b5cf6');
+        kpiChip('👥', s.total || 0, 'Total Leads', '#3b82f6') +
+        kpiChip('🔥', s.hot || 0, 'Hot Leads', '#ef4444') +
+        kpiChip('📞', s.contacted || 0, 'Contacted', '#f59e0b') +
+        kpiChip('📅', (s.meetingsScheduled || 0) + (s.meetingsCompleted || 0), 'Meetings', '#10b981') +
+        kpiChip('🎓', s.enrolled || 0, 'Enrolled', '#ec4899') +
+        kpiChip('⭐', s.avgScore || 0, 'Avg Score', '#8b5cf6');
     }
 
-    function filterLeads() {
-      const search = document.getElementById('leadSearch').value.toLowerCase();
+    async function filterLeads(pageChange = false) {
+      if (!pageChange) _currentPage = 1;
+      const search = document.getElementById('leadSearch').value;
       const status = document.getElementById('leadStatusFilter').value;
       const category = document.getElementById('leadCategoryFilter').value;
       const campaign = (document.getElementById('leadCampaignFilter') || {}).value || '';
-      let filtered = LEADS;
-      if (search) filtered = filtered.filter(l => (l.fullName + l.email + l.phone).toLowerCase().includes(search));
-      if (status) filtered = filtered.filter(l => l.status === status);
-      if (category) filtered = filtered.filter(l => l.leadCategory === category);
-      if (campaign === '__none__') filtered = filtered.filter(l => !l.campaignId);
-      else if (campaign) filtered = filtered.filter(l => l.campaignId === campaign);
-      clearBulkSelect();
-      renderTable('leadsTable', filtered, true);
+      const counselorEl = document.getElementById('leadCounselorFilter');
+      const counselorId = counselorEl && counselorEl.style.display !== 'none' ? counselorEl.value : '';
+
+      try {
+        document.getElementById('leadsTable').innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Loading...</div>';
+        const query = new URLSearchParams({ page: _currentPage, limit: _currentLimit });
+        if (search) query.append('search', search);
+        if (status) query.append('status', status);
+        if (category) query.append('category', category);
+        if (campaign) query.append('campaignId', campaign);
+        if (counselorId) query.append('counselorId', counselorId);
+
+        const res = await api('/leads?' + query.toString());
+        LEADS = res.leads || res; // handle both array and object
+        
+        clearBulkSelect();
+        renderTable('leadsTable', LEADS, true);
+        
+        // Update pagination
+        if (res.total !== undefined) {
+          const totalPages = Math.ceil(res.total / _currentLimit) || 1;
+          document.getElementById('pageIndicator').textContent = `Page ${_currentPage} of ${totalPages} (${res.total} total)`;
+          document.getElementById('btnPrevPage').disabled = _currentPage <= 1;
+          document.getElementById('btnNextPage').disabled = _currentPage >= totalPages;
+          document.getElementById('leadsPagination').style.display = 'flex';
+        } else {
+          document.getElementById('leadsPagination').style.display = 'none';
+        }
+      } catch (e) {
+        toast('Failed to load leads: ' + e.message, 'error');
+      }
+    }
+
+    function changeLeadPage(delta) {
+      _currentPage += delta;
+      if (_currentPage < 1) _currentPage = 1;
+      filterLeads(true);
     }
 
     function renderLeadsTable() { clearBulkSelect(); renderTable('leadsTable', LEADS, true); }

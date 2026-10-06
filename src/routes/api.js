@@ -27,22 +27,32 @@ function groupBy(arr, key) {
   return Object.entries(m).map(([_id, count]) => ({ _id, count }));
 }
 
-// Stats cache — avoid re-querying on every dashboard refresh
-let _statsCache = null;
-let _statsCacheAt = 0;
+// Stats cache — per counselor key
+const _statsCache = {};
 const STATS_TTL_MS = 15000; // 15 seconds
 
 router.get('/stats', async (req, res) => {
   try {
+    const counselorFilter = req.profile?.role !== 'admin' ? req.profile.id : (req.query.counselorId || 'all');
+    const cacheKey = counselorFilter;
+    const cacheEntry = _statsCache[cacheKey];
+
     // Serve from cache if fresh
-    if (_statsCache && Date.now() - _statsCacheAt < STATS_TTL_MS) {
-      return res.json(_statsCache);
+    if (cacheEntry && Date.now() - cacheEntry.timestamp < STATS_TTL_MS) {
+      return res.json(cacheEntry.data);
     }
 
-    // Single query — only the columns we need for aggregation
-    const { data: rows, error } = await supabase
+    let q = supabase
       .from('leads')
       .select('status, lead_category, lead_score, call_attempts');
+
+    if (req.profile?.role !== 'admin') {
+      q = q.eq('counselor_id', req.profile.id);
+    } else if (req.query.counselorId && req.query.counselorId !== 'all') {
+      q = q.eq('counselor_id', req.query.counselorId);
+    }
+
+    const { data: rows, error } = await q;
 
     if (error) throw new Error(error.message);
     const all = rows || [];
@@ -80,14 +90,14 @@ router.get('/stats', async (req, res) => {
       ? ((meetingsScheduled / (contacted + meetingsScheduled)) * 100).toFixed(1)
       : '0.0';
 
-    _statsCache = {
+    const statsData = {
       total, new: newLeads, queued, calling, contacted, qualified,
       meetingsScheduled, meetingsCompleted, enrolled, lost,
       hot, warm, cold, callsCompleted, avgScore,
       conversionRate, meetingRate,
     };
-    _statsCacheAt = Date.now();
-    res.json(_statsCache);
+    _statsCache[cacheKey] = { data: statsData, timestamp: Date.now() };
+    res.json(statsData);
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
@@ -100,9 +110,17 @@ router.get('/analytics', async (req, res) => {
   try {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000);
 
-    const { data: allLeads } = await supabase
+    let q = supabase
       .from('leads')
       .select('source, course_interest, call_attempts, created_at');
+
+    if (req.profile?.role !== 'admin') {
+      q = q.eq('counselor_id', req.profile.id);
+    } else if (req.query.counselorId && req.query.counselorId !== 'all') {
+      q = q.eq('counselor_id', req.query.counselorId);
+    }
+
+    const { data: allLeads } = await q;
 
     const rows = allLeads || [];
 
@@ -150,16 +168,24 @@ router.get('/analytics', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════
 router.get('/leads', async (req, res) => {
   try {
-    const { status, category, search, campaignId, limit = 200 } = req.query;
+    const { status, category, search, campaignId, counselorId, page = 1, limit = 50 } = req.query;
+    const limitNum = parseInt(limit, 10) || 50;
+    const offset = (parseInt(page, 10) - 1) * limitNum;
 
     // Build Supabase query directly — skip heavy JS-model layer for the list view
     // Only fetch columns needed for the table. Omit call_attempts.transcript (huge).
     let q = supabase
       .from('leads')
-      .select('id, full_name, email, phone, parent_name, parent_email, grade, course_interest, status, lead_score, lead_category, total_call_attempts, last_call_at, next_retry_at, campaign_id, meeting, meeting_status, created_at, call_attempts, qualification, is_qualified, sheet_row_index, notes, country_code, country, time_zone')
+      .select('id, full_name, email, phone, parent_name, parent_email, grade, course_interest, status, lead_score, lead_category, total_call_attempts, last_call_at, next_retry_at, campaign_id, meeting, meeting_status, created_at, call_attempts, qualification, is_qualified, sheet_row_index, notes, country_code, country, time_zone, counselor_id', { count: 'exact' })
       .order('lead_score', { ascending: false })
       .order('created_at', { ascending: false })
-      .limit(parseInt(limit));
+      .range(offset, offset + limitNum - 1);
+
+    if (req.profile?.role !== 'admin') {
+      q = q.eq('counselor_id', req.profile.id);
+    } else if (counselorId && counselorId !== 'all') {
+      q = q.eq('counselor_id', counselorId);
+    }
 
     if (status)   q = q.eq('status', status);
     if (category) q = q.eq('lead_category', category);
@@ -169,7 +195,7 @@ router.get('/leads', async (req, res) => {
       q = q.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
     }
 
-    const { data, error } = await q;
+    const { data, count, error } = await q;
     if (error) throw new Error(error.message);
 
     // Convert to camelCase for the dashboard, strip transcript from call_attempts
@@ -183,7 +209,7 @@ router.get('/leads', async (req, res) => {
       return doc;
     });
 
-    res.json(leads);
+    res.json({ leads, total: count || leads.length, page: parseInt(page, 10) || 1, limit: limitNum });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
@@ -227,7 +253,11 @@ router.get('/leads/:id', async (req, res) => {
     }
 
     // Fetch directly from Supabase with full diagnostics
-    const { data: row, error: dbErr } = await supabase.from('leads').select('*').eq('id', id).single();
+    let q = supabase.from('leads').select('*').eq('id', id);
+    if (req.profile?.role !== 'admin') {
+      q = q.eq('counselor_id', req.profile.id);
+    }
+    const { data: row, error: dbErr } = await q.single();
 
     if (dbErr) {
       logger.error('GET /leads/:id — Supabase error', { id, code: dbErr.code, msg: dbErr.message });
@@ -826,6 +856,7 @@ router.post('/leads', async (req, res) => {
     if (existing) return res.status(409).json({ error: `A lead with email "${email}" already exists in this campaign` });
 
     const lead = await Lead.create({
+      counselorId: req.profile.id,
       fullName: fullName.trim(),
       email:    email.trim().toLowerCase(),
       phone:    phone.trim(),
@@ -907,6 +938,7 @@ router.post('/leads/bulk', async (req, res) => {
         }
 
         const newLead = await Lead.create({
+          counselorId: req.profile.id,
           fullName: data.fullName?.trim() || '',
           email:    email,
           phone:    data.phone?.trim() || '',
@@ -1071,17 +1103,26 @@ router.delete('/leads/:id/calls/:callId', async (req, res) => {
 router.get('/meetings', async (req, res) => {
   try {
     const now = new Date();
-    // Fetch meetings joined with leads from meetings table
-    const { data: meetingsRows, error } = await supabase
+    const { counselorId } = req.query;
+
+    let q = supabase
       .from('meetings')
       .select(`
         *,
-        leads (
-          id, full_name, email, phone, parent_name, parent_email, lead_score, course_interest, grade, status
+        leads!inner (
+          id, full_name, email, phone, parent_name, parent_email, lead_score, course_interest, grade, status, counselor_id
         )
       `)
       .order('scheduled_at', { ascending: false })
       .limit(1000);
+
+    if (req.profile?.role !== 'admin') {
+      q = q.eq('leads.counselor_id', req.profile.id);
+    } else if (counselorId && counselorId !== 'all') {
+      q = q.eq('leads.counselor_id', counselorId);
+    }
+
+    const { data: meetingsRows, error } = await q;
 
     if (error) throw error;
 
@@ -1227,12 +1268,22 @@ router.delete('/meetings/:leadId', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════
 router.get('/calls', async (req, res) => {
   try {
-    const { data: rows } = await supabase
+    const { counselorId } = req.query;
+    
+    let q = supabase
       .from('leads')
       .select('id, full_name, email, phone, call_attempts, lead_score, status, last_call_at')
       .not('call_attempts', 'eq', '[]')
       .order('last_call_at', { ascending: false, nullsFirst: false })
       .limit(500);
+
+    if (req.profile?.role !== 'admin') {
+      q = q.eq('counselor_id', req.profile.id);
+    } else if (counselorId && counselorId !== 'all') {
+      q = q.eq('counselor_id', counselorId);
+    }
+
+    const { data: rows } = await q;
 
     const calls = [];
     (rows || []).forEach(r => {
