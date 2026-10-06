@@ -29,10 +29,12 @@
     "nodemailer": "^6.9.16",
     "openai": "^4.67.0",
     "pg": "^8.22.0",
+    "telnyx": "^7.24.0",
     "twilio": "^5.3.4",
     "uuid": "^10.0.0",
     "winston": "^3.15.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "xml2js": "^0.6.2"
   },
   "devDependencies": {
     "nodemon": "^3.1.7"
