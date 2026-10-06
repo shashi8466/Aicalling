@@ -122,10 +122,22 @@ async function driveTwilioFlow(callControlId, state, urlPath, twilioBody = {}) {
     let hangup = false;
 
     const extractText = (node) => {
-        if (typeof node === 'string') return node;
-        if (node && node._) return node._;
-        return '';
+      if (!node) return '';
+      if (typeof node === 'string') return node;
+      let text = '';
+      if (node._) text += node._ + ' ';
+      for (const [key, value] of Object.entries(node)) {
+        if (key === '$' || key === '_') continue;
+        if (Array.isArray(value)) {
+          value.forEach(v => text += extractText(v) + ' ');
+        } else {
+          text += extractText(value) + ' ';
+        }
+      }
+      return text.trim();
     };
+
+    logger.info(`[CALL] Parsed TwiML Response`);
 
     if (responseNode.Say) {
       if (Array.isArray(responseNode.Say)) {
@@ -141,6 +153,9 @@ async function driveTwilioFlow(callControlId, state, urlPath, twilioBody = {}) {
         sayText += ' ' + extractText(gatherNode.Say);
       }
     }
+    
+    sayText = sayText.trim();
+    logger.info(`[CALL] Extracted speak payload: "${sayText}"`);
 
     if (responseNode.Redirect) {
       redirectUrl = typeof responseNode.Redirect === 'string' ? responseNode.Redirect : responseNode.Redirect._;
