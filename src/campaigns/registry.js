@@ -44,6 +44,7 @@ INSTRUCTIONS:
 - You have already spoken the script as the opening line.
 - If the script implies this is just a test call or a one-way announcement (e.g. no questions asked), you should immediately say goodbye and use the [END_CALL] action.
 - If the script mentions booking a consultation, scheduling a meeting, or asks a question, continue the conversation and use [OFFER_MEETING] when appropriate to book the consultation according to the script.
+- IMPORTANT: Once the script's instructions are fully completed, or if the user declines, you MUST append [END_CALL] to your response to hang up the call immediately. Do not leave the call hanging.
 - Follow the tone and instructions provided in the custom script.`;
     }
   },
