@@ -60,23 +60,43 @@ router.post('/', async (req, res) => {
       logger.info(`[CALL] campaign_type = ${state.params?.campaignId ? 'campaign' : 'custom'}`);
       logger.info(`[CALL] starting TTS via Twilio Flow`);
       
+      // Start background speech transcription
+      telnyxPost(`/calls/${callControlId}/actions/transcription_start`, {
+        language: 'en'
+      }).catch(e => logger.error(`[CALL] Failed to start transcription: ${e.message}`));
+
       // Trigger the start of the Twilio webhook flow
       await driveTwilioFlow(callControlId, state, `/webhook/call/start`);
 
     } else if (eventType === 'call.speak.started' || eventType === 'call.playback.started') {
       logger.info(`[CALL] TTS started for call_control_id=${callControlId}`);
-    } else if (eventType === 'call.gather.ended') {
-      const speech = payload.speech?.result || '';
-      if (state.nextActionUrl) {
-        await driveTwilioFlow(callControlId, state, state.nextActionUrl, { SpeechResult: speech });
-      }
     } else if (eventType === 'call.speak.ended' || eventType === 'call.playback.ended') {
       logger.info(`[CALL] TTS completed for call_control_id=${callControlId}`);
-      if (state.redirectUrl) {
+      
+      if (state.isGathering) {
+        // Wait for 5 seconds of silence before assuming they didn't speak
+        state.gatherTimeout = setTimeout(() => {
+          if (state.isGathering) {
+            state.isGathering = false;
+            logger.info(`[CALL] Silence timeout reached, sending empty speech`);
+            driveTwilioFlow(callControlId, state, state.nextActionUrl, { SpeechResult: '' });
+          }
+        }, 5000);
+      } else if (state.redirectUrl) {
         await driveTwilioFlow(callControlId, state, state.redirectUrl);
       } else if (state.hangupAfterSpeak) {
         logger.info(`[CALL] Hanging up after speak as requested by TwiML`);
         await telnyxPost(`/calls/${callControlId}/actions/hangup`, {});
+      }
+    } else if (eventType === 'call.transcription') {
+      const isFinal = payload.transcription_data?.is_final;
+      const transcript = payload.transcription_data?.transcript?.trim();
+      
+      if (isFinal && transcript && state.isGathering) {
+        clearTimeout(state.gatherTimeout);
+        state.isGathering = false;
+        logger.info(`[CALL] Transcription received: "${transcript}"`);
+        await driveTwilioFlow(callControlId, state, state.nextActionUrl, { SpeechResult: transcript });
       }
     } else if (eventType === 'call.hangup' || eventType === 'call.completed') {
       activeCalls.delete(callSessionId);
@@ -176,18 +196,11 @@ async function driveTwilioFlow(callControlId, state, urlPath, twilioBody = {}) {
 
     state.nextActionUrl = gatherNode?.$?.action || null;
     state.redirectUrl = redirectUrl || null;
+    state.isGathering = !!gatherNode;
     // If the XML wants to hang up after speaking, save that to state so we know to hang up on speak.ended
     state.hangupAfterSpeak = hangup && !gatherNode;
 
-    if (sayText && gatherNode) {
-      await telnyxPost(`/calls/${callControlId}/actions/gather_using_speak`, {
-        payload: sayText.trim(),
-        voice: sayVoice,
-        language: sayLanguage,
-        minimum_digits: 1,
-        maximum_digits: 11, // allow dtmf optionally
-      });
-    } else if (sayText && !gatherNode) {
+    if (sayText) {
       await telnyxPost(`/calls/${callControlId}/actions/speak`, {
         payload: sayText.trim(),
         voice: sayVoice,
