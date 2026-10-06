@@ -82,6 +82,8 @@ class TelnyxService {
     const callControlId = callData.call_control_id || callData.id;
     const callSid  = callControlId;
 
+    logger.info(`[CALL] Outbound call created`);
+    logger.info(`[CALL] call_control_id = ${callControlId}`);
     logger.info(`[Telnyx] Outbound call placed → ${lead.phone}  SID=${callSid}`);
     return { callSid, callControlId, status: 'initiated' };
   }
@@ -109,6 +111,8 @@ class TelnyxService {
     const callControlId = callData.call_control_id || callData.id;
     const callSid  = callControlId;
 
+    logger.info(`[CALL] Follow-up call created`);
+    logger.info(`[CALL] call_control_id = ${callControlId}`);
     logger.info(`[Telnyx] Follow-up call placed → ${lead.phone}  SID=${callSid}`);
     return { callSid, callControlId: callSid, status: 'initiated' };
   }
