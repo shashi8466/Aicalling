@@ -58,23 +58,10 @@ router.post('/', async (req, res) => {
     if (eventType === 'call.answered') {
       logger.info(`[CALL] call.answered received for call_control_id=${callControlId}`);
       logger.info(`[CALL] campaign_type = ${state.params?.campaignId ? 'campaign' : 'custom'}`);
-      logger.info(`[CALL] script_source = test_hardcoded`);
-      logger.info(`[CALL] starting TTS`);
+      logger.info(`[CALL] starting TTS via Twilio Flow`);
       
-      // FIRST TEST: Bypass Twilio Flow completely
-      const testText = "Hello, this is Shashi from AIPrep365. How can I help you today?";
-      logger.info(`[CALL] script_length = ${testText.length}`);
-      
-      try {
-        await telnyxPost(`/calls/${callControlId}/actions/speak`, {
-          payload: testText,
-          voice: 'female',
-          language: 'en-US'
-        });
-        logger.info(`[CALL] TTS request sent`);
-      } catch (e) {
-        logger.error(`[CALL] TTS request failed: ${e.message}`);
-      }
+      // Trigger the start of the Twilio webhook flow
+      await driveTwilioFlow(callControlId, state, `/webhook/call/start`);
 
     } else if (eventType === 'call.speak.started' || eventType === 'call.playback.started') {
       logger.info(`[CALL] TTS started for call_control_id=${callControlId}`);
