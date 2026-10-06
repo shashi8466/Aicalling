@@ -32,6 +32,8 @@ async function telnyxPost(path, payload) {
 
 // In-memory state to track Call Control mapping to Lead ID and Campaign info
 const activeCalls = new Map();
+// Sessions that already hung up — stops late events from resurrecting state.
+const endedCalls = new Set();
 
 router.post('/', async (req, res) => {
   res.sendStatus(200); // Always ack Telnyx Webhook quickly
@@ -44,11 +46,15 @@ router.post('/', async (req, res) => {
   const callSessionId = payload.call_session_id;
 
   try {
-    if (eventType === 'call.initiated') {
-      const clientStateStr = payload.client_state;
-      if (clientStateStr) {
-        const state = JSON.parse(Buffer.from(clientStateStr, 'base64').toString('utf8'));
+    // Telnyx echoes client_state on every event, so state can be rebuilt if
+    // call.initiated was missed (e.g. server restarted mid-call).
+    if (endedCalls.has(callSessionId)) return;
+    if (!activeCalls.has(callSessionId) && payload.client_state) {
+      try {
+        const state = JSON.parse(Buffer.from(payload.client_state, 'base64').toString('utf8'));
         activeCalls.set(callSessionId, state);
+      } catch (e) {
+        logger.warn(`[CALL] Could not decode client_state: ${e.message}`);
       }
     }
 
@@ -56,6 +62,7 @@ router.post('/', async (req, res) => {
     if (!state) return;
 
     if (eventType === 'call.answered') {
+      state.answered = true;
       logger.info(`[CALL] call.answered received for call_control_id=${callControlId}`);
       logger.info(`[CALL] campaign_type = ${state.params?.campaignId ? 'campaign' : 'custom'}`);
       logger.info(`[CALL] starting TTS via Twilio Flow`);
@@ -86,7 +93,7 @@ router.post('/', async (req, res) => {
         await driveTwilioFlow(callControlId, state, state.redirectUrl);
       } else if (state.hangupAfterSpeak) {
         logger.info(`[CALL] Hanging up after speak as requested by TwiML`);
-        await telnyxPost(`/calls/${callControlId}/actions/hangup`, {});
+        await hangupCall(callControlId);
       }
     } else if (eventType === 'call.transcription') {
       const isFinal = payload.transcription_data?.is_final;
@@ -99,17 +106,58 @@ router.post('/', async (req, res) => {
         await driveTwilioFlow(callControlId, state, state.nextActionUrl, { SpeechResult: transcript });
       }
     } else if (eventType === 'call.hangup' || eventType === 'call.completed') {
-      logger.info(`[CALL] Call ended for call_control_id=${callControlId}`);
-      if (state.gatherTimeout) clearTimeout(state.gatherTimeout);
       activeCalls.delete(callSessionId);
-      await driveTwilioFlow(callControlId, state, `/webhook/call/status`, { CallStatus: 'completed' });
+      endedCalls.add(callSessionId);
+      setTimeout(() => endedCalls.delete(callSessionId), 10 * 60 * 1000);
+      if (state.gatherTimeout) clearTimeout(state.gatherTimeout);
+      state.isGathering = false;
+      state.ended = true;
+
+      const callStatus = mapHangupStatus(payload.hangup_cause, state.answered);
+      const start = Date.parse(payload.start_time);
+      const end = Date.parse(payload.end_time);
+      const duration = start && end && end > start ? Math.round((end - start) / 1000) : 0;
+      logger.info(`[CALL] Call ended for call_control_id=${callControlId} cause=${payload.hangup_cause || 'n/a'} → ${callStatus}`);
+
+      await driveTwilioFlow(callControlId, state, `/webhook/call/status`, {
+        CallStatus: callStatus,
+        CallDuration: String(duration),
+      });
     }
   } catch (err) {
     logger.error('Telnyx Bridge error:', err);
   }
 });
 
+// A hangup can race with the caller hanging up first — Telnyx then rejects the
+// command, which is harmless.
+async function hangupCall(callControlId) {
+  try {
+    await telnyxPost(`/calls/${callControlId}/actions/hangup`, {});
+  } catch (_) { /* call already ended */ }
+}
+
+// Translate Telnyx hangup_cause into the Twilio-style CallStatus that
+// /webhook/call/status understands.
+function mapHangupStatus(cause, answered) {
+  if (answered) return 'completed';
+  switch (cause) {
+    case 'user_busy':
+    case 'call_rejected':
+      return 'busy';
+    case 'timeout':
+    case 'no_answer':
+      return 'no-answer';
+    case 'originator_cancel':
+      return 'canceled';
+    default:
+      return 'failed';
+  }
+}
+
 async function driveTwilioFlow(callControlId, state, urlPath, twilioBody = {}) {
+  // Once the call is gone, only the final status callback may still run.
+  if (state.ended && !urlPath.startsWith('/webhook/call/status')) return;
   try {
     const port = process.env.PORT || 3000;
     
@@ -210,7 +258,7 @@ async function driveTwilioFlow(callControlId, state, urlPath, twilioBody = {}) {
         language: sayLanguage
       });
     } else if (hangup) {
-      await telnyxPost(`/calls/${callControlId}/actions/hangup`, {});
+      await hangupCall(callControlId);
     }
   } catch (err) {
     logger.error('driveTwilioFlow error:', err);

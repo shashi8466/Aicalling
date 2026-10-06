@@ -23,6 +23,21 @@ function firstName(lead) {
   return (lead.fullName || 'there').split(' ')[0];
 }
 
+// Custom scripts are pasted from emails/flyers — strip emoji and collapse line
+// breaks so TTS reads the text cleanly, without changing the words.
+function speakableScript(script) {
+  return String(script || '')
+    .replace(/[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}️‍]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// A custom script is a one-way announcement unless it asks the caller
+// something — only then does the call stay open for a reply.
+function customScriptExpectsReply(script) {
+  return /\?/.test(String(script || ''));
+}
+
 // ── Campaign definitions ────────────────────────────────────────────────────
 const CAMPAIGNS = {
   'custom-script': {
@@ -30,8 +45,11 @@ const CAMPAIGNS = {
     name: 'Custom Campaign',
     program: 'Multiple',
     skipIdentityCheck: true,
-    opener: (lead, isFollowUp, vars) => (vars && vars.customScript) ? vars.customScript : 'Hello.',
-    voicemail: (lead, vars) => (vars && vars.customScript) ? vars.customScript : 'Hello.',
+    // Speak the script verbatim and hang up the moment it finishes — no AI
+    // turn afterwards. Only a script that asks a question keeps the call open.
+    hangupAfterOpener: (vars) => !customScriptExpectsReply(vars?.customScript),
+    opener: (lead, isFollowUp, vars) => speakableScript(vars?.customScript) || 'Hello.',
+    voicemail: (lead, vars) => speakableScript(vars?.customScript) || 'Hello.',
     turn0Line: () => '',
     systemContext: (lead, vars) => {
       const script = vars?.customScript || '';
@@ -41,9 +59,9 @@ This is a custom campaign. The following is the exact script/instructions provid
 "${script}"
 
 INSTRUCTIONS:
-- You have already spoken the script as the opening line.
-- If the script implies this is just a test call or a one-way announcement (e.g. no questions asked), you should immediately say goodbye and use the [END_CALL] action.
-- If the script mentions booking a consultation, scheduling a meeting, or asks a question, continue the conversation and use [OFFER_MEETING] when appropriate to book the consultation according to the script.
+- You have already spoken the script as the opening line, and it asked the caller a question.
+- The script is the COMPLETE call. Only do what it explicitly instructs — no sales pitch, no extra questions, no unrelated information.
+- Do NOT offer or book a consultation unless the script explicitly instructs you to; only then may you use [OFFER_MEETING].
 - IMPORTANT: Once the script's instructions are fully completed, or if the user declines, you MUST append [END_CALL] to your response to hang up the call immediately. Do not leave the call hanging.
 - Follow the tone and instructions provided in the custom script.`;
     }

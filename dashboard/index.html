@@ -8039,10 +8039,7 @@
 
         body += `
       <div class="action-bar">
-        ${(l.status === 'calling' || l.status === 'queued')
-            ? `<button class="btn" style="background:var(--hot);color:#fff" onclick="stopCall('${l._id}')">🛑 Stop Call</button>`
-            : `<button class="btn btn-primary" onclick="callLead('${l._id}')">📞 Call Now</button>`
-          }
+        <span id="modalCallAction" data-lead-id="${l._id}" style="display:contents">${modalCallButtonHtml(l)}</span>
         <button class="btn btn-secondary" onclick="sendEmail('${l._id}', 'welcome')">📧 Welcome</button>
         ${m.scheduledAt ? `<button class="btn btn-secondary" onclick="sendEmail('${l._id}', 'reminder')">⏰ Reminder</button>` : ''}
         ${m.scheduledAt ? `<button class="btn btn-secondary" onclick="logOutcome('${l._id}', '${esc(l.fullName)}')">📝 Log Outcome</button>` : ''}
@@ -8125,6 +8122,26 @@
           el.replaceWith(note);
         }
       });
+    }
+
+    function modalCallButtonHtml(l) {
+      return (l.status === 'calling' || l.status === 'queued')
+        ? `<button class="btn" style="background:var(--hot);color:#fff" onclick="stopCall('${l._id}')">🛑 Stop Call</button>`
+        : `<button class="btn btn-primary" onclick="callLead('${l._id}')">📞 Call Now</button>`;
+    }
+
+    // Keep the open lead modal's Call / Stop Call button in sync with the
+    // server-side call state (driven by SSE lead updates).
+    async function syncModalCallButton(leadId) {
+      const slot = document.getElementById('modalCallAction');
+      if (!slot || !document.getElementById('leadModal').classList.contains('active')) return;
+      const openId = slot.dataset.leadId;
+      if (leadId && String(leadId) !== openId) return;
+      try {
+        const l = await api('/leads/' + openId);
+        const cur = document.getElementById('modalCallAction');
+        if (cur && cur.dataset.leadId === openId) cur.innerHTML = modalCallButtonHtml(l);
+      } catch (_) { }
     }
 
     function closeModal() {
@@ -10081,6 +10098,9 @@
             // Default: targeted refresh for lead/meeting updates
             loadLeads();
             loadMeetings();
+            refreshCampaignLeads().catch(() => {});
+            refreshParentCampaignLeads().catch(() => {});
+            syncModalCallButton(msg.leadId);
             if (activeView === 'view-billing') loadBilling();
             if (activeView === 'view-classes' && typeof refreshClassDetails === 'function' && typeof currentClassId !== 'undefined' && currentClassId) {
               refreshClassDetails();
@@ -10103,6 +10123,9 @@
           loadLeads();
           loadMeetings().catch(() => {});
           loadCallbacks().catch(() => {});
+          refreshCampaignLeads().catch(() => {});
+          refreshParentCampaignLeads().catch(() => {});
+          syncModalCallButton();
           const activeView = document.querySelector('.view.active')?.id || '';
           if (activeView === 'view-classes' && typeof refreshClassDetails === 'function' && typeof currentClassId !== 'undefined' && currentClassId) {
             refreshClassDetails();

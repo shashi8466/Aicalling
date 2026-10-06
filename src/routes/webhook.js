@@ -272,9 +272,14 @@ router.post('/call/start', async (req, res) => {
     sessionObj.history.push({ role: 'assistant', content: opener });
     sessions.set(leadId, sessionObj);
 
-    // One-way announcement campaigns (e.g. 'student-flt-posted') speak the opener
-    // verbatim and hang up immediately — no <Gather>, no waiting for a reply.
-    if (campaign.hangupAfterOpener) {
+    // One-way announcement campaigns (e.g. 'student-flt-posted', custom scripts
+    // without a question) speak the opener verbatim and hang up immediately —
+    // no <Gather>, no waiting for a reply.
+    const hangupAfterOpener = typeof campaign.hangupAfterOpener === 'function'
+      ? campaign.hangupAfterOpener(campaignVars)
+      : campaign.hangupAfterOpener;
+    if (hangupAfterOpener) {
+      logger.info(`[CALL] One-way script for ${lead.fullName} — hanging up after opener`);
       sessions.delete(leadId);
       res.send(twilioSvc.twimlHangup(opener));
       return;
@@ -343,6 +348,22 @@ router.post('/call/respond', async (req, res) => {
     if (!speech || noSpeech) {
       session.silenceCount = (session.silenceCount || 0) + 1;
       sessions.set(leadId, session);
+
+      // Custom scripts never fall into the consultation pitch below — re-prompt
+      // once, then the script is considered done and the call ends.
+      const isCustomScript = (session.campaignType || session.campaign?.type) === 'custom-script';
+      if (isCustomScript) {
+        if (session.silenceCount === 1) {
+          return res.send(twilioSvc.twimlRespond(
+            "I'm sorry, I didn't quite catch that. Could you please repeat that?",
+            respondUrl(cfg.server.baseUrl, leadId)
+          ));
+        }
+        _finaliseCall(lead, session, req.body.CallSid, 'completed-custom-script').catch(err => {
+          logger.error('Error finalising custom script call:', err);
+        });
+        return res.send(twilioSvc.twimlHangup('Thank you for your time. Have a wonderful day. Goodbye.'));
+      }
 
       if (session.silenceCount === 1) {
         return res.send(twilioSvc.twimlRespond(
@@ -449,7 +470,10 @@ router.post('/call/respond', async (req, res) => {
                cleanParentSpeech === 'no';
       });
 
-      if (parentSaidNo) {
+      // Custom scripts may ask a yes/no question, so "okay"/"sure" can't be
+      // treated as a sign-off — the AI decides when that script is complete.
+      const isCustom = (session.campaignType || session.campaign?.type) === 'custom-script';
+      if (parentSaidNo && !isCustom) {
         // Parent has no questions — end call immediately with exact script
         _finaliseCall(lead, session, req.body.CallSid, 'completed-parent-notification').catch(err => {
           logger.error('Error finalising parent campaign call:', err);
@@ -1081,6 +1105,15 @@ router.post('/call/status', async (req, res) => {
       attempt.endTime  = new Date();
     }
 
+    // The call is over — clear the "calling" state immediately so the UI flips
+    // back to "Call". Summaries/emails below can take several seconds.
+    const TERMINAL = ['completed', 'canceled', 'no-answer', 'busy', 'failed'];
+    if (TERMINAL.includes(CallStatus)) {
+      if (lead.status === 'calling') lead.status = 'contacted';
+      await lead.save();
+      _notifyLeadUpdated(lead._id);
+    }
+
     // ── Billing capture ──────────────────────────────────────────────────────
     // On any terminal call status, record the ACTUAL Twilio cost. Twilio's price
     // is usually not ready yet at this moment, so this creates/refreshes a
@@ -1182,6 +1215,7 @@ router.post('/call/status', async (req, res) => {
       }
 
       await lead.save();
+      _notifyLeadUpdated(lead._id);
 
       // Mark pending ai-call follow-up as failed
       const FollowUp = require('../models/FollowUp');
@@ -1365,6 +1399,10 @@ function _parseMeetingTime(scheduledTime, scheduledDate) {
 
 // ── Internal: finalise a completed call ───────────────────────────────────────
 async function _finaliseCall(lead, session, callSid, reason) {
+  // Several paths end a call (AI [END_CALL] + Telnyx hangup status) — only the
+  // first one summarises/saves, so the call isn't finalised twice.
+  if (session?._finalised) return;
+  if (session) session._finalised = true;
   try {
     const transcript = (session.history || [])
       .map(m => `${m.role === 'user' ? 'Caller' : 'AI'}: ${m.content}`)
@@ -1538,6 +1576,7 @@ async function _finaliseCall(lead, session, callSid, reason) {
       if (lead.status === 'calling') lead.status = 'contacted';
     }
     await lead.save();
+    _notifyLeadUpdated(lead._id);
 
     // Update sheet
     await sheetsSvc.updateRow(lead.sheetRowIndex, {
@@ -1559,6 +1598,17 @@ async function _finaliseCall(lead, session, callSid, reason) {
     logger.info(`Call finalised for ${lead.fullName} | score=${score} | sentiment=${sentiment}`);
   } catch (err) {
     logger.error('_finaliseCall error', { msg: err.message });
+  }
+}
+
+// Push a live update so dashboards drop the "Stop Call" button right away
+// instead of waiting for their 30s poll.
+function _notifyLeadUpdated(leadId) {
+  try {
+    const crm = require('./crm');
+    if (crm.broadcastUpdate) crm.broadcastUpdate('lead-updated', { leadId });
+  } catch (e) {
+    logger.error('SSE update broadcast failed', e);
   }
 }
 
