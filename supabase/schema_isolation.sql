@@ -42,7 +42,7 @@ ALTER TABLE meeting_transcripts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE meeting_ai_analysis ENABLE ROW LEVEL SECURITY;
 
 -- 8. Create Admin checking function
-CREATE OR REPLACE FUNCTION auth.is_admin() RETURNS BOOLEAN AS $$
+CREATE OR REPLACE FUNCTION public.is_admin() RETURNS BOOLEAN AS $$
 BEGIN
   RETURN EXISTS (
     SELECT 1 FROM public.profiles
@@ -54,38 +54,38 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- 9. RLS Policies for Leads
 -- Counselors can read/update their own leads. Admins can read/update all.
 DROP POLICY IF EXISTS "Counselor own leads select" ON leads;
-CREATE POLICY "Counselor own leads select" ON leads FOR SELECT USING (counselor_id = auth.uid() OR auth.is_admin());
+CREATE POLICY "Counselor own leads select" ON leads FOR SELECT USING (counselor_id = auth.uid() OR public.is_admin());
 
 DROP POLICY IF EXISTS "Counselor own leads update" ON leads;
-CREATE POLICY "Counselor own leads update" ON leads FOR UPDATE USING (counselor_id = auth.uid() OR auth.is_admin());
+CREATE POLICY "Counselor own leads update" ON leads FOR UPDATE USING (counselor_id = auth.uid() OR public.is_admin());
 
 DROP POLICY IF EXISTS "Counselor own leads insert" ON leads;
-CREATE POLICY "Counselor own leads insert" ON leads FOR INSERT WITH CHECK (counselor_id = auth.uid() OR auth.is_admin());
+CREATE POLICY "Counselor own leads insert" ON leads FOR INSERT WITH CHECK (counselor_id = auth.uid() OR public.is_admin());
 
 DROP POLICY IF EXISTS "Counselor own leads delete" ON leads;
-CREATE POLICY "Counselor own leads delete" ON leads FOR DELETE USING (counselor_id = auth.uid() OR auth.is_admin());
+CREATE POLICY "Counselor own leads delete" ON leads FOR DELETE USING (counselor_id = auth.uid() OR public.is_admin());
 
 -- 10. RLS Policies for Meetings
 DROP POLICY IF EXISTS "Counselor own meetings select" ON meetings;
 CREATE POLICY "Counselor own meetings select" ON meetings FOR SELECT USING (
-  counselor_id = auth.uid() OR auth.is_admin() OR 
+  counselor_id = auth.uid() OR public.is_admin() OR 
   lead_id IN (SELECT id FROM leads WHERE counselor_id = auth.uid())
 );
 
 DROP POLICY IF EXISTS "Counselor own meetings insert" ON meetings;
 CREATE POLICY "Counselor own meetings insert" ON meetings FOR INSERT WITH CHECK (
-  counselor_id = auth.uid() OR auth.is_admin() OR 
+  counselor_id = auth.uid() OR public.is_admin() OR 
   lead_id IN (SELECT id FROM leads WHERE counselor_id = auth.uid())
 );
 
 DROP POLICY IF EXISTS "Counselor own meetings update" ON meetings;
 CREATE POLICY "Counselor own meetings update" ON meetings FOR UPDATE USING (
-  counselor_id = auth.uid() OR auth.is_admin() OR 
+  counselor_id = auth.uid() OR public.is_admin() OR 
   lead_id IN (SELECT id FROM leads WHERE counselor_id = auth.uid())
 );
 
 DROP POLICY IF EXISTS "Counselor own meetings delete" ON meetings;
 CREATE POLICY "Counselor own meetings delete" ON meetings FOR DELETE USING (
-  counselor_id = auth.uid() OR auth.is_admin() OR 
+  counselor_id = auth.uid() OR public.is_admin() OR 
   lead_id IN (SELECT id FROM leads WHERE counselor_id = auth.uid())
 );
