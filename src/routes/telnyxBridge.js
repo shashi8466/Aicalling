@@ -100,6 +100,7 @@ router.post('/', async (req, res) => {
       }
     } else if (eventType === 'call.hangup' || eventType === 'call.completed') {
       logger.info(`[CALL] Call ended for call_control_id=${callControlId}`);
+      if (state.gatherTimeout) clearTimeout(state.gatherTimeout);
       activeCalls.delete(callSessionId);
       await driveTwilioFlow(callControlId, state, `/webhook/call/status`, { CallStatus: 'completed' });
     }

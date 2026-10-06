@@ -54,6 +54,20 @@ function mapTwilioCall(tw) {
 }
 
 async function fetchTwilioCall(callSid) {
+  if (callSid && (callSid.startsWith('v2:') || callSid.startsWith('v3:'))) {
+    // Return a mock call object for Telnyx since Twilio client cannot fetch it
+    return {
+      price: null,
+      duration: 0,
+      from: '',
+      to: '',
+      direction: 'outbound-api',
+      priceUnit: 'USD',
+      status: 'completed',
+      startTime: new Date().toISOString(),
+      endTime: new Date().toISOString()
+    };
+  }
   return twilioSvc._client().calls(callSid).fetch();
 }
 
