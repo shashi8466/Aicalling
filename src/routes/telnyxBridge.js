@@ -99,7 +99,9 @@ router.post('/', async (req, res) => {
         await driveTwilioFlow(callControlId, state, state.nextActionUrl, { SpeechResult: transcript });
       }
     } else if (eventType === 'call.hangup' || eventType === 'call.completed') {
+      logger.info(`[CALL] Call ended for call_control_id=${callControlId}`);
       activeCalls.delete(callSessionId);
+      await driveTwilioFlow(callControlId, state, `/webhook/call/status`, { CallStatus: 'completed' });
     }
   } catch (err) {
     logger.error('Telnyx Bridge error:', err);
