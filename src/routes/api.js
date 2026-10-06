@@ -481,7 +481,7 @@ router.post('/leads/:id/call', async (req, res) => {
 router.post('/leads/bulk-call', async (req, res) => {
   try {
     const { leadIds, classId, campaignId, campaignVars } = req.body;
-    const { supabase } = require('../db/supabase');
+
 
     let targetIds = leadIds;
     if (classId) {
