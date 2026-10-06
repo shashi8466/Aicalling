@@ -506,7 +506,8 @@ router.post('/leads/bulk-call', async (req, res) => {
       const twilioSvc = require('../services/twilioService');
       
       try {
-        await Lead.updateMany({ _id: { $in: targetIds } }, { $set: { status: 'queued' } });
+        const { supabase } = require('../db/supabase');
+        await supabase.from('leads').update({ status: 'queued' }).in('id', targetIds);
       } catch (e) {
         logger.error(`Failed to set queued status: ${e.message}`);
       }
