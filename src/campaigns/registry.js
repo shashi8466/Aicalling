@@ -32,10 +32,11 @@ function speakableScript(script) {
     .trim();
 }
 
-// A custom script is a one-way announcement unless it asks the caller
-// something — only then does the call stay open for a reply.
+// A custom script is a one-way announcement unless it ENDS by asking the
+// caller something — only then does the call stay open for a reply.
+// Rhetorical questions mid-script ("Why wait?") don't count.
 function customScriptExpectsReply(script) {
-  return /\?/.test(String(script || ''));
+  return /\?["'”’)\s]*$/.test(speakableScript(script));
 }
 
 // ── Campaign definitions ────────────────────────────────────────────────────

@@ -6416,9 +6416,12 @@
 
         const res = await api('/leads?' + query.toString());
         LEADS = res.leads || res; // handle both array and object
-        
-        clearBulkSelect();
+
+        // Keep ticks across background refreshes; drop leads no longer shown.
+        const visibleIds = new Set((LEADS || []).map(l => l._id));
+        _selectedLeads.forEach(id => { if (!visibleIds.has(id)) _selectedLeads.delete(id); });
         renderTable('leadsTable', LEADS, true);
+        updateBulkBar();
         
         // Update pagination
         if (res.total !== undefined) {
@@ -6623,7 +6626,7 @@
         const phoneValid = isValidPhone(l.phone);
         return `
         <tr onclick="openLead('${l._id}')" style="cursor:pointer" data-lead-id="${l._id}">
-          ${isLeadsView ? `<td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="lead-chk" data-id="${l._id}" onchange="toggleLeadSelect()"></td>` : ''}
+          ${isLeadsView ? `<td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="lead-chk" data-id="${l._id}" ${_selectedLeads.has(l._id) ? 'checked' : ''} onchange="toggleLeadSelect()"></td>` : ''}
           <td data-label="Name"><strong>${esc(l.fullName)}</strong><br><span style="color:var(--muted);font-size:12px">${esc(l.email)}</span></td>
           <td data-label="Grade">${esc(l.grade || '—')}</td>
           <td data-label="Phone" style="font-family:monospace;font-size:12px;color:${phoneValid ? 'inherit' : 'var(--hot)'}" title="${phoneValid ? '' : 'Invalid phone'}">${phoneValid ? '' : '⚠️ '}${esc(l.phone)}</td>
@@ -6977,7 +6980,7 @@
         const childName = l.parentName || l.fullName;
         return `
         <tr onclick="openLead('${l._id}')" style="cursor:pointer" data-lead-id="${l._id}">
-          <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="pclp-chk" data-id="${l._id}" onchange="togglePclpSelect()"></td>
+          <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="pclp-chk" data-id="${l._id}" ${_pclpSelected.has(l._id) ? 'checked' : ''} onchange="togglePclpSelect()"></td>
           <td data-label="Name"><strong>${esc(l.fullName)}</strong><br><span style="color:var(--muted);font-size:12px">${esc(l.email)}</span></td>
           <td data-label="Phone" style="font-family:monospace;font-size:12px;color:${phoneValid ? 'inherit' : 'var(--hot)'}">${phoneValid ? '' : '⚠️ '}${esc(l.phone)}</td>
           <td data-label="Child">${esc(l.grade ? 'Grade ' + l.grade : '—')}</td>
@@ -7174,7 +7177,7 @@
         const phoneValid = isValidPhone(l.phone);
         return `
         <tr onclick="openLead('${l._id}')" style="cursor:pointer" data-lead-id="${l._id}">
-          <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="clp-chk" data-id="${l._id}" onchange="toggleClpSelect()"></td>
+          <td class="cb-col" onclick="event.stopPropagation()"><input type="checkbox" class="clp-chk" data-id="${l._id}" ${_clpSelected.has(l._id) ? 'checked' : ''} onchange="toggleClpSelect()"></td>
           <td data-label="Name"><strong>${esc(l.fullName)}</strong><br><span style="color:var(--muted);font-size:12px">${esc(l.email)}</span></td>
           <td data-label="Grade">${esc(l.grade || '—')}</td>
           <td data-label="Phone" style="font-family:monospace;font-size:12px;color:${phoneValid ? 'inherit' : 'var(--hot)'}">${phoneValid ? '' : '⚠️ '}${esc(l.phone)}</td>
@@ -10630,7 +10633,7 @@
   });
 
   </script>
-  <script src="/classes.js?v=9"></script>
+  <script src="/classes.js?v=10"></script>
 </body>
 
 </html>

@@ -145,7 +145,9 @@ async function loadClassStudents() {
         if (!res.ok) throw new Error(cls.error || 'Failed to load');
         currentClassStudents = cls.students || [];
         document.getElementById('cdpBadge').textContent = `${currentClassStudents.length} students`;
-        cdpSelectedLeads.clear();
+        // Keep ticks across background refreshes; drop students no longer in the class.
+        const present = new Set(currentClassStudents.map(s => s.id));
+        cdpSelectedLeads.forEach(id => { if (!present.has(id)) cdpSelectedLeads.delete(id); });
         updateCdpBulkBar();
         renderClassStudentsTable();
     } catch(e) {
@@ -416,16 +418,22 @@ async function confirmAddStudents() {
 
 let launchTarget = 'all';
 
+// Lead IDs captured when the modal opens. Background refreshes (SSE / 30s poll)
+// re-render the tables and can clear the live selection sets before the user
+// clicks "Launch Calls", which used to send an empty leadIds list (HTTP 400).
+let launchLeadIds = [];
+
 function openLaunchCampaignModal(targetType) {
     launchTarget = targetType;
-    let count = 0;
-    if (targetType === 'all') count = currentClassStudents.length;
-    else if (targetType === 'selected') count = cdpSelectedLeads.size;
-    else if (targetType === 'crm-bulk') count = (typeof _selectedLeads !== 'undefined' ? _selectedLeads : new Set()).size;
-    else if (targetType === 'clp-bulk') count = (typeof _clpSelected !== 'undefined' ? _clpSelected : new Set()).size;
-    else if (targetType === 'pclp-bulk') count = (typeof _pclpSelected !== 'undefined' ? _pclpSelected : new Set()).size;
-    else if (targetType === 'individual') count = 1;
-    
+    let ids = [];
+    if (targetType === 'selected') ids = Array.from(cdpSelectedLeads);
+    else if (targetType === 'crm-bulk') ids = Array.from(typeof _selectedLeads !== 'undefined' ? _selectedLeads : []);
+    else if (targetType === 'clp-bulk') ids = Array.from(typeof _clpSelected !== 'undefined' ? _clpSelected : []);
+    else if (targetType === 'pclp-bulk') ids = Array.from(typeof _pclpSelected !== 'undefined' ? _pclpSelected : []);
+    else if (targetType === 'individual') ids = window.individualCallLeadId ? [window.individualCallLeadId] : [];
+    launchLeadIds = ids;
+
+    const count = targetType === 'all' ? currentClassStudents.length : ids.length;
     if (count === 0) return toast('No students/leads to launch campaign for', 'error');
     
     document.getElementById('launchCampaignInfo').textContent = `Launching campaign for ${count} student(s) / lead(s)`;
@@ -486,7 +494,7 @@ function updateLaunchCampaignFields() {
                 <label style="display:block;margin-bottom:4px;font-size:12px;color:var(--muted)">Custom Script / Message <span style="color:var(--hot)">*</span></label>
                 <textarea id="lc_customScript" placeholder="Type exactly what you want the AI to say..." style="width:100%;min-height:100px;background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:8px 12px;border-radius:6px;resize:vertical;"></textarea>
                 <div style="font-size:11px;color:var(--muted);margin-top:4px;">
-                    The AI will speak this script exactly as written and then immediately hang up the call. It will not listen for replies or answer questions.
+                    The AI will speak this script exactly as written and then immediately hang up the call. To have the AI wait for a reply, end the script with a question (ending in "?").
                 </div>
             </div>
         `;
@@ -524,16 +532,9 @@ async function confirmLaunchCampaign() {
     const payload = { campaignId, campaignVars };
     if (launchTarget === 'all') {
         payload.classId = currentClassId;
-    } else if (launchTarget === 'selected') {
-        payload.leadIds = Array.from(cdpSelectedLeads);
-    } else if (launchTarget === 'crm-bulk') {
-        payload.leadIds = Array.from(typeof _selectedLeads !== 'undefined' ? _selectedLeads : []);
-    } else if (launchTarget === 'clp-bulk') {
-        payload.leadIds = Array.from(typeof _clpSelected !== 'undefined' ? _clpSelected : []);
-    } else if (launchTarget === 'pclp-bulk') {
-        payload.leadIds = Array.from(typeof _pclpSelected !== 'undefined' ? _pclpSelected : []);
-    } else if (launchTarget === 'individual') {
-        payload.leadIds = [window.individualCallLeadId];
+    } else {
+        payload.leadIds = launchLeadIds.slice();
+        if (!payload.leadIds.length) return toast('No students/leads selected — please reselect and try again', 'error');
     }
         
     try {
