@@ -3381,11 +3381,8 @@
         <a data-view="pipeline"><span class="icon">🔄</span> Pipeline</a>
         <a data-view="enrollments"><span class="icon">📋</span> Enrollments <span class="nav-badge"
             id="navEnrollCount">0</span></a>
-        <a data-view="callbacks"><span class="icon">🤙</span> Callback Requests <span class="nav-badge"
-            id="navCallbackCount">0</span></a>
         <a data-view="campaigns"><span class="icon">📣</span> Campaigns</a>
         <a data-view="classes"><span class="icon">🏫</span> Classes / Groups</a>
-        <a data-view="parents"><span class="icon">👨‍👩‍👧</span> Parents</a>
         <a data-view="counselors"><span class="icon">👤</span> Counselors</a>
         <a data-view="settings"><span class="icon">⚙️</span> Settings</a>
         <a onclick="doLogout()"><span class="icon">🚪</span> Logout</a>
@@ -3793,23 +3790,28 @@
             <div class="an-header">
               <div>
                 <h2 class="an-title">💰 Billing &amp; Cost Analytics</h2>
-                <p class="an-sub" style="margin:2px 0 0;color:var(--muted);font-size:13px">Actual Twilio charges for every AI call — never estimated.</p>
+                <p class="an-sub" style="margin:2px 0 0;color:var(--muted);font-size:13px">Telnyx call usage &amp; cost. <span class="bl-badge voicemail">Est.</span> = live estimate · <span class="bl-badge answered">Telnyx</span> = reconciled with Telnyx Detail Records.</p>
               </div>
               <div class="an-header-right" style="flex-wrap:wrap;gap:8px">
                 <button class="btn btn-secondary btn-sm" onclick="loadBilling().then(() => { if(typeof toast==='function') toast('Refreshed', 'success'); }).catch(()=>{})">↻ Refresh</button>
                 <button class="btn btn-secondary btn-sm" onclick="exportBilling('csv')">⬇ CSV</button>
                 <button class="btn btn-secondary btn-sm" onclick="exportBilling('xlsx')">⬇ Excel</button>
                 <button class="btn btn-secondary btn-sm" onclick="exportBilling('pdf')">⬇ PDF</button>
-                <button class="btn btn-primary btn-sm" id="blImportBtn" onclick="blImportHistorical()" style="display:none">⤓ Import Historical Calls</button>
+                <button class="btn btn-primary btn-sm" id="blReconcileBtn" onclick="blReconcileNow()" style="display:none">⟳ Reconcile with Telnyx</button>
+                <button class="btn btn-secondary btn-sm" id="blImportBtn" onclick="blImportHistorical()" style="display:none">⤓ Import Historical (pre-Telnyx)</button>
               </div>
             </div>
 
             <!-- Historical import status (admin) -->
+            <div id="blReconcileBar" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:10px;background:var(--panel2);border:1px solid var(--border);font-size:13px;color:var(--muted)"></div>
             <div id="blBackfillBar" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:10px;background:var(--panel2);border:1px solid var(--border);font-size:13px;color:var(--muted)"></div>
 
             <!-- Filter bar -->
             <div class="ov-card" style="margin-bottom:16px">
               <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:14px 16px">
+                <div><label class="bl-flabel">Provider</label><select id="blProvider" class="bl-input" onchange="blApplyFilters()">
+                  <option value="telnyx" selected>Telnyx</option><option value="historical">Historical (pre-Telnyx)</option><option value="all">All providers</option>
+                </select></div>
                 <div><label class="bl-flabel">From</label><input type="date" id="blFrom" class="bl-input" onchange="blApplyFilters()"></div>
                 <div><label class="bl-flabel">To</label><input type="date" id="blTo" class="bl-input" onchange="blApplyFilters()"></div>
                 <div><label class="bl-flabel">Campaign</label><select id="blCampaign" class="bl-input" onchange="blApplyFilters()"><option value="">All campaigns</option></select></div>
@@ -3818,16 +3820,22 @@
                   <option value="">All statuses</option><option value="completed">Answered</option>
                   <option value="no-answer">No answer</option><option value="busy">Busy</option>
                   <option value="failed">Failed</option><option value="voicemail">Voicemail</option><option value="canceled">Canceled</option>
+                  <option value="in-progress">In progress</option>
+                </select></div>
+                <div><label class="bl-flabel">Country</label><select id="blCountry" class="bl-input" onchange="blApplyFilters()"><option value="">All countries</option></select></div>
+                <div><label class="bl-flabel">Cost Type</label><select id="blCostType" class="bl-input" onchange="blApplyFilters()">
+                  <option value="">All</option><option value="reconciled">Reconciled (Telnyx)</option><option value="estimated">Estimated</option>
                 </select></div>
                 <div><label class="bl-flabel">Min $</label><input type="number" step="0.001" id="blCostMin" class="bl-input" style="width:80px" onchange="blApplyFilters()"></div>
                 <div><label class="bl-flabel">Max $</label><input type="number" step="0.001" id="blCostMax" class="bl-input" style="width:80px" onchange="blApplyFilters()"></div>
-                <div style="flex:1;min-width:160px"><label class="bl-flabel">Search</label><input type="text" id="blSearch" class="bl-input" style="width:100%" placeholder="Student, parent, phone, SID…" oninput="blDebouncedSearch()"></div>
+                <div style="flex:1;min-width:160px"><label class="bl-flabel">Search</label><input type="text" id="blSearch" class="bl-input" style="width:100%" placeholder="Student, parent, phone, call ID…" oninput="blDebouncedSearch()"></div>
                 <button class="btn btn-secondary btn-sm" onclick="blResetFilters()">Clear</button>
               </div>
             </div>
 
             <!-- Summary cards -->
             <div id="blSummary" class="bl-cards"></div>
+            <div id="blCostNote" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
 
             <!-- Charts -->
             <div class="an-mid" style="margin-top:16px">
@@ -3855,17 +3863,18 @@
                   <thead><tr>
                     <th class="bl-sort" onclick="blSort('date')">Date ⇅</th>
                     <th class="bl-sort" onclick="blSort('student')">Student ⇅</th>
-                    <th>Parent</th>
                     <th class="bl-sort" onclick="blSort('campaign')">Campaign ⇅</th>
                     <th class="bl-col-counselor">Counselor</th>
-                    <th>Phone</th>
+                    <th>Destination</th>
+                    <th class="bl-sort" onclick="blSort('country')">Country ⇅</th>
                     <th class="bl-sort" onclick="blSort('duration')">Duration ⇅</th>
-                    <th class="bl-sort" onclick="blSort('cost')">Cost ⇅</th>
+                    <th class="bl-sort" onclick="blSort('billable')">Billable ⇅</th>
+                    <th class="bl-sort" onclick="blSort('cost')">Telnyx Cost ⇅</th>
                     <th class="bl-sort" onclick="blSort('status')">Status ⇅</th>
-                    <th>Call SID</th>
+                    <th>Call ID</th>
                     <th></th>
                   </tr></thead>
-                  <tbody id="blTableBody"><tr><td colspan="11" style="text-align:center;padding:28px;color:var(--muted)">Loading…</td></tr></tbody>
+                  <tbody id="blTableBody"><tr><td colspan="12" style="text-align:center;padding:28px;color:var(--muted)">Loading…</td></tr></tbody>
                 </table>
               </div>
               <div id="blPager" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;gap:10px;flex-wrap:wrap"></div>
@@ -3875,13 +3884,34 @@
             <div class="an-mid" style="margin-top:16px">
               <div class="ov-card"><div class="ov-card-hdr"><h4>📣 Campaign Billing</h4></div>
                 <div style="overflow-x:auto"><table class="data-table" style="width:100%"><thead><tr>
-                  <th>Campaign</th><th>Calls</th><th>Minutes</th><th>Avg Dur</th><th>Total Cost</th><th>Avg/Call</th><th>Avg/Min</th>
+                  <th>Campaign</th><th>Calls</th><th>Billable Min</th><th>Total Cost</th><th>Avg/Call</th><th>Avg/Min</th>
                 </tr></thead><tbody id="blCampaignBody"></tbody></table></div>
               </div>
               <div class="ov-card" id="blCounselorTableCard"><div class="ov-card-hdr"><h4>👤 Counselor Billing</h4></div>
                 <div style="overflow-x:auto"><table class="data-table" style="width:100%"><thead><tr>
-                  <th>Counselor</th><th>Calls</th><th>Minutes</th><th>Total Cost</th><th>Avg/Call</th><th>Avg Dur</th>
+                  <th>Counselor</th><th>Calls</th><th>Billable Min</th><th>Total Cost</th><th>Avg/Call</th><th>Avg Dur</th>
                 </tr></thead><tbody id="blCounselorBody"></tbody></table></div>
+              </div>
+            </div>
+
+            <!-- Destination billing + Telnyx rates -->
+            <div class="an-mid" style="margin-top:16px">
+              <div class="ov-card"><div class="ov-card-hdr"><h4>🌍 Cost by Destination</h4></div>
+                <div style="overflow-x:auto"><table class="data-table" style="width:100%"><thead><tr>
+                  <th>Country</th><th>Calls</th><th>Billable Min</th><th>Total Cost</th><th>Avg/Call</th><th>Avg/Min</th>
+                </tr></thead><tbody id="blCountryBody"></tbody></table></div>
+              </div>
+              <div class="ov-card"><div class="ov-card-hdr"><h4>💲 Telnyx Destination Rates</h4></div>
+                <div style="padding:8px 16px 0;font-size:12px;color:var(--muted)">Used only for live estimates. <strong>Learned</strong> rates are calculated automatically from actual Telnyx charges (all components ÷ billable minutes). An admin <strong>override</strong> takes precedence. Final costs always come from Telnyx.</div>
+                <div style="overflow-x:auto"><table class="data-table" style="width:100%"><thead><tr>
+                  <th>Country</th><th>Learned $/min</th><th>Override $/min</th><th>Increment</th><th></th>
+                </tr></thead><tbody id="blRatesBody"></tbody></table></div>
+                <div id="blRateAdd" style="display:none;gap:8px;flex-wrap:wrap;align-items:flex-end;padding:12px 16px">
+                  <div><label class="bl-flabel">Country (ISO)</label><input id="blNewRateCc" class="bl-input" style="width:70px" maxlength="2" placeholder="US"></div>
+                  <div><label class="bl-flabel">Override $/min</label><input id="blNewRateVal" type="number" step="0.0001" class="bl-input" style="width:100px"></div>
+                  <div><label class="bl-flabel">Increment</label><input id="blNewRateInc" class="bl-input" style="width:70px" value="60/60"></div>
+                  <button class="btn btn-secondary btn-sm" onclick="blAddRate()">Add / Update</button>
+                </div>
               </div>
             </div>
 
@@ -3894,7 +3924,7 @@
                 </select>
               </div>
               <div style="overflow-x:auto"><table class="data-table" style="width:100%"><thead><tr>
-                <th>Period</th><th>Total Calls</th><th>Total Minutes</th><th>Total Cost</th>
+                <th>Period</th><th>Total Calls</th><th>Billable Minutes</th><th>Total Cost</th>
               </tr></thead><tbody id="blReportBody"></tbody></table></div>
             </div>
 
@@ -4088,13 +4118,19 @@
             <div class="kpi-strip" id="campaignKpis"></div>
             <div class="card">
               <div class="card-header">
-                <h3>AI Outreach Campaigns</h3>
+                <h3>🎓 Student Campaigns</h3>
                 <div class="filters">
                   <button class="btn btn-secondary btn-sm" onclick="loadCampaigns().then(() => { if(typeof toast==='function') toast('Refreshed', 'success'); }).catch(()=>{})">↻ Refresh</button>
                   <button class="btn btn-primary btn-sm" onclick="openCampaignForm()">➕ New Campaign</button>
                 </div>
               </div>
               <div id="campaignsTable"></div>
+            </div>
+            <div class="card" style="margin-top:16px">
+              <div class="card-header">
+                <h3>👨‍👩‍👧 Parent Outreach Campaigns</h3>
+              </div>
+              <div id="parentCampaignsTable"></div>
             </div>
           </div>
 
@@ -4164,78 +4200,11 @@
             </div>
           </div>
 
-        </section>
-
-        
-        <!-- ─── CLASSES / GROUPS ─── -->
-        <section class="view" id="view-classes">
-          <div id="classesOverview">
-            <div class="card">
-              <div class="card-header">
-                <h3>🏫 Classes / Groups</h3>
-                <div class="filters">
-                  <button class="btn btn-secondary btn-sm" onclick="loadClasses(); if(typeof toast==='function') toast('Refreshed', 'success');">↻ Refresh</button>
-                  <button class="btn btn-primary btn-sm" onclick="openClassForm()">➕ Create Class</button>
-                </div>
-              </div>
-              <div id="classesTable"></div>
-            </div>
-          </div>
-          <div class="camp-leads-panel" id="classDetailsPanel" style="display:none">
-            <div class="camp-back-bar">
-              <button class="camp-back-btn" onclick="closeClassDetails()">← Back to Classes</button>
-              <div>
-                <span class="camp-back-title" id="cdpTitle">Class Details</span>
-                <span class="camp-back-badge" id="cdpBadge">Loading…</span>
-              </div>
-              <div style="margin-left:auto;display:flex;gap:8px">
-                <button class="btn btn-secondary btn-sm" onclick="refreshClassDetails(); if(typeof toast==='function') toast('Refreshed', 'success');">↻ Refresh</button>
-                <button class="btn btn-primary btn-sm" onclick="openAddStudentsToClassModal()">➕ Add Students</button>
-              </div>
-            </div>
-            <div class="card">
-              <div class="card-header">
-                <h3 id="cdpTableTitle">Students in Class</h3>
-                <div class="filters">
-                  <input type="text" id="cdpSearch" placeholder="Search students…" oninput="filterClassStudents()">
-                </div>
-              </div>
-              <div class="bulk-bar" id="cdpBulkBar">
-                <span><span class="bulk-count" id="cdpBulkCount">0</span> students selected</span>
-                <button class="btn btn-secondary btn-sm" style="margin-left:8px;background:#f59e0b;color:#fff;border:none;" onclick="openLaunchCampaignModal('selected')">📞 Launch Campaign (Selected)</button>
-                <button class="btn btn-sm admin-only-btn" style="margin-left:8px;background:#ef4444;color:#fff;border:none;font-weight:600;" onclick="removeSelectedStudentsFromClass()">✕ Remove Selected</button>
-                <button class="bulk-clear" onclick="clearCdpBulkSelect()">✕ Clear</button>
-              </div>
-              <div style="padding: 10px 20px; border-bottom: 1px solid var(--border);">
-                 <button class="btn btn-primary btn-sm" onclick="openLaunchCampaignModal('all')">📞 Launch Campaign for Entire Class</button>
-              </div>
-              <div id="classStudentsTable"></div>
-            </div>
-          </div>
-        </section>
-
-        <!-- ─── PARENTS CAMPAIGNS ─── -->
-        <section class="view" id="view-parents">
-
-          <!-- Level 1: Parent Campaign Overview (shown by default) -->
-          <div id="parentCampaignOverview">
-            <div class="kpi-strip" id="parentCampaignKpis"></div>
-            <div class="card">
-              <div class="card-header">
-                <h3>👨‍👩‍👧 Parent Outreach Campaigns</h3>
-                <div class="filters">
-                  <button class="btn btn-secondary btn-sm" onclick="loadParentCampaigns().then(() => { if(typeof toast==='function') toast('Refreshed', 'success'); }).catch(()=>{})">↻ Refresh</button>
-                </div>
-              </div>
-              <div id="parentCampaignsTable"></div>
-            </div>
-          </div>
-
-          <!-- Level 2: Per-Campaign Leads Page -->
+          <!-- Level 2b: Parent Outreach Campaign Leads Page -->
           <div class="camp-leads-panel" id="parentCampaignLeadsPanel">
             <!-- Back bar -->
             <div class="camp-back-bar">
-              <button class="camp-back-btn" onclick="closeParentCampaignLeads()">← Back to Parent Campaigns</button>
+              <button class="camp-back-btn" onclick="closeParentCampaignLeads()">← Back to Campaigns</button>
               <div>
                 <span class="camp-back-title" id="pclpTitle">Campaign Leads</span>
                 <span class="camp-back-badge" id="pclpBadge">Loading…</span>
@@ -4289,6 +4258,54 @@
             </div>
           </div>
 
+        </section>
+
+        
+        <!-- ─── CLASSES / GROUPS ─── -->
+        <section class="view" id="view-classes">
+          <div id="classesOverview">
+            <div class="card">
+              <div class="card-header">
+                <h3>🏫 Classes / Groups</h3>
+                <div class="filters">
+                  <button class="btn btn-secondary btn-sm" onclick="loadClasses(); if(typeof toast==='function') toast('Refreshed', 'success');">↻ Refresh</button>
+                  <button class="btn btn-primary btn-sm" onclick="openClassForm()">➕ Create Class</button>
+                </div>
+              </div>
+              <div id="classesTable"></div>
+            </div>
+          </div>
+          <div class="camp-leads-panel" id="classDetailsPanel" style="display:none">
+            <div class="camp-back-bar">
+              <button class="camp-back-btn" onclick="closeClassDetails()">← Back to Classes</button>
+              <div>
+                <span class="camp-back-title" id="cdpTitle">Class Details</span>
+                <span class="camp-back-badge" id="cdpBadge">Loading…</span>
+              </div>
+              <div style="margin-left:auto;display:flex;gap:8px">
+                <button class="btn btn-secondary btn-sm" onclick="refreshClassDetails(); if(typeof toast==='function') toast('Refreshed', 'success');">↻ Refresh</button>
+                <button class="btn btn-primary btn-sm" onclick="openAddStudentsToClassModal()">➕ Add Students</button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3 id="cdpTableTitle">Students in Class</h3>
+                <div class="filters">
+                  <input type="text" id="cdpSearch" placeholder="Search students…" oninput="filterClassStudents()">
+                </div>
+              </div>
+              <div class="bulk-bar" id="cdpBulkBar">
+                <span><span class="bulk-count" id="cdpBulkCount">0</span> students selected</span>
+                <button class="btn btn-secondary btn-sm" style="margin-left:8px;background:#f59e0b;color:#fff;border:none;" onclick="openLaunchCampaignModal('selected')">📞 Launch Campaign (Selected)</button>
+                <button class="btn btn-sm admin-only-btn" style="margin-left:8px;background:#ef4444;color:#fff;border:none;font-weight:600;" onclick="removeSelectedStudentsFromClass()">✕ Remove Selected</button>
+                <button class="bulk-clear" onclick="clearCdpBulkSelect()">✕ Clear</button>
+              </div>
+              <div style="padding: 10px 20px; border-bottom: 1px solid var(--border);">
+                 <button class="btn btn-primary btn-sm" onclick="openLaunchCampaignModal('all')">📞 Launch Campaign for Entire Class</button>
+              </div>
+              <div id="classStudentsTable"></div>
+            </div>
+          </div>
         </section>
 
         <!-- ─── COUNSELORS (Admin only) ─── -->
@@ -5958,6 +5975,10 @@
     });
 
     function showView(name) {
+      // Parents and Callback Requests were removed from navigation; parent
+      // campaigns now live under Campaigns.
+      if (name === 'parents') name = 'campaigns';
+      if (name === 'callbacks') name = 'overview';
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       document.querySelectorAll('.nav a').forEach(a => a.classList.remove('active'));
       document.getElementById('view-' + name).classList.add('active');
@@ -5969,8 +5990,7 @@
         counselor: 'Counselor Dashboard', pipeline: 'Enrollment Pipeline',
         enrollments: 'Enrollments', campaigns: 'Campaign Management',
         classes: 'Classes / Groups',
-        parents: 'Parent Campaigns', counselors: 'Counselor Management', settings: 'Settings',
-        callbacks: 'Callback Requests',
+        counselors: 'Counselor Management', settings: 'Settings',
       };
       document.getElementById('pageTitle').textContent = titles[name] || name;
       if (name === 'overview') loadOverview();
@@ -5984,10 +6004,8 @@
       if (name === 'enrollments') loadEnrollments();
       if (name === 'campaigns') loadCampaigns();
       if (name === 'classes') loadClasses();
-      if (name === 'parents') loadParentCampaigns();
       if (name === 'counselors') loadCounselors();
       if (name === 'settings') showSettingsPanel('profile');
-      if (name === 'callbacks') loadCallbacks();
     }
 
     // ─── Callback Requests View Logic ───
@@ -5996,7 +6014,8 @@
       el.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:32px">Loading callback requests…</td></tr>';
       try {
         const list = await api('/crm/callbacks');
-        document.getElementById('navCallbackCount').textContent = list.length;
+        const cbBadge = document.getElementById('navCallbackCount');
+        if (cbBadge) cbBadge.textContent = list.length;
         if (!list.length) {
           el.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:32px">No callback requests found</td></tr>';
           return;
@@ -6670,8 +6689,12 @@
         const data = await api('/campaigns');
         CAMPAIGNS = data.campaigns || [];
         renderCampaignKpis(data);
-        renderCampaignsTable(data);
+        // Each campaign is listed once: parent outreach types in their own group.
+        renderCampaignsTable({ ...data, campaigns: CAMPAIGNS.filter(c => !PARENT_CAMPAIGN_TYPES.includes(c.type)) });
+        renderParentCampaignsTable({ campaigns: CAMPAIGNS.filter(c => PARENT_CAMPAIGN_TYPES.includes(c.type)) });
       } catch (e) {
+        const pEl = document.getElementById('parentCampaignsTable');
+        if (pEl) pEl.innerHTML = '';
         const setup = /set up|schema_campaigns/i.test(e.message);
         el.innerHTML = `<div class="empty"><div class="icon">📣</div>${esc(e.message)}${setup ? '<br><br><span style="color:var(--muted);font-size:12px">Run <code>supabase/schema_campaigns.sql</code> in the Supabase SQL editor, then refresh.</span>' : ''
           }</div>`;
@@ -6689,7 +6712,7 @@
       document.getElementById('campaignKpis').innerHTML =
         kpiChip('📣', cs.length, 'Campaigns', '#3b82f6') +
         kpiChip('🟢', active, 'Active', '#10b981') +
-        kpiChip('👥', totalLeads, 'Total Students', '#6366f1') +
+        kpiChip('👥', totalLeads, 'Total Leads', '#6366f1') +
         kpiChip('📞', sum('callsCompleted'), 'Calls Completed', '#f59e0b') +
         kpiChip('📅', sum('meetingsBooked'), 'Meetings Booked', '#8b5cf6') +
         kpiChip('🎓', totalEnroll, 'Enrollments', '#22c55e') +
@@ -6794,26 +6817,11 @@
     let PCLP_CAMPAIGN_NAME = '';
     let PCLP_ALL_LEADS = [];
 
-    async function loadParentCampaigns() {
-      const el = document.getElementById('parentCampaignsTable');
-      el.innerHTML = '<div style="text-align:center;color:var(--muted);padding:24px">Loading parent campaigns…</div>';
-      try {
-        const data = await api('/campaigns');
-        // Filter to parent campaign types only
-        const allCamps = data.campaigns || [];
-        CAMPAIGNS = allCamps; // keep global cache updated
-        const parentCamps = allCamps.filter(c => PARENT_CAMPAIGN_TYPES.includes(c.type));
-        const parentData = { campaigns: parentCamps, unassignedLeads: 0 };
-        renderParentCampaignKpis(parentData);
-        renderParentCampaignsTable(parentData);
-      } catch (e) {
-        const setup = /set up|schema_campaigns/i.test(e.message);
-        el.innerHTML = `<div class="empty"><div class="icon">👨‍👩‍👧</div>${esc(e.message)}${setup ? '<br><br><span style="color:var(--muted);font-size:12px">Run <code>supabase/schema_campaigns.sql</code> in the Supabase SQL editor, then refresh.</span>' : ''}</div>`;
-        document.getElementById('parentCampaignKpis').innerHTML = '';
-      }
-    }
+    // Parent campaigns are part of the Campaigns page now — reload it.
+    function loadParentCampaigns() { return loadCampaigns(); }
 
     function renderParentCampaignKpis(data) {
+      if (!document.getElementById('parentCampaignKpis')) return;
       const cs = data.campaigns || [];
       const sum = (k) => cs.reduce((s, c) => s + (c.stats[k] || 0), 0);
       const totalLeads = sum('totalLeads');
@@ -6887,7 +6895,7 @@
       PCLP_CAMPAIGN_NAME = campaignName;
       PCLP_ALL_LEADS = [];
 
-      document.getElementById('parentCampaignOverview').style.display = 'none';
+      document.getElementById('campaignOverview').style.display = 'none';
       const panel = document.getElementById('parentCampaignLeadsPanel');
       panel.classList.add('visible');
 
@@ -6934,7 +6942,7 @@
       PCLP_ALL_LEADS = [];
       clearPclpBulkSelect();
       document.getElementById('parentCampaignLeadsPanel').classList.remove('visible');
-      document.getElementById('parentCampaignOverview').style.display = '';
+      document.getElementById('campaignOverview').style.display = '';
     }
 
     function renderParentCampaignLeadsKpis(leads) {
@@ -8014,7 +8022,7 @@
           }
         } catch (_) { }
 
-        // Billing history for this lead (actual Twilio costs)
+        // Billing history for this lead (Telnyx + historical records)
         try {
           const bill = await api('/billing/by-lead/' + l._id);
           const brows = bill.rows || [];
@@ -8023,16 +8031,16 @@
             body += `<div class="section-title">💰 Billing History (${brows.length})</div>
             <div class="detail-grid">
               <div class="detail-cell"><div class="lbl">Total Cost</div><div class="val"><strong>${blMoney(t.totalCost, t.currency)}</strong></div></div>
-              <div class="detail-cell"><div class="lbl">Total Minutes</div><div class="val">${t.totalMinutes || 0}</div></div>
+              <div class="detail-cell"><div class="lbl">Billable Minutes</div><div class="val">${t.billableMinutes ?? t.totalMinutes ?? 0}</div></div>
               <div class="detail-cell"><div class="lbl">Total Calls</div><div class="val">${t.totalCalls || 0}</div></div>
             </div>
             <div style="overflow-x:auto;margin-top:8px"><table class="data-table" style="width:100%">
               <thead><tr><th>Date</th><th>Campaign</th><th>Duration</th><th>Cost</th><th>Status</th><th></th></tr></thead>
               <tbody>${brows.map(r => `<tr>
                 <td>${r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}</td>
-                <td>${esc(r.campaign_name || 'Demo / Unassigned')}</td>
+                <td>${esc(r.campaign_name || r.campaign_type || 'Demo / Unassigned')}</td>
                 <td>${blFmtDuration(r.duration_seconds)}</td>
-                <td>${r.twilio_price != null ? '<strong>' + blMoney(r.twilio_price, r.currency) + '</strong>' : '<span class="bl-badge pending">pending</span>'}</td>
+                <td>${blCostCell(r)}</td>
                 <td>${blStatusBadge(r.call_status)}</td>
                 <td><button class="bl-pill-btn" onclick="openBillingDetail('${r.id}')">Details</button></td>
               </tr>`).join('')}</tbody>
@@ -9586,12 +9594,36 @@
     }
     function blStatusBadge(status) {
       const s = (status || '').toLowerCase();
-      let cls = 'other', label = status || '—';
-      if (s === 'completed') { cls = 'answered'; label = 'Answered'; }
-      else if (['no-answer', 'busy', 'failed'].includes(s)) { cls = 'failed'; }
-      else if (s === 'voicemail') { cls = 'voicemail'; }
+      const map = {
+        completed: ['answered', 'Answered'], voicemail: ['voicemail', 'Voicemail'],
+        'no-answer': ['failed', 'No answer'], busy: ['failed', 'Busy'], failed: ['failed', 'Failed'],
+        canceled: ['other', 'Canceled'], initiated: ['pending', 'In progress'], 'in-progress': ['pending', 'In progress'],
+      };
+      const [cls, label] = map[s] || ['other', status || '—'];
       return `<span class="bl-badge ${cls}">${esc(label)}</span>`;
     }
+    // Amount every report uses: reconciled Telnyx cost, else estimate, else historical price.
+    function blCostOf(r) {
+      if (r.cost_amount != null) return Number(r.cost_amount);
+      if (r.provider !== 'telnyx' && r.twilio_price != null) return Number(r.twilio_price);
+      return null;
+    }
+    function blCostTypeBadge(r) {
+      if (r.provider !== 'telnyx') return '<span class="bl-badge other" title="Pre-Telnyx record">Historical</span>';
+      if (r.cost_type === 'reconciled') return '<span class="bl-badge answered" title="Actual charge from Telnyx Detail Records">Telnyx</span>';
+      return '<span class="bl-badge voicemail" title="Estimate — not yet reconciled with Telnyx">Est.</span>';
+    }
+    function blCostCell(r) {
+      const c = blCostOf(r);
+      if (c != null) return `<strong>${blMoney(c, r.currency)}</strong> ${blCostTypeBadge(r)}`;
+      if (r.provider === 'telnyx' && !r.ended_at) return '<span class="bl-badge pending">in progress</span>';
+      return '<span class="bl-badge pending" title="No Telnyx rate known yet for this destination — will be priced on reconciliation">awaiting Telnyx</span>';
+    }
+    const BL_BUILTIN_CAMPAIGNS = [
+      ['custom-script', 'Custom Campaign'], ['parent-homework', 'Homework Campaign'], ['parent-absent', 'Absent Campaign'],
+      ['parent-flt', 'Full Length Test Campaign'], ['student-flt-posted', 'Full Length Test Announcement'],
+      ['sat-summer-challenge', 'SAT Summer Digital Challenge'],
+    ];
 
     // Chart theming (works on the app's dark surface; light-safe fallback colors)
     const BL_PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#ef4444', '#84cc16', '#f97316', '#14b8a6', '#a855f7', '#eab308'];
@@ -9623,13 +9655,18 @@
       });
       document.querySelectorAll('.bl-col-counselor').forEach(el => { el.style.display = admin ? '' : 'none'; });
 
-      // Historical import is admin-only
+      // Historical import + reconciliation are admin-only
       const importBtn = document.getElementById('blImportBtn');
       if (importBtn) importBtn.style.display = admin ? '' : 'none';
+      const recBtn = document.getElementById('blReconcileBtn');
+      if (recBtn) recBtn.style.display = admin ? '' : 'none';
+      const rateAdd = document.getElementById('blRateAdd');
+      if (rateAdd) rateAdd.style.display = admin ? 'flex' : 'none';
       if (admin) blLoadBackfillStatus();
+      blLoadReconcileStatus();
 
       await blPopulateFilters();
-      await Promise.all([blLoadAnalytics(), loadBillingTable()]);
+      await Promise.all([blLoadAnalytics(), loadBillingTable(), blLoadRates()]);
     }
 
     async function blLoadBackfillStatus() {
@@ -9642,10 +9679,9 @@
           bar.innerHTML = `⏳ <strong>Historical import running…</strong> creating billing records for existing calls.`;
         } else if (s.done) {
           const im = s.summary || {};
-          bar.innerHTML = `✅ <strong>Historical import complete.</strong> ${s.historicalRecords} imported · ${s.totalRecords} total billing records.` +
-            (im.finalized != null ? ` (${im.finalized} priced, ${im.pending || 0} pending)` : '');
+          bar.innerHTML = `🗂 Historical (pre-Telnyx) records: ${s.historicalRecords} imported. They are kept separate — choose Provider → Historical to view them.`;
         } else {
-          bar.innerHTML = `📥 Historical calls have not been imported yet. Click <strong>Import Historical Calls</strong> to fetch actual Twilio charges for all existing calls.`;
+          bar.innerHTML = `📥 Pre-Telnyx calls have not been imported. Click <strong>Import Historical (pre-Telnyx)</strong> to add them — they appear only under Provider → Historical.`;
         }
       } catch (e) {
         // 503 (table missing) or 403 — show a hint only for real errors
@@ -9656,7 +9692,7 @@
 
     async function blImportHistorical() {
       const btn = document.getElementById('blImportBtn');
-      if (!confirm('Import billing for ALL existing calls? This fetches the actual Twilio price for each past call. It runs once and skips anything already imported.')) return;
+      if (!confirm('Import billing records for all existing pre-Telnyx calls? They are tagged Historical and kept separate from Telnyx billing. Anything already imported is skipped.')) return;
       try {
         if (btn) { btn.disabled = true; btn.textContent = '⏳ Importing…'; }
         await api('/billing/backfill', { method: 'POST' });
@@ -9690,6 +9726,7 @@
         if (!CAMPAIGNS.length) { try { const d = await api('/campaigns'); CAMPAIGNS = d.campaigns || []; } catch (_) {} }
         const cSel = document.getElementById('blCampaign');
         if (cSel) cSel.innerHTML = '<option value="">All campaigns</option>' +
+          BL_BUILTIN_CAMPAIGNS.map(([v, n]) => `<option value="${v}">${esc(n)}</option>`).join('') +
           CAMPAIGNS.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
         if (blIsAdmin()) {
           try {
@@ -9704,12 +9741,14 @@
     }
 
     function blResetFilters() {
-      ['blFrom', 'blTo', 'blCampaign', 'blCounselor', 'blStatus', 'blCostMin', 'blCostMax', 'blSearch']
+      ['blFrom', 'blTo', 'blCampaign', 'blCounselor', 'blStatus', 'blCostMin', 'blCostMax', 'blSearch', 'blCountry', 'blCostType']
         .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+      const prov = document.getElementById('blProvider'); if (prov) prov.value = 'telnyx';
       blApplyFilters();
     }
     function blDebouncedSearch() { clearTimeout(_blSearchTimer); _blSearchTimer = setTimeout(blApplyFilters, 350); }
-    function blApplyFilters() { blState.page = 1; loadBillingTable(); }
+    // Filters drive the whole page — cards, charts and tables all reflect them.
+    function blApplyFilters() { blState.page = 1; loadBillingTable(); blLoadAnalytics(); }
 
     function blFilterQuery() {
       const p = new URLSearchParams();
@@ -9722,6 +9761,9 @@
       if (g('blCostMin')) p.set('costMin', g('blCostMin'));
       if (g('blCostMax')) p.set('costMax', g('blCostMax'));
       if (g('blSearch')) p.set('search', g('blSearch'));
+      p.set('provider', g('blProvider') || 'telnyx');
+      if (g('blCountry')) p.set('country', g('blCountry'));
+      if (g('blCostType')) p.set('costType', g('blCostType'));
       return p;
     }
 
@@ -9736,7 +9778,7 @@
     async function loadBillingTable() {
       const tbody = document.getElementById('blTableBody');
       if (!tbody) return;
-      const colspan = blIsAdmin() ? 11 : 10;
+      const colspan = blIsAdmin() ? 12 : 11;
       tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center;padding:24px;color:var(--muted)">Loading…</td></tr>`;
       try {
         const p = blFilterQuery();
@@ -9755,26 +9797,25 @@
     function blRenderRows(rows) {
       const tbody = document.getElementById('blTableBody');
       const admin = blIsAdmin();
-      const colspan = admin ? 11 : 10;
+      const colspan = admin ? 12 : 11;
       if (!rows.length) {
         tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center;padding:24px;color:var(--muted)">No billing records match your filters.</td></tr>`;
         return;
       }
       tbody.innerHTML = rows.map(r => {
-        const priceCell = r.twilio_price != null
-          ? `<strong>${blMoney(r.twilio_price, r.currency)}</strong>`
-          : `<span class="bl-badge pending">pending</span>`;
+        const billable = r.billable_seconds != null ? r.billable_seconds : Math.round((Number(r.duration_minutes) || 0) * 60);
         return `<tr>
           <td data-label="Date">${r.created_at ? new Date(r.created_at).toLocaleString() : '—'}</td>
           <td data-label="Student"><strong>${esc(r.student_name || '—')}</strong></td>
-          <td data-label="Parent">${esc(r.parent_name || '—')}</td>
-          <td data-label="Campaign">${esc(r.campaign_name || 'Demo / Unassigned')}</td>
+          <td data-label="Campaign">${esc(r.campaign_name || r.campaign_type || 'Demo / Unassigned')}</td>
           ${admin ? `<td class="bl-col-counselor" data-label="Counselor">${esc(r.counselor_id ? (r.counselor_id.slice(0, 8) + '…') : '—')}</td>` : ''}
-          <td data-label="Phone" style="font-family:monospace;font-size:12px">${esc(r.phone_number || r.to_number || '—')}</td>
+          <td data-label="Destination" style="font-family:monospace;font-size:12px">${esc(r.destination_number || r.phone_number || r.to_number || '—')}</td>
+          <td data-label="Country">${esc(r.destination_country || '—')}</td>
           <td data-label="Duration">${blFmtDuration(r.duration_seconds)}</td>
-          <td data-label="Cost">${priceCell}</td>
+          <td data-label="Billable">${blFmtDuration(billable)}${r.billing_increment ? ` <span style="color:var(--muted);font-size:10px">(${esc(r.billing_increment)})</span>` : ''}</td>
+          <td data-label="Cost">${blCostCell(r)}</td>
           <td data-label="Status">${blStatusBadge(r.call_status)}</td>
-          <td data-label="Call SID" style="font-family:monospace;font-size:11px;color:var(--muted)">${esc((r.call_sid || '').slice(0, 12))}…</td>
+          <td data-label="Call ID" style="font-family:monospace;font-size:11px;color:var(--muted)" title="${esc(r.call_sid || '')}">${esc((r.call_sid || '').slice(0, 12))}…</td>
           <td data-label=""><button class="bl-pill-btn" onclick="openBillingDetail('${r.id}')">Details</button></td>
         </tr>`;
       }).join('');
@@ -9802,9 +9843,12 @@
 
     async function blLoadAnalytics() {
       try {
-        const a = await api('/billing/analytics');
+        const q = blFilterQuery();
+        q.set('tzOffset', new Date().getTimezoneOffset());
+        const a = await api('/billing/analytics?' + q.toString());
         _blReports = a.reports || { daily: [], weekly: [], monthly: [] };
         blRenderSummary(a.summary || {});
+        blRenderCountryBilling(a.byCountry || []);
         blRenderCharts(a.charts || {});
         blRenderCampaignBilling(a.byCampaign || []);
         if (blIsAdmin()) blRenderCounselorBilling(a.byCounselor || []);
@@ -9822,19 +9866,31 @@
       const cur = s.currency || 'USD';
       const el = document.getElementById('blSummary');
       if (!el) return;
+      const prov = document.getElementById('blProvider')?.value || 'telnyx';
+      const label = prov === 'telnyx' ? 'Telnyx ' : prov === 'historical' ? 'Historical ' : '';
       el.innerHTML =
         blCard('Cost Today', blMoney(s.costToday, cur)) +
         blCard('Cost This Week', blMoney(s.costWeek, cur)) +
         blCard('Cost This Month', blMoney(s.costMonth, cur)) +
         blCard('Cost This Year', blMoney(s.costYear, cur)) +
-        blCard('Lifetime Cost', blMoney(s.lifetimeCost, cur)) +
-        blCard('Avg Cost / Call', blMoney(s.avgCostPerCall, cur)) +
-        blCard('Avg Cost / Minute', blMoney(s.avgCostPerMinute, cur)) +
-        blCard('Total Call Minutes', (s.totalMinutes || 0).toLocaleString()) +
-        blCard('Total Calls', (s.totalCalls || 0).toLocaleString(), s.pendingCount ? `${s.pendingCount} pending price` : '') +
+        blCard(`Lifetime ${label}Cost`, blMoney(s.lifetimeCost, cur),
+          prov !== 'historical' ? `Reconciled ${blMoney(s.reconciledCost, cur)} · Est. ${blMoney(s.estimatedCost, cur)}` : '') +
+        blCard('Avg Cost / Call', blMoney(s.avgCostPerCall, cur), 'per billable call') +
+        blCard('Avg Cost / Minute', blMoney(s.avgCostPerMinute, cur), 'per billable minute') +
+        blCard('Total Billable Minutes', (s.billableMinutes ?? s.totalMinutes ?? 0).toLocaleString()) +
+        blCard(`Total ${label}Calls`, (s.totalCalls || 0).toLocaleString(), s.inProgressCalls ? `${s.inProgressCalls} in progress` : '') +
         blCard('Answered', (s.answeredCalls || 0).toLocaleString()) +
-        blCard('Failed', (s.failedCalls || 0).toLocaleString()) +
+        blCard('No Answer', (s.noAnswerCalls || 0).toLocaleString()) +
+        blCard('Busy', (s.busyCalls || 0).toLocaleString()) +
+        blCard('Failed', (s.failedCalls || 0).toLocaleString(), s.canceledCalls ? `${s.canceledCalls} canceled` : '') +
         blCard('Voicemail', (s.voicemailCalls || 0).toLocaleString());
+      const note = document.getElementById('blCostNote');
+      if (note) {
+        note.innerHTML = prov === 'historical'
+          ? 'Showing historical (pre-Telnyx) records only — these are not Telnyx charges.'
+          : `${s.reconciledCalls || 0} call(s) reconciled with Telnyx Detail Records · ${s.estimatedCalls || 0} estimated (not yet reconciled — estimates are not Telnyx invoice amounts)` +
+            (s.unpricedCalls ? ` · ${s.unpricedCalls} awaiting a Telnyx rate` : '');
+      }
     }
 
     function blRenderCharts(c) {
@@ -9914,12 +9970,128 @@
     function blRenderCampaignBilling(list) {
       const tb = document.getElementById('blCampaignBody');
       if (!tb) return;
-      if (!list.length) { tb.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>`; return; }
+      if (!list.length) { tb.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>`; return; }
       tb.innerHTML = list.map(g => `<tr>
         <td><strong>${esc(g.label)}</strong></td>
-        <td>${g.totalCalls}</td><td>${g.totalMinutes}</td><td>${blFmtDuration(g.avgDuration)}</td>
+        <td>${g.totalCalls}</td><td>${g.billableMinutes ?? g.totalMinutes}</td>
         <td><strong>${blMoney(g.totalCost)}</strong></td><td>${blMoney(g.avgCostPerCall)}</td><td>${blMoney(g.avgCostPerMinute)}</td>
       </tr>`).join('');
+    }
+    function blRenderCountryBilling(list) {
+      const tb = document.getElementById('blCountryBody');
+      if (tb) {
+        tb.innerHTML = !list.length
+          ? `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>`
+          : list.map(g => `<tr>
+              <td><strong>${esc(g.label)}</strong>${g.key ? ` <span style="color:var(--muted);font-size:11px">${esc(g.key)}</span>` : ''}</td>
+              <td>${g.totalCalls}</td><td>${g.billableMinutes}</td>
+              <td><strong>${blMoney(g.totalCost)}</strong></td><td>${blMoney(g.avgCostPerCall)}</td><td>${blMoney(g.avgCostPerMinute)}</td>
+            </tr>`).join('');
+      }
+      // Keep the country filter's options in sync with countries seen in the data.
+      const sel = document.getElementById('blCountry');
+      if (sel) {
+        window._blCountries = window._blCountries || {};
+        list.forEach(g => { if (g.key) window._blCountries[g.key] = g.label; });
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">All countries</option>' + Object.entries(window._blCountries)
+          .sort((a, b) => a[1].localeCompare(b[1]))
+          .map(([k, n]) => `<option value="${k}">${esc(n)} (${k})</option>`).join('');
+        sel.value = cur;
+      }
+    }
+
+    // ── Telnyx reconciliation ──
+    async function blLoadReconcileStatus() {
+      const bar = document.getElementById('blReconcileBar');
+      if (!bar) return;
+      try {
+        const st = await api('/billing/telnyx/reconcile/status');
+        const l = st.last;
+        bar.style.display = '';
+        if (!l) {
+          bar.innerHTML = '🔄 Telnyx reconciliation has not run yet. Recent calls are reconciled automatically every 5 minutes against Telnyx Detail Records.';
+          return;
+        }
+        const errs = (l.errors || []).length
+          ? ` <span style="color:#ef4444" title="${esc(l.errors.join('\n'))}">· ⚠️ ${l.errors.length} issue(s) — hover for details</span>` : '';
+        bar.innerHTML = `🔄 <strong>Last Telnyx reconciliation:</strong> ${new Date(l.at).toLocaleString()} (${esc((l.ranges || []).join(', '))}) · ` +
+          `${l.recordsFetched} Telnyx records · ${l.matchedCalls} matched · ${l.updatedRows} updated · ` +
+          `Telnyx total ${blMoney(l.telnyxTotal)}` +
+          (l.unmatchedCalls ? ` · <span title="Telnyx charged for calls that don't match any app call record">${l.unmatchedCalls} unmatched Telnyx call(s) = ${blMoney(l.unmatchedCost)}</span>` : '') + errs;
+      } catch (e) {
+        if (/not set up/i.test(e.message)) { bar.style.display = ''; bar.innerHTML = `⚠️ ${esc(e.message)}`; }
+        else bar.style.display = 'none';
+      }
+    }
+
+    async function blReconcileNow() {
+      const choice = prompt('Reconcile which Telnyx period?\n1 = Today + yesterday\n2 = This week + last week\n3 = This month + last month', '1');
+      if (!choice) return;
+      const ranges = { '1': ['today', 'yesterday'], '2': ['this_week', 'last_week'], '3': ['this_month', 'last_month'] }[choice.trim()];
+      if (!ranges) return toast('Please enter 1, 2 or 3', 'error');
+      const btn = document.getElementById('blReconcileBtn');
+      try {
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ Reconciling…'; }
+        const r = await api('/billing/telnyx/reconcile', { method: 'POST', body: JSON.stringify({ ranges }) });
+        if (r.skipped) toast('A reconciliation is already running', 'info');
+        else toast(`✅ Reconciled: ${r.updatedRows} call(s) updated from ${r.recordsFetched} Telnyx records` + ((r.errors || []).length ? ` (${r.errors.length} issue(s))` : ''), (r.errors || []).length ? 'info' : 'success');
+        loadBilling();
+      } catch (e) { toast('❌ ' + e.message, 'error'); }
+      finally { if (btn) { btn.disabled = false; btn.textContent = '⟳ Reconcile with Telnyx'; } }
+    }
+
+    // ── Telnyx destination rates ──
+    async function blLoadRates() {
+      const tb = document.getElementById('blRatesBody');
+      if (!tb) return;
+      try {
+        const rates = await api('/billing/telnyx/rates');
+        const admin = blIsAdmin();
+        if (!rates.length) {
+          tb.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px">No rates yet — they are learned automatically after the first calls are reconciled with Telnyx.</td></tr>`;
+          return;
+        }
+        tb.innerHTML = rates.map(r => `<tr>
+          <td><strong>${esc(r.country_name || r.country_code)}</strong> <span style="color:var(--muted);font-size:11px">${esc(r.country_code)}</span></td>
+          <td>${r.learned_rate_per_min != null ? blMoney(r.learned_rate_per_min) + ` <span style="color:var(--muted);font-size:10px">(${r.learned_samples} calls)</span>` : '—'}</td>
+          <td>${admin
+            ? `<input type="number" step="0.0001" class="bl-input" style="width:90px" id="blRate_${r.country_code}" value="${r.rate_per_min ?? ''}" placeholder="auto">`
+            : (r.rate_per_min != null ? blMoney(r.rate_per_min) : '—')}</td>
+          <td>${r.billing_increment_initial}/${r.billing_increment_subsequent}</td>
+          <td>${admin ? `<button class="bl-pill-btn" onclick="blSaveRate('${r.country_code}')">Save</button> <button class="bl-pill-btn" onclick="blDeleteRate('${r.country_code}')">✕</button>` : ''}</td>
+        </tr>`).join('');
+      } catch (e) {
+        tb.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px">${esc(e.message)}</td></tr>`;
+      }
+    }
+    async function blSaveRate(cc, extra = {}) {
+      try {
+        const el = document.getElementById('blRate_' + cc);
+        const body = { rate_per_min: el ? el.value : '', ...extra };
+        await api('/billing/telnyx/rates/' + encodeURIComponent(cc), { method: 'PUT', body: JSON.stringify(body) });
+        toast(`Rate saved for ${cc}`, 'success');
+        blLoadRates(); blLoadAnalytics(); loadBillingTable();
+      } catch (e) { toast('❌ ' + e.message, 'error'); }
+    }
+    async function blAddRate() {
+      const cc = (document.getElementById('blNewRateCc')?.value || '').trim().toUpperCase();
+      const val = (document.getElementById('blNewRateVal')?.value || '').trim();
+      const inc = (document.getElementById('blNewRateInc')?.value || '60/60').trim();
+      const m = /^(\d+)\s*\/\s*(\d+)$/.exec(inc);
+      if (!/^[A-Z]{2}$/.test(cc)) return toast('Enter a 2-letter country code (e.g. US, IN)', 'error');
+      if (!m) return toast('Increment must look like 60/60', 'error');
+      try {
+        await api('/billing/telnyx/rates/' + cc, { method: 'PUT', body: JSON.stringify({
+          rate_per_min: val, billing_increment_initial: m[1], billing_increment_subsequent: m[2] }) });
+        toast(`Rate saved for ${cc}`, 'success');
+        blLoadRates(); blLoadAnalytics(); loadBillingTable();
+      } catch (e) { toast('❌ ' + e.message, 'error'); }
+    }
+    async function blDeleteRate(cc) {
+      if (!confirm(`Remove the rate row for ${cc}? It will be re-learned from future Telnyx charges.`)) return;
+      try { await api('/billing/telnyx/rates/' + cc, { method: 'DELETE' }); blLoadRates(); }
+      catch (e) { toast('❌ ' + e.message, 'error'); }
     }
     function blRenderCounselorBilling(list) {
       const tb = document.getElementById('blCounselorBody');
@@ -9950,12 +10122,41 @@
         const b = d.billing || {};
         document.getElementById('blDetailName').textContent = b.student_name || 'Call Detail';
         document.getElementById('blDetailMeta').textContent =
-          `${b.campaign_name || 'Demo / Unassigned'} · ${b.created_at ? new Date(b.created_at).toLocaleString() : ''}`;
+          `${b.campaign_name || b.campaign_type || 'Demo / Unassigned'} · ${b.created_at ? new Date(b.created_at).toLocaleString() : ''}`;
 
-        let body = `
-          <div class="section-title">💵 Billing</div>
+        const tx = b.provider === 'telnyx';
+        const breakdown = b.telnyx_cost_breakdown && typeof b.telnyx_cost_breakdown === 'object'
+          ? Object.entries(b.telnyx_cost_breakdown).map(([k, v]) => `${esc(k)}: ${blMoney(v, b.currency)}`).join(' · ') : '';
+        let body = tx ? `
+          <div class="section-title">💵 Telnyx Billing</div>
           <div class="detail-grid">
-            <div class="detail-cell"><div class="lbl">Twilio Cost</div><div class="val">${b.twilio_price != null ? '<strong>' + blMoney(b.twilio_price, b.currency) + '</strong>' : '<span class="bl-badge pending">pending</span>'}</div></div>
+            <div class="detail-cell"><div class="lbl">Cost</div><div class="val">${blCostCell(b)}</div></div>
+            <div class="detail-cell"><div class="lbl">Reconciled Telnyx Cost</div><div class="val">${b.telnyx_cost != null ? '<strong>' + blMoney(b.telnyx_cost, b.currency) + '</strong>' + (b.reconciled_at ? ` <span style="color:var(--muted);font-size:11px">${new Date(b.reconciled_at).toLocaleString()}</span>` : '') : '<span class="bl-badge pending">not yet reconciled</span>'}</div></div>
+            <div class="detail-cell"><div class="lbl">Estimated Cost</div><div class="val">${b.estimated_cost != null ? blMoney(b.estimated_cost, b.currency) + (b.estimated_rate_per_min != null ? ` @ ${blMoney(b.estimated_rate_per_min, b.currency)}/min` : '') : '—'}</div></div>
+            <div class="detail-cell"><div class="lbl">Telnyx Rate</div><div class="val">${b.telnyx_rate != null ? blMoney(b.telnyx_rate, b.currency) + '/min' : '—'}</div></div>
+            ${breakdown ? `<div class="detail-cell" style="grid-column:1/-1"><div class="lbl">Telnyx Cost Components</div><div class="val">${breakdown}</div></div>` : ''}
+            <div class="detail-cell"><div class="lbl">Duration</div><div class="val">${blFmtDuration(b.duration_seconds)}</div></div>
+            <div class="detail-cell"><div class="lbl">Billable Duration</div><div class="val">${blFmtDuration(b.billable_seconds || 0)} ${b.billing_increment ? '(' + esc(b.billing_increment) + ')' : ''}${b.telnyx_billed_seconds != null ? ' · Telnyx billed ' + b.telnyx_billed_seconds + 's' : ''}</div></div>
+            <div class="detail-cell"><div class="lbl">Call Status</div><div class="val">${blStatusBadge(b.call_status)}${b.hangup_cause ? ` <span style="color:var(--muted);font-size:11px">${esc(b.hangup_cause)}</span>` : ''}</div></div>
+            <div class="detail-cell"><div class="lbl">Answered By (AMD)</div><div class="val">${esc(b.answered_by || '—')}</div></div>
+            <div class="detail-cell"><div class="lbl">Destination</div><div class="val" style="font-family:monospace">${esc(b.destination_number || b.to_number || '—')} ${b.destination_country ? '· ' + esc(b.destination_country) : ''}</div></div>
+            <div class="detail-cell"><div class="lbl">Call Control ID</div><div class="val" style="font-family:monospace;font-size:11px">${esc(b.call_sid || '—')}</div></div>
+            <div class="detail-cell"><div class="lbl">Call Session ID</div><div class="val" style="font-family:monospace;font-size:11px">${esc(b.call_session_id || '—')}</div></div>
+            <div class="detail-cell"><div class="lbl">Connection ID</div><div class="val" style="font-family:monospace;font-size:11px">${esc(b.connection_id || '—')}</div></div>
+          </div>
+          <div class="section-title">📇 Call Information</div>
+          <div class="detail-grid">
+            <div class="detail-cell"><div class="lbl">Student</div><div class="val">${esc(b.student_name || '—')}</div></div>
+            <div class="detail-cell"><div class="lbl">Parent</div><div class="val">${esc(b.parent_name || '—')}</div></div>
+            <div class="detail-cell"><div class="lbl">Phone</div><div class="val" style="font-family:monospace">${esc(b.phone_number || '—')}</div></div>
+            <div class="detail-cell"><div class="lbl">From</div><div class="val" style="font-family:monospace;font-size:12px">${esc(b.from_number || '—')}</div></div>
+            <div class="detail-cell"><div class="lbl">Campaign</div><div class="val">${esc(b.campaign_name || b.campaign_type || 'Demo / Unassigned')}</div></div>
+            <div class="detail-cell"><div class="lbl">Class / Group</div><div class="val" style="font-family:monospace;font-size:11px">${esc(b.class_id || '—')}</div></div>
+            ${b.recording_sid ? `<div class="detail-cell"><div class="lbl">Recording SID</div><div class="val" style="font-family:monospace;font-size:11px">${esc(b.recording_sid)}</div></div>` : ''}
+          </div>` : `
+          <div class="section-title">💵 Billing (Historical — pre-Telnyx)</div>
+          <div class="detail-grid">
+            <div class="detail-cell"><div class="lbl">Cost</div><div class="val">${b.twilio_price != null ? '<strong>' + blMoney(b.twilio_price, b.currency) + '</strong>' : '<span class="bl-badge pending">pending</span>'}</div></div>
             <div class="detail-cell"><div class="lbl">Currency</div><div class="val">${esc(b.currency || 'USD')}</div></div>
             <div class="detail-cell"><div class="lbl">Billing Status</div><div class="val">${esc(b.billing_status || '—')}</div></div>
             <div class="detail-cell"><div class="lbl">Call Status</div><div class="val">${blStatusBadge(b.call_status)}</div></div>
@@ -10065,7 +10266,6 @@
         await Promise.all([
           loadLeads(),
           loadMeetings(),
-          loadCallbacks().catch(() => {}),
         ]);
       } finally {
         if (loader) loader.classList.remove('active');
@@ -10093,11 +10293,7 @@
               if (activeView === 'view-billing') loadBilling();
               return;
             }
-            if (msg.type === 'callback_new') {
-              toast('New Callback Request Received!');
-              if (activeView === 'view-callbacks') loadCallbacks();
-              return;
-            }
+            if (msg.type === 'callback_new') return; // Callback Requests page removed from navigation
             // Default: targeted refresh for lead/meeting updates
             loadLeads();
             loadMeetings();
@@ -10125,7 +10321,6 @@
         if (!document.hidden) {
           loadLeads();
           loadMeetings().catch(() => {});
-          loadCallbacks().catch(() => {});
           refreshCampaignLeads().catch(() => {});
           refreshParentCampaignLeads().catch(() => {});
           syncModalCallButton();

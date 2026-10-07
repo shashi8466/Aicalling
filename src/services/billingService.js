@@ -1,17 +1,16 @@
 /**
- * Billing Service — captures the ACTUAL Twilio price for every AI call.
+ * Billing Service — reporting over call_billing + capture entry points.
  *
- * Twilio does not return `price` in the call-status webhook; it lands on the
- * Call resource seconds-to-minutes later. So:
- *   1. On call completion we create/refresh a billing row (billing_status=pending).
- *   2. billingPoller.backfillPending() re-fetches the Call resource until Twilio
- *      returns a real price, then flips the row to 'final'.
- * The stored amount is always Twilio's own figure — never estimated.
+ * Telnyx is the billing provider for all current calls: usage rows, estimates
+ * and reconciliation against Telnyx Detail Records live in telnyxBilling.js.
+ * The Twilio capture/finalize code below remains only for pre-Telnyx
+ * (provider='historical') records.
  */
 const supabase   = require('../db/supabase');
 const twilioSvc   = require('./twilioService');
 const campaignSvc = require('./campaignService');
 const CallBilling = require('../models/CallBilling');
+const telnyxBilling = require('./telnyxBilling');
 const logger      = require('../logger');
 
 const MAX_FETCH_ATTEMPTS = 15;     // ~22 min at the 90s poll interval
@@ -54,20 +53,6 @@ function mapTwilioCall(tw) {
 }
 
 async function fetchTwilioCall(callSid) {
-  if (callSid && (callSid.startsWith('v2:') || callSid.startsWith('v3:'))) {
-    // Return a mock call object for Telnyx since Twilio client cannot fetch it
-    return {
-      price: null,
-      duration: 0,
-      from: '',
-      to: '',
-      direction: 'outbound-api',
-      priceUnit: 'USD',
-      status: 'completed',
-      startTime: new Date().toISOString(),
-      endTime: new Date().toISOString()
-    };
-  }
   return twilioSvc._client().calls(callSid).fetch();
 }
 
@@ -90,6 +75,9 @@ function broadcast(payload) { emit('billing-updated', payload); }
  */
 async function captureFromCall(callSid, ctx = {}) {
   if (!callSid) return null;
+  // Telnyx calls are captured from Telnyx's own webhook events (telnyxBridge);
+  // here we only make sure the row exists and carries lead context.
+  if (telnyxBilling.isTelnyxSid(callSid)) return telnyxBilling.ensureRow(callSid, ctx);
   try {
     const tw = await fetchTwilioCall(callSid);
     const m  = mapTwilioCall(tw);
@@ -236,6 +224,8 @@ async function backfillPending() {
       .from('call_billing')
       .select('id, call_sid, fetch_attempts')
       .eq('billing_status', 'pending')
+      .not('call_sid', 'like', 'v2:%')     // Telnyx rows are reconciled separately
+      .not('call_sid', 'like', 'v3:%')
       .gte('created_at', cutoff)
       .lt('fetch_attempts', MAX_FETCH_ATTEMPTS)
       .limit(200);
@@ -405,15 +395,58 @@ async function backfillStatus() {
 // ═══════════════════════════════════════════════════════════════════════════
 //   QUERY + AGGREGATION HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
-const AGG_COLUMNS = 'id, twilio_price, duration_seconds, duration_minutes, call_status, ' +
-  'billing_status, currency, created_at, campaign_id, campaign_name, counselor_id, lead_id, student_name';
+// Every report aggregates `cost_amount`: the reconciled Telnyx cost when known,
+// otherwise the Telnyx estimate, or the stored price for historical rows.
+const AGG_COLUMNS = 'id, provider, cost_amount, cost_type, twilio_price, duration_seconds, duration_minutes, ' +
+  'billable_seconds, call_status, billing_status, currency, created_at, campaign_id, campaign_type, ' +
+  'campaign_name, counselor_id, lead_id, student_name, destination_country, class_id, ended_at';
 
-// Fetch scoped rows for JS aggregation (minimal columns).
-async function fetchRows(scope = {}, { dateFrom, dateTo } = {}) {
-  let q = supabase.from('call_billing').select(AGG_COLUMNS);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function costOf(r) {
+  if (r.cost_amount != null) return Number(r.cost_amount);
+  if (r.provider !== 'telnyx' && r.twilio_price != null) return Number(r.twilio_price);
+  return null;
+}
+function billableSecOf(r) {
+  if (r.billable_seconds != null) return Number(r.billable_seconds) || 0;
+  return Math.round((Number(r.duration_minutes) || 0) * 60);
+}
+
+/**
+ * Apply dashboard filters to a call_billing query. Provider defaults to
+ * 'telnyx' so historical (pre-Telnyx) records are never mixed in unless asked
+ * for ('all' or 'historical').
+ */
+function applyFilters(q, query = {}, scope = {}) {
+  const provider = query.provider === undefined ? 'telnyx' : String(query.provider);
+  if (provider && provider !== 'all') q = q.eq('provider', provider);
   if (scope.counselorId) q = q.eq('counselor_id', scope.counselorId);
-  if (dateFrom) q = q.gte('created_at', dateFrom);
-  if (dateTo)   q = q.lte('created_at', dateTo);
+  if (query.counselorId && !scope.counselorId) q = q.eq('counselor_id', query.counselorId);
+  if (query.campaignId) {
+    q = UUID_RE.test(query.campaignId) ? q.eq('campaign_id', query.campaignId) : q.eq('campaign_type', query.campaignId);
+  }
+  if (query.country)     q = q.eq('destination_country', String(query.country).toUpperCase());
+  if (query.classId)     q = q.eq('class_id', query.classId);
+  if (query.leadId)      q = q.eq('lead_id', query.leadId);
+  if (query.status)      q = q.eq('call_status', query.status);
+  if (query.billingStatus) q = q.eq('billing_status', query.billingStatus);
+  if (query.costType)    q = q.eq('cost_type', query.costType);
+  if (query.dateFrom)    q = q.gte('created_at', new Date(query.dateFrom).toISOString());
+  if (query.dateTo)      q = q.lte('created_at', new Date(query.dateTo).toISOString());
+  if (query.costMin !== undefined && query.costMin !== '') q = q.gte('cost_amount', Number(query.costMin));
+  if (query.costMax !== undefined && query.costMax !== '') q = q.lte('cost_amount', Number(query.costMax));
+  if (query.search) {
+    const s = String(query.search).replace(/[%,()*]/g, '');
+    q = q.or(`student_name.ilike.%${s}%,parent_name.ilike.%${s}%,phone_number.ilike.%${s}%,` +
+             `destination_number.ilike.%${s}%,call_sid.ilike.%${s}%`);
+  }
+  return q;
+}
+
+// Fetch filtered + scoped rows for JS aggregation (minimal columns).
+async function fetchRows(scope = {}, query = {}) {
+  let q = applyFilters(supabase.from('call_billing').select(AGG_COLUMNS), query, scope);
   const { data, error } = await q.order('created_at', { ascending: false }).range(0, AGG_ROW_CAP - 1);
   if (error) throw new Error(error.message);
   if ((data || []).length >= AGG_ROW_CAP) {
@@ -422,48 +455,81 @@ async function fetchRows(scope = {}, { dateFrom, dateTo } = {}) {
   return data || [];
 }
 
-// Classify a call row into answered / failed / voicemail buckets.
-const isAnswered  = s => s === 'completed';
-const isFailed    = s => ['no-answer', 'busy', 'failed'].includes(s);
-const isVoicemail = s => s === 'voicemail';
+// Call outcome buckets.
+const STATUS_BUCKET = {
+  completed: 'answered', voicemail: 'voicemail', 'no-answer': 'noAnswer',
+  busy: 'busy', failed: 'failed', canceled: 'canceled',
+  initiated: 'inProgress', 'in-progress': 'inProgress', ringing: 'inProgress',
+};
 
 function tallyRows(rows) {
-  let cost = 0, minutes = 0, seconds = 0, priced = 0;
-  let answered = 0, failed = 0, voicemail = 0;
+  let cost = 0, billableSec = 0, seconds = 0, billableCalls = 0;
+  let reconciledCost = 0, estimatedCost = 0, reconciledCalls = 0, estimatedCalls = 0, unpricedCalls = 0;
+  const counts = { answered: 0, voicemail: 0, noAnswer: 0, busy: 0, failed: 0, canceled: 0, inProgress: 0 };
   for (const r of rows) {
-    const price = r.twilio_price != null ? Number(r.twilio_price) : null;
-    if (price != null) { cost += price; priced++; }
-    minutes += Number(r.duration_minutes) || 0;
+    const c = costOf(r);
+    const b = billableSecOf(r);
+    if (c != null) cost += c;
+    if (r.cost_type === 'reconciled') { reconciledCost += c || 0; reconciledCalls++; }
+    else if (r.cost_type === 'estimated' && c != null) { estimatedCost += c; estimatedCalls++; }
+    if (c == null && b > 0) unpricedCalls++;
+    billableSec += b;
+    if (b > 0) billableCalls++;
     seconds += Number(r.duration_seconds) || 0;
-    if (isAnswered(r.call_status))  answered++;
-    if (isFailed(r.call_status))    failed++;
-    if (isVoicemail(r.call_status)) voicemail++;
+    const bucket = STATUS_BUCKET[r.call_status];
+    if (bucket) counts[bucket]++;
   }
   const calls = rows.length;
+  const billableMinutes = billableSec / 60;
   return {
     totalCalls: calls,
-    answeredCalls: answered,
-    failedCalls: failed,
-    voicemailCalls: voicemail,
+    answeredCalls: counts.answered,
+    voicemailCalls: counts.voicemail,
+    noAnswerCalls: counts.noAnswer,
+    busyCalls: counts.busy,
+    failedCalls: counts.failed,
+    canceledCalls: counts.canceled,
+    inProgressCalls: counts.inProgress,
     totalCost: round4(cost),
-    pricedCalls: priced,
-    totalMinutes: round2(minutes),
+    reconciledCost: round4(reconciledCost),
+    estimatedCost: round4(estimatedCost),
+    reconciledCalls,
+    estimatedCalls,
+    unpricedCalls,
+    billableCalls,
+    billableMinutes: round2(billableMinutes),
+    totalMinutes: round2(billableMinutes),   // legacy alias
     totalSeconds: seconds,
-    avgCostPerCall:   round4(calls    ? cost / calls   : 0),
-    avgCostPerMinute: round4(minutes  ? cost / minutes : 0),
+    avgCostPerCall:   round4(billableCalls   ? cost / billableCalls   : 0),
+    avgCostPerMinute: round4(billableMinutes ? cost / billableMinutes : 0),
     avgDurationSeconds: calls ? Math.round(seconds / calls) : 0,
     currency: rows.find(r => r.currency)?.currency || 'USD',
   };
 }
 
-// ── Date bucket keys ──────────────────────────────────────────────────────
-const dayKey   = d => new Date(d).toISOString().slice(0, 10);
-const monthKey = d => new Date(d).toISOString().slice(0, 7);
-function weekKey(d) {
-  const dt = new Date(d);
-  const dow = (dt.getUTCDay() + 6) % 7; // Monday = 0
-  dt.setUTCDate(dt.getUTCDate() - dow);
-  return dt.toISOString().slice(0, 10);
+// ── Date bucket keys (in the viewer's time zone) ─────────────────────────
+// tzOffset = minutes from Date#getTimezoneOffset() in the browser (UTC − local).
+function tzTools(tzOffset) {
+  const off = (Number.isFinite(Number(tzOffset)) ? Number(tzOffset) : 0) * 60000;
+  const local = d => new Date(new Date(d).getTime() - off);          // shifted; read with UTC getters
+  const fromLocal = d => new Date(d.getTime() + off);
+  const dayKey   = d => local(d).toISOString().slice(0, 10);
+  const monthKey = d => local(d).toISOString().slice(0, 7);
+  const weekKey  = d => {
+    const dt = local(d);
+    dt.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7));     // Monday
+    return dt.toISOString().slice(0, 10);
+  };
+  const now = local(Date.now());
+  const sod = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const sow = new Date(sod); sow.setUTCDate(sod.getUTCDate() - ((sod.getUTCDay() + 6) % 7));
+  const som = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const soy = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+  return {
+    dayKey, weekKey, monthKey,
+    startOfDay: fromLocal(sod), startOfWeek: fromLocal(sow),
+    startOfMonth: fromLocal(som), startOfYear: fromLocal(soy),
+  };
 }
 
 function bucketBy(rows, keyFn) {
@@ -472,34 +538,57 @@ function bucketBy(rows, keyFn) {
     const k = keyFn(r.created_at);
     if (!map[k]) map[k] = { label: k, calls: 0, cost: 0, minutes: 0 };
     map[k].calls++;
-    map[k].cost    += r.twilio_price != null ? Number(r.twilio_price) : 0;
-    map[k].minutes += Number(r.duration_minutes) || 0;
+    map[k].cost    += costOf(r) || 0;
+    map[k].minutes += billableSecOf(r) / 60;
   }
   return Object.values(map)
     .map(b => ({ ...b, cost: round4(b.cost), minutes: round2(b.minutes) }))
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
-function groupCost(rows, keyField, labelField) {
+function groupCost(rows, keyFn, labelFn) {
   const map = {};
   for (const r of rows) {
-    const key = r[keyField] || '__none__';
-    if (!map[key]) map[key] = { key, label: r[labelField] || '', calls: 0, cost: 0, minutes: 0, seconds: 0 };
-    map[key].calls++;
-    map[key].cost    += r.twilio_price != null ? Number(r.twilio_price) : 0;
-    map[key].minutes += Number(r.duration_minutes) || 0;
-    map[key].seconds += Number(r.duration_seconds) || 0;
+    const key = keyFn(r) || '__none__';
+    if (!map[key]) map[key] = { key, label: labelFn(r) || '', calls: 0, billableCalls: 0, cost: 0, billSec: 0, seconds: 0 };
+    const g = map[key];
+    const b = billableSecOf(r);
+    g.calls++;
+    if (b > 0) g.billableCalls++;
+    g.cost    += costOf(r) || 0;
+    g.billSec += b;
+    g.seconds += Number(r.duration_seconds) || 0;
+    if (!g.label) g.label = labelFn(r) || '';
   }
   return Object.values(map).map(g => ({
     key: g.key === '__none__' ? null : g.key,
     label: g.label,
     totalCalls: g.calls,
-    totalMinutes: round2(g.minutes),
+    billableMinutes: round2(g.billSec / 60),
+    totalMinutes: round2(g.billSec / 60),
     totalCost: round4(g.cost),
     avgDuration: g.calls ? Math.round(g.seconds / g.calls) : 0,
-    avgCostPerCall:   round4(g.calls   ? g.cost / g.calls   : 0),
-    avgCostPerMinute: round4(g.minutes ? g.cost / g.minutes : 0),
-  })).sort((a, b) => b.totalCost - a.totalCost);
+    avgCostPerCall:   round4(g.billableCalls ? g.cost / g.billableCalls : 0),
+    avgCostPerMinute: round4(g.billSec ? g.cost / (g.billSec / 60) : 0),
+  })).sort((a, b) => b.totalCost - a.totalCost || b.totalCalls - a.totalCalls);
+}
+
+const campaignKey   = r => r.campaign_id || r.campaign_type || null;
+const campaignLabel = r => r.campaign_name || (r.campaign_type ? r.campaign_type : '');
+
+function byCampaignFrom(rows) {
+  return groupCost(rows, campaignKey, campaignLabel)
+    .map(g => ({ ...g, label: g.label || (g.key ? g.key : 'Unassigned / Demo') }));
+}
+async function byCounselorFrom(rows) {
+  const grouped = groupCost(rows, r => r.counselor_id, () => '');
+  const names = await counselorNames(grouped.map(g => g.key));
+  return grouped.map(g => ({ ...g, label: g.key ? (names[g.key] || 'Unknown') : 'Unassigned' }));
+}
+function byCountryFrom(rows) {
+  const { countryName } = require('../utils/phoneCountry');
+  return groupCost(rows, r => r.destination_country, r => r.destination_country ? countryName(r.destination_country) : '')
+    .map(g => ({ ...g, label: g.label || 'Unknown' }));
 }
 
 // Resolve profile display names for a set of counselor ids.
@@ -512,53 +601,38 @@ async function counselorNames(ids) {
   return names;
 }
 
-// ── Summary cards ──────────────────────────────────────────────────────────
-async function summary(scope = {}) {
-  const rows = await fetchRows(scope);
-  const now = new Date();
-  const startOfDay   = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfWeek  = new Date(startOfDay); startOfWeek.setDate(startOfDay.getDate() - ((startOfDay.getDay() + 6) % 7));
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startOfYear  = new Date(now.getFullYear(), 0, 1);
-
-  const costSince = since => round4(rows
-    .filter(r => r.twilio_price != null && new Date(r.created_at) >= since)
-    .reduce((s, r) => s + Number(r.twilio_price), 0));
-
+function summaryFrom(rows, tz) {
   const all = tallyRows(rows);
+  const costSince = since => round4(rows
+    .filter(r => new Date(r.created_at) >= since)
+    .reduce((s, r) => s + (costOf(r) || 0), 0));
   return {
-    costToday:  costSince(startOfDay),
-    costWeek:   costSince(startOfWeek),
-    costMonth:  costSince(startOfMonth),
-    costYear:   costSince(startOfYear),
+    ...all,
+    costToday:  costSince(tz.startOfDay),
+    costWeek:   costSince(tz.startOfWeek),
+    costMonth:  costSince(tz.startOfMonth),
+    costYear:   costSince(tz.startOfYear),
     lifetimeCost: all.totalCost,
-    avgCostPerCall:   all.avgCostPerCall,
-    avgCostPerMinute: all.avgCostPerMinute,
-    totalMinutes: all.totalMinutes,
-    totalCalls:   all.totalCalls,
-    answeredCalls: all.answeredCalls,
-    failedCalls:   all.failedCalls,
-    voicemailCalls: all.voicemailCalls,
     pendingCount: rows.filter(r => r.billing_status === 'pending').length,
-    currency: all.currency,
   };
 }
 
-async function byCampaign(scope = {}) {
-  const rows = await fetchRows(scope);
-  return groupCost(rows, 'campaign_id', 'campaign_name')
-    .map(g => ({ ...g, label: g.label || (g.key ? g.key : 'Unassigned / Demo') }));
+// ── Summary cards ──────────────────────────────────────────────────────────
+async function summary(scope = {}, query = {}) {
+  const rows = await fetchRows(scope, query);
+  return summaryFrom(rows, tzTools(query.tzOffset));
 }
 
-async function byCounselor(scope = {}) {
-  const rows = await fetchRows(scope);
-  const grouped = groupCost(rows, 'counselor_id', 'label');
-  const names = await counselorNames(grouped.map(g => g.key));
-  return grouped.map(g => ({ ...g, label: g.key ? (names[g.key] || 'Unknown') : 'Unassigned' }));
+async function byCampaign(scope = {}, query = {}) {
+  return byCampaignFrom(await fetchRows(scope, query));
+}
+
+async function byCounselor(scope = {}, query = {}) {
+  return byCounselorFrom(await fetchRows(scope, query));
 }
 
 async function byLead(leadId, scope = {}) {
-  // Full rows (with call_sid) for the lead's billing history table
+  // Full rows (with call_sid) for the lead's billing history table — all providers.
   let q = supabase.from('call_billing').select('*').eq('lead_id', leadId);
   if (scope.counselorId) q = q.eq('counselor_id', scope.counselorId);
   const { data } = await q.order('created_at', { ascending: false }).limit(500);
@@ -568,99 +642,61 @@ async function byLead(leadId, scope = {}) {
 }
 
 // ── Time-series reports ─────────────────────────────────────────────────────
-async function reports(scope = {}) {
-  const rows = await fetchRows(scope);
+async function reports(scope = {}, query = {}) {
+  const rows = await fetchRows(scope, query);
+  const tz = tzTools(query.tzOffset);
   return {
-    daily:   bucketBy(rows, dayKey).slice(-60),
-    weekly:  bucketBy(rows, weekKey).slice(-26),
-    monthly: bucketBy(rows, monthKey).slice(-24),
+    daily:   bucketBy(rows, tz.dayKey).slice(-60),
+    weekly:  bucketBy(rows, tz.weekKey).slice(-26),
+    monthly: bucketBy(rows, tz.monthKey).slice(-24),
+  };
+}
+
+function chartsFrom(rows, tz, costByCampaign, costByCounselor) {
+  const daily   = bucketBy(rows, tz.dayKey);
+  const weekly  = bucketBy(rows, tz.weekKey);
+  const monthly = bucketBy(rows, tz.monthKey);
+  const costByLead = groupCost(rows, r => r.lead_id, r => r.student_name)
+    .map(g => ({ ...g, label: g.label || 'Unknown' }));
+  // Scatter: each priced call as (durationSeconds, cost)
+  const costVsDuration = rows.filter(r => costOf(r) != null)
+    .map(r => ({ x: Number(r.duration_seconds) || 0, y: round4(costOf(r)) })).slice(0, 2000);
+  return {
+    daily: daily.slice(-30), weekly: weekly.slice(-12), monthly: monthly.slice(-12),
+    costByCampaign: costByCampaign.slice(0, 12),
+    costByCounselor: costByCounselor.slice(0, 12),
+    costByLead: costByLead.slice(0, 15),
+    costVsDuration,
+    callsVsCost: daily.slice(-30).map(b => ({ label: b.label, calls: b.calls, cost: b.cost })),
+    avgCostPerCall: daily.slice(-30).map(b => ({ label: b.label, value: round4(b.calls ? b.cost / b.calls : 0) })),
+    _all: { daily, weekly, monthly },
   };
 }
 
 // ── Chart datasets ───────────────────────────────────────────────────────────
-async function charts(scope = {}, isAdmin = true) {
-  const rows = await fetchRows(scope);
-
-  const daily   = bucketBy(rows, dayKey).slice(-30);
-  const weekly  = bucketBy(rows, weekKey).slice(-12);
-  const monthly = bucketBy(rows, monthKey).slice(-12);
-
-  const costByCampaign  = (await byCampaignFrom(rows)).slice(0, 12);
-  const costByCounselor = isAdmin ? (await byCounselorFrom(rows)).slice(0, 12) : [];
-  const costByLead      = groupCost(rows, 'lead_id', 'student_name')
-    .map(g => ({ ...g, label: g.label || 'Unknown' })).slice(0, 15);
-
-  // Scatter: each priced call as (durationSeconds, price)
-  const costVsDuration = rows
-    .filter(r => r.twilio_price != null)
-    .map(r => ({ x: Number(r.duration_seconds) || 0, y: round4(r.twilio_price) }))
-    .slice(0, 2000);
-
-  // Calls vs cost + avg cost/call per day (derived from the daily buckets)
-  const callsVsCost   = daily.map(b => ({ label: b.label, calls: b.calls, cost: b.cost }));
-  const avgCostPerCall = daily.map(b => ({ label: b.label, value: round4(b.calls ? b.cost / b.calls : 0) }));
-
-  return { daily, weekly, monthly, costByCampaign, costByCounselor, costByLead,
-           costVsDuration, callsVsCost, avgCostPerCall };
-}
-
-// helpers reused by charts (aggregate from already-fetched rows)
-function byCampaignFrom(rows) {
-  return Promise.resolve(groupCost(rows, 'campaign_id', 'campaign_name')
-    .map(g => ({ ...g, label: g.label || (g.key ? g.key : 'Unassigned / Demo') })));
-}
-async function byCounselorFrom(rows) {
-  const grouped = groupCost(rows, 'counselor_id', 'label');
-  const names = await counselorNames(grouped.map(g => g.key));
-  return grouped.map(g => ({ ...g, label: g.key ? (names[g.key] || 'Unknown') : 'Unassigned' }));
+async function charts(scope = {}, isAdmin = true, query = {}) {
+  const rows = await fetchRows(scope, query);
+  const c = chartsFrom(rows, tzTools(query.tzOffset), byCampaignFrom(rows), isAdmin ? await byCounselorFrom(rows) : []);
+  delete c._all;
+  return c;
 }
 
 // ── Combined analytics (single fetch — used by the dashboard load) ───────────
-async function analytics(scope = {}, isAdmin = true) {
-  const rows = await fetchRows(scope);
-  const all = tallyRows(rows);
-  const now = new Date();
-  const startOfDay   = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfWeek  = new Date(startOfDay); startOfWeek.setDate(startOfDay.getDate() - ((startOfDay.getDay() + 6) % 7));
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startOfYear  = new Date(now.getFullYear(), 0, 1);
-  const costSince = since => round4(rows
-    .filter(r => r.twilio_price != null && new Date(r.created_at) >= since)
-    .reduce((s, r) => s + Number(r.twilio_price), 0));
-
-  const daily   = bucketBy(rows, dayKey);
-  const weekly  = bucketBy(rows, weekKey);
-  const monthly = bucketBy(rows, monthKey);
-  const costByCampaign  = (await byCampaignFrom(rows));
-  const costByCounselor = isAdmin ? (await byCounselorFrom(rows)) : [];
-  const costByLead      = groupCost(rows, 'lead_id', 'student_name')
-    .map(g => ({ ...g, label: g.label || 'Unknown' }));
-  const costVsDuration = rows.filter(r => r.twilio_price != null)
-    .map(r => ({ x: Number(r.duration_seconds) || 0, y: round4(r.twilio_price) })).slice(0, 2000);
-
+async function analytics(scope = {}, isAdmin = true, query = {}) {
+  const rows = await fetchRows(scope, query);
+  const tz = tzTools(query.tzOffset);
+  const costByCampaign  = byCampaignFrom(rows);
+  const costByCounselor = isAdmin ? await byCounselorFrom(rows) : [];
+  const c = chartsFrom(rows, tz, costByCampaign, costByCounselor);
+  const { daily, weekly, monthly } = c._all;
+  delete c._all;
   return {
-    summary: {
-      costToday: costSince(startOfDay), costWeek: costSince(startOfWeek),
-      costMonth: costSince(startOfMonth), costYear: costSince(startOfYear),
-      lifetimeCost: all.totalCost, avgCostPerCall: all.avgCostPerCall,
-      avgCostPerMinute: all.avgCostPerMinute, totalMinutes: all.totalMinutes,
-      totalCalls: all.totalCalls, answeredCalls: all.answeredCalls,
-      failedCalls: all.failedCalls, voicemailCalls: all.voicemailCalls,
-      pendingCount: rows.filter(r => r.billing_status === 'pending').length,
-      currency: all.currency,
-    },
-    charts: {
-      daily: daily.slice(-30), weekly: weekly.slice(-12), monthly: monthly.slice(-12),
-      costByCampaign: costByCampaign.slice(0, 12),
-      costByCounselor: costByCounselor.slice(0, 12),
-      costByLead: costByLead.slice(0, 15),
-      costVsDuration,
-      callsVsCost: daily.slice(-30).map(b => ({ label: b.label, calls: b.calls, cost: b.cost })),
-      avgCostPerCall: daily.slice(-30).map(b => ({ label: b.label, value: round4(b.calls ? b.cost / b.calls : 0) })),
-    },
+    summary: summaryFrom(rows, tz),
+    charts: c,
     reports: { daily: daily.slice(-60), weekly: weekly.slice(-26), monthly: monthly.slice(-24) },
     byCampaign: costByCampaign,
     byCounselor: costByCounselor,
+    byCountry: byCountryFrom(rows),
   };
 }
 
@@ -672,28 +708,14 @@ async function list(query = {}, scope = {}) {
   const to   = from + pageSize - 1;
 
   const sortMap = {
-    date: 'created_at', cost: 'twilio_price', duration: 'duration_seconds',
-    student: 'student_name', campaign: 'campaign_name', status: 'call_status',
+    date: 'created_at', cost: 'cost_amount', duration: 'duration_seconds',
+    billable: 'billable_seconds', student: 'student_name', campaign: 'campaign_name',
+    status: 'call_status', country: 'destination_country',
   };
   const sortCol = sortMap[query.sortBy] || 'created_at';
   const ascending = String(query.sortDir).toLowerCase() === 'asc';
 
-  let q = supabase.from('call_billing').select('*', { count: 'exact' });
-  if (scope.counselorId) q = q.eq('counselor_id', scope.counselorId);
-  if (query.campaignId)  q = q.eq('campaign_id', query.campaignId);
-  if (query.counselorId && !scope.counselorId) q = q.eq('counselor_id', query.counselorId);
-  if (query.leadId)      q = q.eq('lead_id', query.leadId);
-  if (query.status)      q = q.eq('call_status', query.status);
-  if (query.billingStatus) q = q.eq('billing_status', query.billingStatus);
-  if (query.dateFrom)    q = q.gte('created_at', new Date(query.dateFrom).toISOString());
-  if (query.dateTo)      q = q.lte('created_at', new Date(query.dateTo).toISOString());
-  if (query.costMin !== undefined && query.costMin !== '') q = q.gte('twilio_price', Number(query.costMin));
-  if (query.costMax !== undefined && query.costMax !== '') q = q.lte('twilio_price', Number(query.costMax));
-  if (query.search) {
-    const s = String(query.search).replace(/[%,()*]/g, '');
-    q = q.or(`student_name.ilike.%${s}%,parent_name.ilike.%${s}%,phone_number.ilike.%${s}%,call_sid.ilike.%${s}%`);
-  }
-
+  let q = applyFilters(supabase.from('call_billing').select('*', { count: 'exact' }), query, scope);
   q = q.order(sortCol, { ascending, nullsFirst: false }).range(from, to);
 
   const { data, error, count } = await q;
@@ -703,18 +725,7 @@ async function list(query = {}, scope = {}) {
 
 // Rows for export (respects filters + scope, no pagination — pulls everything matching).
 async function exportRows(query = {}, scope = {}) {
-  let q = supabase.from('call_billing').select('*');
-  if (scope.counselorId) q = q.eq('counselor_id', scope.counselorId);
-  if (query.campaignId)  q = q.eq('campaign_id', query.campaignId);
-  if (query.counselorId && !scope.counselorId) q = q.eq('counselor_id', query.counselorId);
-  if (query.leadId)      q = q.eq('lead_id', query.leadId);
-  if (query.status)      q = q.eq('call_status', query.status);
-  if (query.dateFrom)    q = q.gte('created_at', new Date(query.dateFrom).toISOString());
-  if (query.dateTo)      q = q.lte('created_at', new Date(query.dateTo).toISOString());
-  if (query.search) {
-    const s = String(query.search).replace(/[%,()*]/g, '');
-    q = q.or(`student_name.ilike.%${s}%,parent_name.ilike.%${s}%,phone_number.ilike.%${s}%,call_sid.ilike.%${s}%`);
-  }
+  let q = applyFilters(supabase.from('call_billing').select('*'), query, scope);
   const { data, error } = await q.order('created_at', { ascending: false }).range(0, AGG_ROW_CAP - 1);
   if (error) throw new Error(error.message);
   return data || [];
@@ -740,7 +751,9 @@ async function detail(id, scope = {}) {
     row.started_at && { at: row.started_at, event: 'Call started' },
     attempt?.recordingUrl && attempt.recordingUrl !== 'FAILED' && { at: row.ended_at || row.started_at, event: 'Recording captured' },
     row.ended_at && { at: row.ended_at, event: `Call ended (${row.call_status || 'completed'})` },
-    row.billing_status === 'final' && { at: row.updated_at, event: `Billed ${row.twilio_price} ${row.currency}` },
+    row.provider === 'telnyx' && row.estimated_cost != null && row.ended_at && { at: row.ended_at, event: `Estimated ${row.estimated_cost} ${row.currency || 'USD'} (${row.billable_seconds || 0}s billable)` },
+    row.provider === 'telnyx' && row.reconciled_at && { at: row.reconciled_at, event: `Reconciled with Telnyx: ${row.telnyx_cost} ${row.currency || 'USD'}` },
+    row.provider !== 'telnyx' && row.billing_status === 'final' && { at: row.updated_at, event: `Billed ${row.twilio_price} ${row.currency}` },
   ].filter(Boolean);
 
   return {

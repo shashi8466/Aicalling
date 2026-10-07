@@ -4,6 +4,7 @@ const axios = require('axios');
 const xml2js = require('xml2js');
 const logger = require('../logger');
 const qs = require('querystring');
+const telnyxBilling = require('../services/telnyxBilling');
 
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY;
 
@@ -44,6 +45,7 @@ router.post('/', async (req, res) => {
   const payload = event.payload;
   const callControlId = payload.call_control_id;
   const callSessionId = payload.call_session_id;
+  const occurredAt = event.occurred_at;
 
   try {
     // Telnyx echoes client_state on every event, so state can be rebuilt if
@@ -61,8 +63,12 @@ router.post('/', async (req, res) => {
     const state = activeCalls.get(callSessionId);
     if (!state) return;
 
-    if (eventType === 'call.answered') {
+    if (eventType === 'call.initiated') {
+      telnyxBilling.onInitiated({ callControlId, payload, occurredAt, state });
+    } else if (eventType === 'call.answered') {
       state.answered = true;
+      state.answeredAt = occurredAt || new Date().toISOString();
+      telnyxBilling.onAnswered({ callControlId, occurredAt: state.answeredAt });
       logger.info(`[CALL] call.answered received for call_control_id=${callControlId}`);
       logger.info(`[CALL] campaign_type = ${state.params?.campaignId ? 'campaign' : 'custom'}`);
       logger.info(`[CALL] starting TTS via Twilio Flow`);
@@ -75,6 +81,10 @@ router.post('/', async (req, res) => {
       // Trigger the start of the Twilio webhook flow
       await driveTwilioFlow(callControlId, state, `/webhook/call/start`);
 
+    } else if (eventType === 'call.machine.premium.detection.ended' || eventType === 'call.machine.detection.ended') {
+      state.amdResult = payload.result || '';
+      logger.info(`[CALL] AMD result for call_control_id=${callControlId}: ${state.amdResult}`);
+      telnyxBilling.onAmd({ callControlId, result: state.amdResult });
     } else if (eventType === 'call.speak.started' || eventType === 'call.playback.started') {
       logger.info(`[CALL] TTS started for call_control_id=${callControlId}`);
     } else if (eventType === 'call.speak.ended' || eventType === 'call.playback.ended') {
@@ -114,10 +124,13 @@ router.post('/', async (req, res) => {
       state.ended = true;
 
       const callStatus = mapHangupStatus(payload.hangup_cause, state.answered);
-      const start = Date.parse(payload.start_time);
-      const end = Date.parse(payload.end_time);
-      const duration = start && end && end > start ? Math.round((end - start) / 1000) : 0;
+      // Talk time runs from answer to hangup (ring time isn't billed).
+      const answeredMs = Date.parse(state.answeredAt);
+      const endMs = Date.parse(payload.end_time || occurredAt) || Date.now();
+      const duration = answeredMs && endMs > answeredMs ? Math.round((endMs - answeredMs) / 1000) : 0;
       logger.info(`[CALL] Call ended for call_control_id=${callControlId} cause=${payload.hangup_cause || 'n/a'} → ${callStatus}`);
+
+      telnyxBilling.onHangup({ callControlId, payload, occurredAt, state, callStatus });
 
       await driveTwilioFlow(callControlId, state, `/webhook/call/status`, {
         CallStatus: callStatus,
