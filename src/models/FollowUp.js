@@ -28,6 +28,16 @@ function applyFilter(q, filter = {}) {
   return q;
 }
 
+function toRow(data) {
+  const now = new Date().toISOString();
+  const row = { completed: false, cycle: 0, notes: '', result: '', created_at: now, updated_at: now };
+  for (const [k, v] of Object.entries(data)) {
+    if (k === '_id') continue;
+    row[toSnake(k)] = v instanceof Date ? v.toISOString() : v;
+  }
+  return row;
+}
+
 const FollowUp = {
   async find(filter = {}, opts = {}) {
     let q = supabase.from(TABLE).select('*');
@@ -49,15 +59,16 @@ const FollowUp = {
   },
 
   async create(data) {
-    const now = new Date().toISOString();
-    const row = { completed: false, cycle: 0, notes: '', result: '', created_at: now, updated_at: now };
-    for (const [k, v] of Object.entries(data)) {
-      if (k === '_id') continue;
-      row[toSnake(k)] = v instanceof Date ? v.toISOString() : v;
-    }
-    const { data: created, error } = await supabase.from(TABLE).insert(row).select().single();
+    const { data: created, error } = await supabase.from(TABLE).insert(toRow(data)).select().single();
     if (error) throw new Error(error.message);
     return W(created);
+  },
+
+  async insertMany(items = []) {
+    if (!items.length) return [];
+    const { data: created, error } = await supabase.from(TABLE).insert(items.map(toRow)).select();
+    if (error) throw new Error(error.message);
+    return (created || []).map(W);
   },
 
   async findByIdAndUpdate(id, update, _opts = {}) {

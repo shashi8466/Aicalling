@@ -33,6 +33,16 @@ module.exports = {
     fromName:  process.env.BREVO_FROM_NAME  || 'Test Prep Pundits Admissions',
   },
 
+  // SMTP fallback used when the Brevo API call fails
+  smtp: {
+    host:   process.env.SMTP_HOST || '',
+    port:   parseInt(process.env.SMTP_PORT) || 465,
+    secure: process.env.SMTP_SECURE !== 'false',
+    user:   process.env.SMTP_USER || '',
+    pass:   process.env.SMTP_PASS || '',
+    from:   process.env.SMTP_FROM || '',
+  },
+
   // IMAP email polling configuration
   imap: {
     host:     process.env.IMAP_HOST || process.env.SMTP_HOST || 'imap.gmail.com',

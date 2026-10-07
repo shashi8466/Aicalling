@@ -561,7 +561,7 @@ router.get('/pipeline', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════
 //   HELPER: schedule follow-up sequence for a lead
 // ═══════════════════════════════════════════════════════════════════════
-async function scheduleFollowUps(leadId) {
+async function scheduleFollowUps(leadId, { skip = [] } = {}) {
   const now  = new Date();
   const days = d => new Date(now.getTime() + d * 86400000);
 
@@ -595,7 +595,7 @@ async function scheduleFollowUps(leadId) {
   ];
 
   const existingFollowups = await FollowUp.find({ leadId, completed: false });
-  const existingTypes = new Set(existingFollowups.map(f => f.followupType));
+  const existingTypes = new Set([...existingFollowups.map(f => f.followupType), ...skip]);
 
   const toCreate = [];
   for (const p of plan) {
@@ -727,3 +727,4 @@ function broadcastUpdate(type, data = {}) {
 module.exports = router;
 module.exports.broadcastUpdate = broadcastUpdate;
 module.exports.streamHandler = streamHandler;
+module.exports.scheduleFollowUps = scheduleFollowUps;

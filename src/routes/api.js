@@ -927,6 +927,7 @@ router.post('/leads', async (req, res) => {
     });
     logger.info(`Lead created manually: ${lead.fullName} <${lead.email}>`);
     res.status(201).json(lead);
+    emailSvc.sendNewLeadWelcome(lead).catch(e => logger.error('Welcome email failed', { msg: e.message }));
   } catch(e) {
     if (e.message?.includes('unique') || e.message?.includes('duplicate')) {
       return res.status(409).json({ error: 'A lead with this email already exists in the database. You must drop the unique email constraint in your Supabase SQL Editor.' });
@@ -949,6 +950,7 @@ router.post('/leads/bulk', async (req, res) => {
       failedCount: 0,
       errors: []
     };
+    const newLeads = [];
 
     for (const data of leads) {
       try {
@@ -1010,6 +1012,7 @@ router.post('/leads/bulk', async (req, res) => {
         results.successCount++;
         results.createdLeadIds = results.createdLeadIds || [];
         results.createdLeadIds.push(newLead._id);
+        newLeads.push(newLead);
       } catch (e) {
         results.failedCount++;
         let errMsg = e.message;
@@ -1030,6 +1033,13 @@ router.post('/leads/bulk', async (req, res) => {
     }
 
     res.status(200).json(results);
+
+    // Welcome emails for newly created leads only, one at a time in the background.
+    (async () => {
+      for (const l of newLeads) {
+        await emailSvc.sendNewLeadWelcome(l).catch(e => logger.error('Welcome email failed', { msg: e.message }));
+      }
+    })();
   } catch (e) {
     logger.error('Bulk leads import error', { msg: e.message });
     res.status(500).json({ error: e.message });

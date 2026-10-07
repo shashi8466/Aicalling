@@ -120,6 +120,49 @@ async function _sendParentCampaignEmailOnce(lead, campaignType, outcome, callSid
 }
 
 /**
+ * After a non-parent call where the student actually spoke and no meeting was
+ * booked: send the enrollment follow-up email now and queue the rest of the
+ * follow-up sequence (its day-1 email is skipped — this one replaces it).
+ * At most one post-call email per lead per 24h, so repeat calls don't spam.
+ */
+const _postCallSent = new Set();
+async function _sendPostCallFollowUp(lead, callSid) {
+  const key = callSid || String(lead._id);
+  if (_postCallSent.has(key)) return;
+  _postCallSent.add(key);
+
+  const fresh = (await Lead.findById(lead._id)) || lead;
+  if (['meeting-scheduled', 'enrolled', 'do-not-call', 'lost'].includes(fresh.status)) return;
+  if (!fresh.email) return;
+
+  const dayAgo = Date.now() - 24 * 3600 * 1000;
+  const recent = (fresh.emailsSent || []).some(e =>
+    e.type === 'post-call-followup' && e.status === 'sent' && Date.parse(e.sentAt) > dayAgo);
+  if (recent) {
+    logger.info(`Post-call follow-up skipped for ${fresh.fullName} — already sent in the last 24h`);
+    return;
+  }
+
+  const result = await emailSvc.sendEnrollmentFollowup(fresh);
+  fresh.emailsSent = fresh.emailsSent || [];
+  fresh.emailsSent.push({
+    type:      'post-call-followup',
+    callSid:   callSid || null,
+    to:        fresh.email,
+    sentAt:    new Date().toISOString(),
+    status:    result.ok ? 'sent' : 'failed',
+    messageId: result.messageId || null,
+    ...(result.ok ? {} : { error: result.error }),
+  });
+  await fresh.save();
+  if (result.ok && result.messageId) _recordEmailMessage(result.messageId, fresh._id);
+
+  const { scheduleFollowUps } = require('./crm');
+  const queued = await scheduleFollowUps(fresh._id, { skip: ['email-day1'] });
+  logger.info(`Post-call follow-up for ${fresh.fullName}: email ${result.ok ? 'sent' : 'FAILED ' + result.error}, ${queued.length} follow-ups queued`);
+}
+
+/**
  * Deterministically checks whether the caller's first reply confirms their identity.
  * Matches all accepted confirmation phrases regardless of case or minor punctuation.
  * @param {string} lowSpeech  - caller speech already lowercased
@@ -1167,6 +1210,8 @@ router.post('/call/status', async (req, res) => {
 
     if (CallStatus === 'completed') {
       const session = sessions.get(leadId);
+      const followUpEligible = !!session?.history?.some(m => m.role === 'user' && m.content?.trim())
+        && session._endReason !== 'ended-by-caller-decline';
       if (session) {
         await _finaliseCall(lead, session, CallSid, 'completed');
         sessions.delete(leadId);
@@ -1186,6 +1231,8 @@ router.post('/call/status', async (req, res) => {
         setImmediate(() => {
           _sendParentCampaignEmailOnce(lead, _ct, 'completed', CallSid).catch(e => logger.error('Parent email failed', e));
         });
+      } else if (followUpEligible) {
+        setImmediate(() => _sendPostCallFollowUp(lead, CallSid).catch(e => logger.error('Post-call follow-up failed', { msg: e.message })));
       }
     }
 
@@ -1402,7 +1449,7 @@ async function _finaliseCall(lead, session, callSid, reason) {
   // Several paths end a call (AI [END_CALL] + Telnyx hangup status) — only the
   // first one summarises/saves, so the call isn't finalised twice.
   if (session?._finalised) return;
-  if (session) session._finalised = true;
+  if (session) { session._finalised = true; session._endReason = reason; }
   try {
     const transcript = (session.history || [])
       .map(m => `${m.role === 'user' ? 'Caller' : 'AI'}: ${m.content}`)

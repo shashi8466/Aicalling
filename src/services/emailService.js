@@ -234,7 +234,9 @@ class EmailService {
       return this.sendSatSummerChallengeEmail1(lead);
     }
 
-    const t = PARENT_TEMPLATES[campaignType];
+    const t = campaignType === 'custom-script'
+      ? this._customScriptTemplate(lead)
+      : PARENT_TEMPLATES[campaignType];
     if (!t) return { ok: false, error: `Not a parent notification campaign: ${campaignType}` };
 
     // The Parent Email stored in the CRM (fall back to the lead's own email).
@@ -259,6 +261,22 @@ class EmailService {
     const html = await this._wrap(body, lead, campaignType);
     const res = await this._send({ to, subject, html });
     return { ...res, to };
+  }
+
+  // Custom-script calls carry their message in the call's campaignVars, so the
+  // email repeats whatever the AI read out.
+  _customScriptTemplate(lead) {
+    const attempts = lead.callAttempts || [];
+    const script = [...attempts].reverse().find(a => a.campaignVars?.customScript)?.campaignVars.customScript || '';
+    const escaped = script.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return {
+      name: 'Custom Message',
+      subject: s => `A message from Test Prep Pundits regarding ${s}`,
+      intro:  s => `Our AI assistant from Test Prep Pundits called you today regarding ${s}.`,
+      reason: escaped || `We have an important update for you from Test Prep Pundits.`,
+      action: `If you have any questions, simply reply to this email.`,
+      help:   ``,
+    };
   }
 
   async sendSatSummerChallengeEmail1(lead) {
@@ -735,11 +753,50 @@ ${t.help ? `<p>${t.help}</p>` : ''}
         logger.info(`Email sent via Brevo → ${to} "${subject}" [${res.data?.messageId}]`);
         return { ok: true, messageId: res.data?.messageId };
       } catch (error1) {
-        logger.warn(`Brevo API attempt failed (${error1.message}), trying fallback...`);
+        const detail = error1.response?.data ? JSON.stringify(error1.response.data) : error1.message;
+        logger.warn(`Brevo API attempt failed (${detail}), trying fallback...`);
       }
     }
 
-    // 2. Fallback: Try Gmail SMTP if GMAIL_APP_PASSWORD is available (with strict 3s connection timeout)
+    const smtpAttachments = attachment
+      ? (Array.isArray(attachment) ? attachment : [attachment]).map(att => ({
+          filename: att.name,
+          content: Buffer.from(att.content, 'base64'),
+          contentType: 'text/calendar',
+        }))
+      : undefined;
+
+    // 2. Fallback: configured SMTP server (SMTP_HOST / SMTP_USER / SMTP_PASS)
+    if (cfg.smtp.host && cfg.smtp.user && cfg.smtp.pass) {
+      try {
+        const nodemailer = require('nodemailer');
+        const transporter = nodemailer.createTransport({
+          host: cfg.smtp.host,
+          port: cfg.smtp.port,
+          secure: cfg.smtp.secure,
+          connectionTimeout: 8000,
+          socketTimeout: 10000,
+          auth: { user: cfg.smtp.user, pass: cfg.smtp.pass },
+        });
+
+        const info = await transporter.sendMail({
+          from: cfg.smtp.from || `"${cfg.brevo.fromName}" <${cfg.smtp.user}>`,
+          to,
+          subject,
+          html,
+          replyTo: cfg.brevo.fromEmail,
+          ...(cc && cc.includes('@') ? { cc } : {}),
+          ...(bcc && bcc.includes('@') ? { bcc } : {}),
+          ...(smtpAttachments ? { attachments: smtpAttachments } : {}),
+        });
+        logger.info(`Email sent via SMTP (${cfg.smtp.host}) → ${to} "${subject}" [${info.messageId}]`);
+        return { ok: true, messageId: info.messageId };
+      } catch (smtpErr) {
+        logger.warn('SMTP send failed', { msg: smtpErr.message });
+      }
+    }
+
+    // 3. Last resort: Gmail SMTP if GMAIL_APP_PASSWORD is available (with strict 3s connection timeout)
     if (cfg.gmail?.appPassword) {
       try {
         const nodemailer = require('nodemailer');
@@ -764,24 +821,17 @@ ${t.help ? `<p>${t.help}</p>` : ''}
         if (cc && cc.includes('@')) mailOptions.cc = cc;
         if (bcc && bcc.includes('@')) mailOptions.bcc = bcc;
         
-        if (attachment) {
-          const attArray = Array.isArray(attachment) ? attachment : [attachment];
-          mailOptions.attachments = attArray.map(att => ({
-            filename: att.name,
-            content: Buffer.from(att.content, 'base64'),
-            contentType: 'text/calendar',
-          }));
-        }
+        if (smtpAttachments) mailOptions.attachments = smtpAttachments;
 
         const info = await transporter.sendMail(mailOptions);
         logger.info(`Email sent via Gmail SMTP to ${to} (Message ID: ${info.messageId})`);
-        return { ok: true, data: info };
+        return { ok: true, messageId: info.messageId };
       } catch (gmailErr) {
         logger.warn('Gmail SMTP send failed', { msg: gmailErr.message });
       }
     }
 
-    const err = 'Both Brevo API and Gmail SMTP failed to send email';
+    const err = 'All email providers (Brevo API, SMTP, Gmail) failed to send email';
     logger.error(err);
     return { ok: false, error: err };
   }

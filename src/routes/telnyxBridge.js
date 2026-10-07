@@ -132,8 +132,11 @@ router.post('/', async (req, res) => {
 
       telnyxBilling.onHangup({ callControlId, payload, occurredAt, state, callStatus });
 
+      // A voicemail/fax pickup is still billed as answered, but for the lead it
+      // counts as not reached — they get the no-answer email and a retry.
+      const reachedMachine = callStatus === 'completed' && /machine|fax/i.test(state.amdResult || '');
       await driveTwilioFlow(callControlId, state, `/webhook/call/status`, {
-        CallStatus: callStatus,
+        CallStatus: reachedMachine ? 'no-answer' : callStatus,
         CallDuration: String(duration),
       });
     }
