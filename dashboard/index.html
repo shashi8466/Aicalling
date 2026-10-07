@@ -6394,10 +6394,8 @@
       try {
         if (!CAMPAIGNS.length) { try { const d = await api('/campaigns'); CAMPAIGNS = d.campaigns || []; } catch (_) { } }
         populateCampaignLeadFilter();
-        await filterLeads(false);
-        
-        // Fetch KPIs from stats api
-        const s = await api('/stats');
+        // Table page and KPI stats load in parallel.
+        const [, s] = await Promise.all([filterLeads(false), api('/stats')]);
         renderLeadsKpis(s);
         document.getElementById('navLeadCount').textContent = s.total || 0;
       } catch (e) { toast(e.message, 'error'); }
@@ -10259,17 +10257,11 @@
         </td></tr>`;
       }
 
-      // Load all primary data in parallel — do not await one before starting the next
-      const loader = document.getElementById('globalLoader');
-      if (loader) loader.classList.add('active');
-      try {
-        await Promise.all([
-          loadLeads(),
-          loadMeetings(),
-        ]);
-      } finally {
-        if (loader) loader.classList.remove('active');
-      }
+      // Load the landing view + sidebar counts in parallel without blocking the
+      // UI — each section shows its own loading state while its data arrives.
+      loadOverview().catch(() => {});
+      loadLeads();
+      loadMeetings().catch(() => {});
 
       // Real-time EventSource Updates
       let _sseRetry = 1000;
@@ -10294,16 +10286,8 @@
               return;
             }
             if (msg.type === 'callback_new') return; // Callback Requests page removed from navigation
-            // Default: targeted refresh for lead/meeting updates
-            loadLeads();
-            loadMeetings();
-            refreshCampaignLeads().catch(() => {});
-            refreshParentCampaignLeads().catch(() => {});
-            syncModalCallButton(msg.leadId);
-            if (activeView === 'view-billing') loadBilling();
-            if (activeView === 'view-classes' && typeof refreshClassDetails === 'function' && typeof currentClassId !== 'undefined' && currentClassId) {
-              refreshClassDetails();
-            }
+            // Default: lead/meeting update — refresh once per burst of events.
+            scheduleLiveRefresh(msg.leadId);
           };
           sse.onerror = () => {
             sse.close();
@@ -10317,20 +10301,39 @@
       connectSSE();
 
       // Background polling — only refresh if tab is visible to avoid unnecessary DB load
-      setInterval(() => {
-        if (!document.hidden) {
-          loadLeads();
-          loadMeetings().catch(() => {});
-          refreshCampaignLeads().catch(() => {});
-          refreshParentCampaignLeads().catch(() => {});
-          syncModalCallButton();
-          const activeView = document.querySelector('.view.active')?.id || '';
-          if (activeView === 'view-classes' && typeof refreshClassDetails === 'function' && typeof currentClassId !== 'undefined' && currentClassId) {
-            refreshClassDetails();
-          }
-        }
-      }, 30000);
+      setInterval(() => { if (!document.hidden) runLiveRefresh(); }, 30000);
     })();
+
+    // ── Live refresh ────────────────────────────────────────────────────────
+    // A single call fires several updates (initiated, answered, hangup, billing)
+    // in quick succession. Coalesce them into one refresh, and only reload data
+    // for what's on screen (sidebar counts always stay current).
+    let _liveRefreshTimer = null;
+    const _liveRefreshLeads = new Set();
+    function scheduleLiveRefresh(leadId) {
+      if (leadId) _liveRefreshLeads.add(String(leadId));
+      clearTimeout(_liveRefreshTimer);
+      _liveRefreshTimer = setTimeout(runLiveRefresh, 700);
+    }
+    function runLiveRefresh() {
+      clearTimeout(_liveRefreshTimer);
+      const leadIds = [..._liveRefreshLeads];
+      _liveRefreshLeads.clear();
+      const v = document.querySelector('.view.active')?.id || '';
+      loadLeads();                          // leads table + Leads badge / KPIs
+      loadMeetings().catch(() => {});       // Meetings badge
+      if (v === 'view-overview') loadOverview().catch(() => {});
+      if (v === 'view-campaigns') {
+        refreshCampaignLeads().catch(() => {});
+        refreshParentCampaignLeads().catch(() => {});
+      }
+      if (v === 'view-billing') loadBilling();
+      if (v === 'view-classes' && typeof refreshClassDetails === 'function' && typeof currentClassId !== 'undefined' && currentClassId) {
+        refreshClassDetails();
+      }
+      if (leadIds.length) leadIds.forEach(id => syncModalCallButton(id));
+      else syncModalCallButton();
+    }
   </script>
 
   <!-- ═══════════════════════════════════════════════════════════════════

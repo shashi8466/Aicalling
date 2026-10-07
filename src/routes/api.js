@@ -27,30 +27,53 @@ function groupBy(arr, key) {
   return Object.entries(m).map(([_id, count]) => ({ _id, count }));
 }
 
-// Stats cache — per counselor key
+// Stats cache — per counselor key. Stale-while-revalidate: a cached result is
+// returned immediately and recomputed in the background once it's older than
+// STATS_TTL_MS, so the dashboard never waits on the full-table scan unless the
+// cache is cold or very old.
 const _statsCache = {};
-const STATS_TTL_MS = 15000; // 15 seconds
+const _statsInflight = {};
+const STATS_TTL_MS = 15000;          // refresh in the background after 15s
+const STATS_MAX_STALE_MS = 5 * 60000; // older than this → wait for fresh data
 
 router.get('/stats', async (req, res) => {
   try {
-    const counselorFilter = req.profile?.role !== 'admin' ? req.profile.id : (req.query.counselorId || 'all');
+    const isAdmin = req.profile?.role === 'admin';
+    const counselorFilter = !isAdmin ? req.profile.id : (req.query.counselorId || 'all');
+    const scopeId = !isAdmin ? req.profile.id
+      : (req.query.counselorId && req.query.counselorId !== 'all' ? req.query.counselorId : null);
     const cacheKey = counselorFilter;
     const cacheEntry = _statsCache[cacheKey];
 
-    // Serve from cache if fresh
-    if (cacheEntry && Date.now() - cacheEntry.timestamp < STATS_TTL_MS) {
-      return res.json(cacheEntry.data);
+    if (cacheEntry) {
+      const age = Date.now() - cacheEntry.timestamp;
+      if (age < STATS_MAX_STALE_MS) {
+        if (age >= STATS_TTL_MS) refreshStats(cacheKey, scopeId).catch(() => {});
+        return res.json(cacheEntry.data);
+      }
     }
+    res.json(await refreshStats(cacheKey, scopeId));
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
+// One computation per cache key at a time; concurrent requests share it.
+function refreshStats(cacheKey, counselorId) {
+  if (!_statsInflight[cacheKey]) {
+    _statsInflight[cacheKey] = computeStats(counselorId)
+      .then(data => { _statsCache[cacheKey] = { data, timestamp: Date.now() }; return data; })
+      .finally(() => { delete _statsInflight[cacheKey]; });
+  }
+  return _statsInflight[cacheKey];
+}
+
+async function computeStats(counselorId) {
     let q = supabase
       .from('leads')
       .select('status, lead_category, lead_score, call_attempts');
 
-    if (req.profile?.role !== 'admin') {
-      q = q.eq('counselor_id', req.profile.id);
-    } else if (req.query.counselorId && req.query.counselorId !== 'all') {
-      q = q.eq('counselor_id', req.query.counselorId);
-    }
+    if (counselorId) q = q.eq('counselor_id', counselorId);
 
     const { data: rows, error } = await q;
 
@@ -96,12 +119,8 @@ router.get('/stats', async (req, res) => {
       hot, warm, cold, callsCompleted, avgScore,
       conversionRate, meetingRate,
     };
-    _statsCache[cacheKey] = { data: statsData, timestamp: Date.now() };
-    res.json(statsData);
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
+    return statsData;
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 //   ANALYTICS
