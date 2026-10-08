@@ -23,7 +23,7 @@ const TELNYX_API_KEY     = process.env.TELNYX_API_KEY      || '';
 const TELNYX_PHONE       = process.env.TELNYX_PHONE_NUMBER || '';
 const TELNYX_APP_ID      = process.env.TELNYX_APP_ID       || '';   // optional: TeXML Application ID
 const TELNYX_CONNECTION  = process.env.TELNYX_CONNECTION_ID || '';  // optional: outbound voice profile id
-const CALLER_NAME        = process.env.TELNYX_CALLER_NAME || 'Test Prep Pundit'; // display name; carriers may ignore it
+const CALLER_NAME        = process.env.TELNYX_CALLER_NAME || 'Test Prep Pundits'; // display name; carriers may ignore it
 const TELNYX_BASE        = 'https://api.telnyx.com/v2';
 
 // Telnyx TeXML is fully TwiML-compatible — we reuse the same VoiceResponse builder
