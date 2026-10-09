@@ -250,6 +250,7 @@ async function boot() {
     meetingReminderPoller.start();
     billingPoller.start();
     transcriptionProcessor.start();
+    require('./services/bulkCallService').start(); // watchdog + resume interrupted bulk runs
 
     // One-time historical billing import — scans every existing call and
     // creates billing rows with the actual Twilio price. Guarded so it runs

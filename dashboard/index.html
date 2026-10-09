@@ -889,6 +889,36 @@
       color: var(--hot);
     }
 
+    .status-badge.no-answer {
+      background: rgba(148, 163, 184, .15);
+      color: #94a3b8;
+    }
+
+    .status-badge.failed {
+      background: rgba(239, 68, 68, .15);
+      color: var(--hot);
+    }
+
+    /* ─── Bulk call progress panel ─────────────────────────── */
+    #bulkCallPanel {
+      position: fixed; right: 16px; bottom: 16px; z-index: 900;
+      width: min(360px, calc(100vw - 32px));
+      display: none; flex-direction: column; gap: 10px;
+    }
+    .bcp-card {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 12px 14px; box-shadow: 0 8px 24px rgba(0,0,0,.35); font-size: 12px;
+    }
+    .bcp-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .bcp-title { font-weight: 700; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bcp-bar { height: 6px; background: var(--panel2); border-radius: 4px; overflow: hidden; margin: 6px 0 8px; }
+    .bcp-bar > div { height: 100%; background: linear-gradient(90deg, #6366f1, #8b5cf6); transition: width .3s; }
+    .bcp-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .bcp-stat { text-align: center; }
+    .bcp-stat b { display: block; font-size: 15px; }
+    .bcp-stat span { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
+    .bcp-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; color: var(--muted); }
+
     /* ─── Counselor Dashboard ───────────────────────────────── */
     .cd-page {
       display: flex;
@@ -3581,6 +3611,8 @@
                   <option value="enrollment-pending">Enrollment Pending</option>
                   <option value="payment-pending">Payment Pending</option>
                   <option value="enrolled">Enrolled</option>
+                  <option value="no-answer">No Answer</option>
+                  <option value="failed">Failed</option>
                   <option value="lost">Lost</option>
                 </select>
                 <select id="leadCategoryFilter" onchange="filterLeads()">
@@ -4173,6 +4205,8 @@
                     <option value="enrollment-pending">Enrollment Pending</option>
                     <option value="payment-pending">Payment Pending</option>
                     <option value="enrolled">Enrolled</option>
+                    <option value="no-answer">No Answer</option>
+                    <option value="failed">Failed</option>
                     <option value="lost">Lost</option>
                   </select>
                   <select id="clpCategoryFilter" onchange="filterCampaignLeads()">
@@ -4231,6 +4265,8 @@
                     <option value="calling">Calling</option>
                     <option value="contacted">Contacted</option>
                     <option value="qualified">Qualified</option>
+                    <option value="no-answer">No Answer</option>
+                    <option value="failed">Failed</option>
                     <option value="lost">Lost</option>
                   </select>
                   <select id="pclpCategoryFilter" onchange="filterParentCampaignLeads()">
@@ -5099,6 +5135,8 @@
               <option value="interested">Interested</option>
               <option value="enrollment-pending">Enrollment Pending</option>
               <option value="enrolled">Enrolled</option>
+              <option value="no-answer">No Answer</option>
+              <option value="failed">Failed</option>
               <option value="lost">Lost</option>
             </select>
           </div>
@@ -10286,6 +10324,11 @@
               return;
             }
             if (msg.type === 'callback_new') return; // Callback Requests page removed from navigation
+            if (msg.type === 'bulk-call-progress') {
+              bcpUpdate(msg.run);
+              if (msg.leadId) scheduleLiveRefresh(msg.leadId);
+              return;
+            }
             // Default: lead/meeting update — refresh once per burst of events.
             scheduleLiveRefresh(msg.leadId);
           };
@@ -10299,10 +10342,81 @@
         }
       }
       connectSSE();
+      bcpLoad();
 
       // Background polling — only refresh if tab is visible to avoid unnecessary DB load
       setInterval(() => { if (!document.hidden) runLiveRefresh(); }, 30000);
     })();
+
+    // ── Bulk call progress panel ────────────────────────────────────────────
+    // Driven by server 'bulk-call-progress' events; counts come from the queue's
+    // provider-backed job states, never from a frontend timer.
+    const _bcpRuns = new Map();
+    let _bcpTick = null;
+    async function bcpLoad() {
+      try {
+        const runs = await api('/bulk-calls');
+        (Array.isArray(runs) ? runs : []).forEach(r => { if (!r.done) _bcpRuns.set(r.runId, r); });
+        bcpRender();
+      } catch (_) {}
+    }
+    function bcpUpdate(run) {
+      if (!run || !run.runId) return;
+      run._receivedAt = Date.now();
+      _bcpRuns.set(run.runId, run);
+      if (run.done) setTimeout(() => { _bcpRuns.delete(run.runId); bcpRender(); }, 60000);
+      bcpRender();
+    }
+    function bcpFmt(sec) {
+      sec = Math.max(0, Math.round(sec));
+      const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+      return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
+    }
+    function bcpRender() {
+      const el = document.getElementById('bulkCallPanel');
+      if (!el) return;
+      const runs = [..._bcpRuns.values()];
+      el.style.display = runs.length ? 'flex' : 'none';
+      el.innerHTML = runs.map(r => {
+        const finished = r.processed;
+        const pct = r.total ? Math.round(finished / r.total * 100) : 0;
+        const elapsed = r.done ? r.elapsedSec : r.elapsedSec + (Date.now() - (r._receivedAt || Date.now())) / 1000;
+        const state = r.done ? (r.stopped ? 'Stopped' : 'Finished') : (r.calling ? 'Calling…' : 'Dialing next…');
+        return `<div class="bcp-card">
+          <div class="bcp-head">
+            <div class="bcp-title">📞 ${esc(r.label || 'Bulk AI Calls')}</div>
+            ${r.done
+              ? `<button class="btn btn-sm btn-secondary" onclick="_bcpRuns.delete('${r.runId}');bcpRender()">✕</button>`
+              : `<button class="btn btn-sm" style="background:var(--hot);color:#fff" onclick="bcpStop('${r.runId}')">⏹ Stop Campaign</button>`}
+          </div>
+          <div style="color:var(--muted)">${finished} of ${r.total} done · ${state}</div>
+          <div class="bcp-bar"><div style="width:${pct}%"></div></div>
+          <div class="bcp-stats">
+            <div class="bcp-stat"><b>${r.queued}</b><span>Queued</span></div>
+            <div class="bcp-stat"><b style="color:#f59e0b">${r.calling}</b><span>Calling</span></div>
+            <div class="bcp-stat"><b style="color:var(--green,#22c55e)">${r.completed}</b><span>Answered</span></div>
+            <div class="bcp-stat"><b style="color:#94a3b8">${r.noAnswer}</b><span>No Answer</span></div>
+            <div class="bcp-stat"><b style="color:var(--hot)">${r.failed}</b><span>Failed</span></div>
+            <div class="bcp-stat"><b>${finished}</b><span>Completed</span></div>
+            <div class="bcp-stat"><b>${r.total}</b><span>Total</span></div>
+          </div>
+          <div class="bcp-foot"><span>⏱ ${bcpFmt(elapsed)}${r.skipped + r.canceled ? ` · ${r.skipped} skipped · ${r.canceled} canceled` : ''}</span><span>Active calls: ${r.activeCalls}/${r.concurrency}</span></div>
+        </div>`;
+      }).join('');
+      clearInterval(_bcpTick);
+      if (runs.some(r => !r.done)) _bcpTick = setInterval(bcpRender, 1000);
+    }
+    async function bcpStop(runId) {
+      if (!confirm('Stop this campaign? Students still waiting will not be called, and any call in progress will be hung up.')) return;
+      try {
+        const r = await api('/bulk-calls/' + runId + '/stop', { method: 'POST' });
+        if (r && r.run) bcpUpdate(r.run);
+        toast('Campaign stopped', 'success');
+        runLiveRefresh();
+      } catch (e) {
+        toast('Could not stop campaign: ' + e.message, 'error');
+      }
+    }
 
     // ── Live refresh ────────────────────────────────────────────────────────
     // A single call fires several updates (initiated, answered, hangup, billing)
@@ -10831,7 +10945,8 @@
   });
 
   </script>
-  <script src="/classes.js?v=10"></script>
+  <div id="bulkCallPanel" aria-live="polite"></div>
+  <script src="/classes.js?v=11"></script>
 </body>
 
 </html>

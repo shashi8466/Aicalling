@@ -1137,6 +1137,13 @@ router.post('/call/status', async (req, res) => {
   const { CallStatus, CallDuration, CallSid } = req.body;
   res.sendStatus(200);
 
+  // Free the bulk-queue slot first so the next student is dialed right away,
+  // before the summaries/emails below (which take several seconds).
+  const TERMINAL_CALL = ['completed', 'canceled', 'no-answer', 'busy', 'failed'];
+  if (CallSid && TERMINAL_CALL.includes(CallStatus)) {
+    require('../services/bulkCallService').onCallEnded(CallSid, CallStatus);
+  }
+
   try {
     const lead = await Lead.findById(leadId);
     if (!lead) return;
@@ -1251,10 +1258,23 @@ router.post('/call/status', async (req, res) => {
 
     if (['no-answer','busy','failed'].includes(CallStatus)) {
       sessions.delete(leadId);
-      lead.status = 'queued';
+      // The call happened — show the real outcome, not "queued" (which reads as
+      // "still waiting to be called").
+      lead.status = CallStatus === 'failed' ? 'failed' : 'no-answer';
+
+      // Lost only after CALL_MAX_ATTEMPTS calls in a row went unanswered. A
+      // lifetime count would also include answered calls and mark a student
+      // Lost after a single miss.
+      const UNREACHED = ['no-answer', 'busy', 'failed', 'voicemail'];
+      let unreachedStreak = 0;
+      for (const a of [...(lead.callAttempts || [])].reverse()) {
+        if (!a.callSid && a.status === 'failed') continue; // never placed — not an attempt to reach them
+        if (!UNREACHED.includes(a.status)) break;
+        unreachedStreak++;
+      }
 
       // Schedule retry if attempts remain
-      if (lead.totalCallAttempts < cfg.call.maxAttempts) {
+      if (unreachedStreak < cfg.call.maxAttempts) {
         const retryMs = cfg.call.retryDelayMinutes * 60 * 1000;
         lead.nextRetryAt = new Date(Date.now() + retryMs);
       } else {

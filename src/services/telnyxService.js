@@ -44,7 +44,10 @@ function telnyxPost(path, payload) {
   }).catch(err => {
     const details = err.response?.data;
     const msg = details ? JSON.stringify(details) : err.message;
-    throw new Error(`Telnyx API Error: ${msg}`);
+    const e = new Error(`Telnyx API Error: ${msg}`);
+    e.status = err.response?.status;          // lets callers tell capacity/rate limits from permanent errors
+    e.providerErrors = details?.errors || [];
+    throw e;
   });
 }
 
@@ -57,7 +60,9 @@ function validateConfig() {
 class TelnyxService {
 
   // ── Outbound call ────────────────────────────────────────────────────
-  async call(lead, baseUrl, campaignId, campaignVars = null) {
+  // `ringTimeoutSecs` hangs up an unanswered call after that long (Telnyx then
+  // reports hangup_cause=timeout → no-answer). Omitted → Telnyx default (30s).
+  async call(lead, baseUrl, campaignId, campaignVars = null, { ringTimeoutSecs } = {}) {
     validateConfig();
 
     const leadId = (lead._id || lead.id).toString();
@@ -76,7 +81,8 @@ class TelnyxService {
       from_display_name: CALLER_NAME,
       connection_id: TELNYX_APP_ID,
       client_state: Buffer.from(JSON.stringify(clientStateObj)).toString('base64'),
-      answering_machine_detection: 'premium'
+      answering_machine_detection: 'premium',
+      ...(ringTimeoutSecs ? { timeout_secs: ringTimeoutSecs } : {}),
     };
 
     const response = await telnyxPost('/calls', payload);
@@ -128,6 +134,22 @@ class TelnyxService {
     // Update call status to completed
     await telnyxPost(`/calls/${callSid}/actions/hangup`, {});
     logger.info(`[Telnyx] Hung up call ${callSid}`);
+  }
+
+  // ── Live call state — used by the bulk-call watchdog ──────────────────
+  // Returns { alive } or null when Telnyx no longer knows the call.
+  async getCallStatus(callSid) {
+    validateConfig();
+    try {
+      const res = await axios.get(`${TELNYX_BASE}/calls/${encodeURIComponent(callSid)}`, {
+        headers: { Authorization: `Bearer ${TELNYX_API_KEY}` },
+        timeout: 8000,
+      });
+      return { alive: !!res.data?.data?.is_alive };
+    } catch (err) {
+      if (err.response?.status === 404 || err.response?.status === 422) return null;
+      throw err;
+    }
   }
 
   // ── Expose "client" shim — used by webhook AMD hangup ─────────────────

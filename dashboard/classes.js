@@ -544,13 +544,11 @@ async function confirmLaunchCampaign() {
             body: JSON.stringify(payload)
         });
         if (!res.ok) throw new Error(await res.text());
+        const result = await res.json().catch(() => ({}));
         closeLaunchCampaignModal();
-        
-        let count = 0;
-        if (launchTarget === 'all') count = currentClassStudents.length;
-        else count = payload.leadIds.length;
-        
-        toast(`Launched ${campaignId} for ${count} students/leads!`, 'success');
+
+        const why = (result.skippedDetails || []).slice(0, 3).map(s => `${s.name || s.leadId}: ${s.reason}`).join('; ');
+        toast((result.message || `Launched ${campaignId}`) + (why ? ` — ${why}` : ''), 'success');
         
         // Clear appropriate selection
         if (launchTarget === 'selected') clearCdpBulkSelect();
