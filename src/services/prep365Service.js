@@ -4,17 +4,28 @@ const logger = require('../logger');
 
 /**
  * Mask phone numbers for privacy in logs.
- * e.g. "+918466924574" -> "+91846***574"
+ * e.g. "+918466924574" -> "+91******4574"
  */
 function maskPhone(phone) {
   if (!phone) return 'N/A';
   const clean = String(phone).trim();
   if (clean.length <= 6) return '***';
-  const prefixLen = clean.startsWith('+') ? 6 : 4;
-  const prefix = clean.slice(0, Math.min(prefixLen, Math.floor(clean.length / 2)));
-  const suffix = clean.slice(-3);
-  const maskCount = Math.max(3, clean.length - prefix.length - suffix.length);
-  return `${prefix}${'*'.repeat(maskCount)}${suffix}`;
+  const prefix = clean.startsWith('+') ? clean.slice(0, 3) : clean.slice(0, 2);
+  const suffix = clean.slice(-4);
+  return `${prefix}******${suffix}`;
+}
+
+/**
+ * Accurately determines dryRun boolean.
+ * Ensures string "false" is evaluated to boolean false (NOT truthy).
+ */
+function isDryRunMode(paramValue) {
+  if (paramValue !== undefined && paramValue !== null && paramValue !== '') {
+    if (typeof paramValue === 'boolean') return paramValue;
+    return String(paramValue).trim().toLowerCase() === 'true';
+  }
+  // In Render, PREP365_DRY_RUN is the string "false" in live mode
+  return process.env.PREP365_DRY_RUN === 'true';
 }
 
 class Prep365Service {
@@ -26,15 +37,10 @@ class Prep365Service {
     return process.env.PREP365_API_KEY || cfg.prep365?.apiKey || '';
   }
 
-  isDryRunConfigured() {
-    const envVal = process.env.PREP365_DRY_RUN;
-    if (envVal !== undefined) return envVal !== 'false';
-    return cfg.prep365?.dryRun !== false;
-  }
-
   /**
    * Claim candidates from Prep365.
-   * If dryRun is true, Prep365 previews candidates without creating permanent outreach rows.
+   * In dry-run: body is {"dryRun": true}
+   * In live mode: body does NOT contain dryRun:true (sends {})
    */
   async claimCandidates({ dryRun } = {}) {
     const apiKey = this.getApiKey();
@@ -42,12 +48,15 @@ class Prep365Service {
       throw new Error('PREP365_API_KEY is not configured in environment');
     }
 
-    const isDryRun = dryRun !== undefined ? Boolean(dryRun) : this.isDryRunConfigured();
+    const isDryRun = isDryRunMode(dryRun);
     const claimUrl = `${this.baseUrl}/claim`;
+    const requestBody = isDryRun ? { dryRun: true } : {};
+
+    logger.info(`[Prep365] Request: POST ${claimUrl} body=${JSON.stringify(requestBody)}`);
 
     const res = await axios.post(
       claimUrl,
-      { dryRun: isDryRun },
+      requestBody,
       {
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -58,7 +67,10 @@ class Prep365Service {
       }
     );
 
-    return res.data;
+    const count = res.data?.count ?? (res.data?.batches ? res.data.batches.length : 0);
+    logger.info(`[Prep365] Response: status=${res.status} count=${count} dryRun=${res.data?.dryRun}`);
+
+    return { response: res, data: res.data };
   }
 
   /**
@@ -81,6 +93,8 @@ class Prep365Service {
       duration: duration !== undefined ? parseInt(duration, 10) : 0,
     };
 
+    logger.info(`[Prep365] Reporting result to ${targetUrl}: outreachId=${outreachId} status=${status} callId=${providerCallId}`);
+
     try {
       const res = await axios.post(targetUrl, payload, {
         headers: {
@@ -90,7 +104,7 @@ class Prep365Service {
         },
         timeout: 15000,
       });
-      logger.info(`[Prep365] Reported call result for outreach ${outreachId}: ${status}`);
+      logger.info(`[Prep365] Reported call result for outreach ${outreachId}: HTTP ${res.status} ok=${res.data?.ok}`);
       return res.data;
     } catch (err) {
       const errDetail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
@@ -103,19 +117,33 @@ class Prep365Service {
    * Perform a full sync from Prep365.
    */
   async sync({ dryRun } = {}) {
-    const isDryRun = dryRun !== undefined ? Boolean(dryRun) : this.isDryRunConfigured();
+    const isDryRun = isDryRunMode(dryRun);
     logger.info(`[Prep365] Starting candidate sync (dryRun=${isDryRun})…`);
 
-    const result = await this.claimCandidates({ dryRun: isDryRun });
+    const { data: result } = await this.claimCandidates({ dryRun: isDryRun });
     if (!result.ok) {
       throw new Error(`Prep365 /claim returned ok=false: ${result.error || 'Unknown error'}`);
     }
 
     const batches = result.batches || [];
-    const studentCount = result.count !== undefined ? result.count : batches.length;
-    const callsCount = result.calls !== undefined ? result.calls : batches.reduce((acc, b) => acc + (b.calls?.length || 0), 0);
+    const count = result.count !== undefined ? result.count : batches.length;
+    const totalCalls = result.calls !== undefined ? result.calls : batches.reduce((acc, b) => acc + (b.calls?.length || 0), 0);
 
-    logger.info(`[Prep365] Fetched ${studentCount} student(s) / ${callsCount} planned call(s) (dryRun=${isDryRun})`);
+    // If count is 0, log full response and stop immediately (do not loop)
+    if (count === 0) {
+      logger.warn(`[Prep365] count=0 received. Full response body: ${JSON.stringify(result)}`);
+      return {
+        ok: true,
+        dryRun: isDryRun,
+        studentCount: 0,
+        callsCount: 0,
+        plannedCalls: [],
+        rawResponse: result,
+        message: 'No candidate students available from Prep365 (count=0).'
+      };
+    }
+
+    logger.info(`[Prep365] Fetched ${count} student(s) / ${totalCalls} planned call(s) (dryRun=${isDryRun})`);
 
     const plannedCalls = [];
 
@@ -123,6 +151,9 @@ class Prep365Service {
       const studentInfo = batch.student?.student || {};
       const studentName = studentInfo.name || 'Unknown Student';
       const studentId = studentInfo.id || null;
+      const parents = batch.student?.parents || [];
+      const parentName = parents[0]?.name || '';
+      const parentEmail = parents[0]?.email || '';
       const reasons = (batch.student?.reasons || []).map(r => r.label || r.code).join('; ');
       const talkingPoints = batch.student?.talkingPoints || '';
 
@@ -136,6 +167,8 @@ class Prep365Service {
           studentId,
           studentName,
           studentEmail: studentInfo.email || null,
+          parentName,
+          parentEmail,
           reasons,
           talkingPoints,
           callbackUrl: result.callbackUrl || null,
@@ -143,37 +176,40 @@ class Prep365Service {
       }
     }
 
-    // DRY RUN: place NO calls, return planned calls preview
+    // DRY RUN: place NO calls, return preview
     if (isDryRun) {
       logger.info('[Prep365] Dry-run enabled: no outbound calls placed.');
       return {
         ok: true,
         dryRun: true,
-        studentCount,
-        callsCount,
+        studentCount: count,
+        callsCount: totalCalls,
         plannedCalls,
         callbackUrl: result.callbackUrl,
-        message: 'Dry-run sync complete. No calls were placed.'
+        message: 'Dry-run sync complete. Zero calls placed.'
       };
     }
 
-    // LIVE RUN: Dispatch calls and notify Prep365
-    logger.info(`[Prep365] Live mode: processing ${plannedCalls.length} call(s)…`);
+    // LIVE RUN: Dial via Telnyx immediately
+    logger.info(`[Prep365] Live mode: placing Telnyx calls for ${plannedCalls.length} recipient(s)…`);
     const Lead = require('../models/Lead');
-    const bulkCallService = require('./bulkCallService');
+    const telnyxSvc = require('./telnyxService');
+    const baseUrl = cfg.server.meetingBaseUrl || cfg.server.baseUrl || 'https://aicalling-xfyr.onrender.com';
 
-    const queuedLeadIds = [];
+    const placedCalls = [];
 
     for (const item of plannedCalls) {
       try {
         let lead = await Lead.findOne({ phone: item.phone });
         if (!lead) {
-          lead = new Lead({
+          lead = await Lead.create({
             fullName: item.recipientName,
             phone: item.phone,
             email: item.studentEmail || '',
+            parentName: item.parentName || '',
+            parentEmail: item.parentEmail || '',
             source: 'Prep365',
-            status: 'queued',
+            status: 'calling',
             courseInterest: 'SAT Prep',
             notes: item.talkingPoints || item.reasons || '',
             campaignId: 'prep365-retention',
@@ -186,8 +222,8 @@ class Prep365Service {
               prep365CallbackUrl: item.callbackUrl,
             }
           });
-          await lead.save();
         } else {
+          lead.status = 'calling';
           lead.campaignId = 'prep365-retention';
           lead.notes = item.talkingPoints || lead.notes;
           lead.qualification = {
@@ -202,41 +238,53 @@ class Prep365Service {
           await lead.save();
         }
 
-        // Notify Prep365 that call was queued/sent
+        lead.totalCallAttempts = (lead.totalCallAttempts || 0) + 1;
+        lead.lastCallAt = new Date();
+        lead.callAttempts = lead.callAttempts || [];
+        lead.callAttempts.push({
+          attemptNumber: lead.totalCallAttempts,
+          startTime: new Date().toISOString(),
+          status: 'initiated',
+          campaignId: 'prep365-retention',
+          prep365OutreachId: item.outreachId,
+        });
+        await lead.save();
+
+        logger.info(`[Prep365] Placing Telnyx call to ${item.recipientName} at ${item.phone} (outreachId: ${item.outreachId})…`);
+        const { callSid } = await telnyxSvc.call(lead, baseUrl, 'prep365-retention');
+        logger.info(`[Prep365] Telnyx call placed successfully: SID=${callSid}`);
+
+        lead.callAttempts[lead.callAttempts.length - 1].callSid = callSid;
+        await lead.save();
+
+        // Notify Prep365 that call has been initiated / sent
         if (item.outreachId) {
           await this.reportCallResult({
             outreachId: item.outreachId,
             status: 'sent',
+            providerCallId: callSid,
             callbackUrl: item.callbackUrl,
-          }).catch(() => {});
+          }).catch(rErr => logger.warn('[Prep365] Initial sent status report warning', { msg: rErr.message }));
         }
 
-        queuedLeadIds.push(lead._id.toString());
-      } catch (err) {
-        logger.error(`[Prep365] Error preparing lead for ${item.recipientName}`, { msg: err.message });
-      }
-    }
-
-    if (queuedLeadIds.length > 0) {
-      try {
-        await bulkCallService.enqueue({
-          leadIds: queuedLeadIds,
-          campaignId: 'prep365-retention',
-          label: 'Prep365 Retention Outreach'
+        placedCalls.push({
+          recipientName: item.recipientName,
+          phone: item.phone,
+          outreachId: item.outreachId,
+          callSid,
         });
-        logger.info(`[Prep365] Enqueued ${queuedLeadIds.length} lead(s) into bulk calling queue.`);
-      } catch (qErr) {
-        logger.error('[Prep365] Failed enqueuing leads into bulk call queue', { msg: qErr.message });
+      } catch (err) {
+        logger.error(`[Prep365] Failed placing Telnyx call to ${item.recipientName}`, { msg: err.message, stack: err.stack });
       }
     }
 
     return {
       ok: true,
       dryRun: false,
-      studentCount,
-      callsCount,
+      studentCount: count,
+      callsCount: totalCalls,
       plannedCalls,
-      queuedCallsCount: queuedLeadIds.length,
+      placedCalls,
       callbackUrl: result.callbackUrl,
     };
   }

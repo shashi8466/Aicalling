@@ -29,7 +29,7 @@ async function syncOnce({ dryRun } = {}) {
 
 function start() {
   const schedule = cfg.prep365?.cronSchedule || process.env.PREP365_CRON_SCHEDULE || '0 14 * * *';
-  const isDryRun = prep365Svc.isDryRunConfigured();
+  const isDryRun = process.env.PREP365_DRY_RUN === 'true';
 
   // Log startup line exactly as requested:
   logger.info(`Prep365 sync job started — schedule ${schedule}, dryRun=${isDryRun}`);
