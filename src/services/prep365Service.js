@@ -102,23 +102,30 @@ class Prep365Service {
     const finalDuration = durationSeconds !== undefined ? parseInt(durationSeconds, 10) : (parseInt(duration, 10) || 0);
     const finalSummary = summary || outcome || '';
 
+    // Standardize status: 'completed' | 'no_answer' | 'failed'
+    let normStatus = status || 'completed';
+    if (normStatus === 'no-answer' || normStatus === 'busy' || normStatus === 'canceled') {
+      normStatus = 'no_answer';
+    }
+
+    // Standardize answeredBy: 'human' | 'voicemail' | 'unknown'
+    let normAnsweredBy = answeredBy || 'unknown';
+    if (normAnsweredBy === 'machine') normAnsweredBy = 'voicemail';
+
     const payload = {
-      outreachId: outreachId || undefined,
-      callId: callId || undefined,
-      status: status || 'completed',
-      outcome: finalSummary,
+      outreachId: outreachId !== undefined && outreachId !== null ? Number(outreachId) : undefined,
+      callId: callId || providerCallId || undefined,
+      status: normStatus,
       summary: finalSummary,
-      providerCallId: providerCallId || undefined,
-      duration: finalDuration,
       durationSeconds: finalDuration,
-      answeredBy: answeredBy || 'human',
+      answeredBy: normAnsweredBy,
       transcriptUrl: transcriptUrl || undefined,
       recordingUrl: recordingUrl || undefined,
       followUpRequested: Boolean(followUpRequested),
       optOut: Boolean(optOut),
     };
 
-    logger.info(`[Prep365] Reporting result to ${targetUrl}: outreachId=${outreachId} status=${status} duration=${finalDuration}s callId=${providerCallId}`);
+    logger.info(`[Prep365] Reporting result to ${targetUrl}: outreachId=${outreachId} status=${normStatus} duration=${finalDuration}s answeredBy=${normAnsweredBy}`);
 
     try {
       const res = await axios.post(targetUrl, payload, {
@@ -176,11 +183,14 @@ class Prep365Service {
       const studentInfo = batch.student?.student || {};
       const studentName = studentInfo.name || 'Unknown Student';
       const studentId = studentInfo.id || null;
+      const studentGrade = studentInfo.grade || batch.student?.grade || '11th Grade';
+      const rawReasons = batch.student?.reasons || [];
+      const reasons = rawReasons.map(r => r.label || r.code).join('; ');
+      const talkingPoints = batch.student?.talkingPoints || '';
+      const snapshot = batch.student?.snapshot || {};
       const parents = batch.student?.parents || [];
       const parentName = parents[0]?.name || '';
       const parentEmail = parents[0]?.email || '';
-      const reasons = (batch.student?.reasons || []).map(r => r.label || r.code).join('; ');
-      const talkingPoints = batch.student?.talkingPoints || '';
 
       for (const call of (batch.calls || [])) {
         const masked = maskPhone(call.phone);
@@ -192,10 +202,14 @@ class Prep365Service {
           studentId,
           studentName,
           studentEmail: studentInfo.email || null,
+          studentGrade,
           parentName,
           parentEmail,
           reasons,
+          rawReasons,
           talkingPoints,
+          snapshot,
+          studentData: studentInfo,
           callbackUrl: result.callbackUrl || null,
         });
       }
@@ -204,6 +218,14 @@ class Prep365Service {
     // DRY RUN: place NO calls, return preview
     if (isDryRun) {
       logger.info('[Prep365] Dry-run enabled: no outbound calls placed.');
+      this.lastSync = {
+        timestamp: new Date().toISOString(),
+        dryRun: true,
+        studentsReceived: count,
+        callsQueued: totalCalls,
+        callsPlaced: 0,
+        errors: 0,
+      };
       return {
         ok: true,
         dryRun: true,
@@ -240,6 +262,7 @@ class Prep365Service {
             email: item.studentEmail || '',
             parentName: item.parentName || '',
             parentEmail: item.parentEmail || '',
+            grade: item.studentGrade || '11th Grade',
             source: 'Prep365',
             status: 'calling',
             courseInterest: 'SAT Prep',
@@ -252,12 +275,16 @@ class Prep365Service {
               prep365StudentName: item.studentName,
               prep365TalkingPoints: item.talkingPoints,
               prep365CallbackUrl: item.callbackUrl,
+              prep365Reasons: item.rawReasons || [],
+              prep365Snapshot: item.snapshot || {},
+              prep365Student: item.studentData || {},
             }
           });
         } else {
           lead.status = 'calling';
           lead.campaignId = campaignUuid;
           lead.notes = item.talkingPoints || lead.notes;
+          if (item.studentGrade) lead.grade = item.studentGrade;
           lead.qualification = {
             ...(lead.qualification || {}),
             prep365OutreachId: item.outreachId,
@@ -266,6 +293,9 @@ class Prep365Service {
             prep365StudentName: item.studentName,
             prep365TalkingPoints: item.talkingPoints,
             prep365CallbackUrl: item.callbackUrl,
+            prep365Reasons: item.rawReasons || lead.qualification?.prep365Reasons || [],
+            prep365Snapshot: item.snapshot || lead.qualification?.prep365Snapshot || {},
+            prep365Student: item.studentData || lead.qualification?.prep365Student || {},
           };
           await lead.save();
         }
@@ -310,6 +340,15 @@ class Prep365Service {
       }
     }
 
+    this.lastSync = {
+      timestamp: new Date().toISOString(),
+      dryRun: false,
+      studentsReceived: count,
+      callsQueued: totalCalls,
+      callsPlaced: placedCalls.length,
+      errors: totalCalls - placedCalls.length,
+    };
+
     return {
       ok: true,
       dryRun: false,
@@ -318,6 +357,17 @@ class Prep365Service {
       plannedCalls,
       placedCalls,
       callbackUrl: result.callbackUrl,
+    };
+  }
+
+  getLastSync() {
+    return this.lastSync || {
+      timestamp: null,
+      dryRun: isDryRunMode(),
+      studentsReceived: 0,
+      callsQueued: 0,
+      callsPlaced: 0,
+      errors: 0,
     };
   }
 }

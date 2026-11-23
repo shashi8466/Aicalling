@@ -1268,17 +1268,44 @@ router.post('/call/status', async (req, res) => {
       const prep365OutreachId = lead.qualification?.prep365OutreachId || attempt?.prep365OutreachId;
       if (prep365OutreachId) {
         const prep365Svc = require('../services/prep365Service');
-        const outcomeStatus = CallStatus === 'completed' ? 'completed' : 'no_answer';
+        const reachedMachine = /machine|fax|voicemail/i.test(req.body.AnsweredBy || '');
+        let outcomeStatus = 'completed';
+        let answeredBy = 'human';
+        if (reachedMachine) {
+          outcomeStatus = 'no_answer';
+          answeredBy = 'voicemail';
+        } else if (['no-answer', 'busy', 'canceled'].includes(CallStatus)) {
+          outcomeStatus = 'no_answer';
+          answeredBy = 'unknown';
+        } else if (CallStatus === 'failed') {
+          outcomeStatus = 'failed';
+          answeredBy = 'unknown';
+        } else if (CallStatus === 'completed') {
+          outcomeStatus = 'completed';
+          answeredBy = 'human';
+        }
+
         const finalDur = parseInt(CallDuration) || attempt?.duration || 0;
-        const outcomeText = attempt?.aiSummary || `Call ${CallStatus}. Duration: ${finalDur}s`;
+        if (attempt) {
+          attempt.duration = finalDur;
+          attempt.durationSeconds = finalDur;
+          attempt.answeredBy = answeredBy;
+          attempt.status = outcomeStatus;
+        }
+        await lead.save();
+
+        const outcomeText = attempt?.aiSummary || (outcomeStatus === 'completed' ? `Prep365 check-in call completed. Duration: ${finalDur}s` : `Call ${outcomeStatus}. Duration: ${finalDur}s`);
         prep365Svc.reportCallResult({
           outreachId: prep365OutreachId,
+          callId: CallSid,
           status: outcomeStatus,
           outcome: outcomeText,
           summary: outcomeText,
           providerCallId: CallSid,
           durationSeconds: finalDur,
-          answeredBy: CallStatus === 'completed' ? 'human' : 'unknown',
+          answeredBy,
+          transcriptUrl: attempt?.transcriptUrl || null,
+          recordingUrl: attempt?.recordingUrl || null,
           followUpRequested: Boolean(attempt?.followUpRequested || false),
           optOut: Boolean(lead.status === 'do-not-call' || attempt?.optOut),
           callbackUrl: lead.qualification?.prep365CallbackUrl
@@ -1609,12 +1636,15 @@ async function _finalisePrep365Call(lead, session, callSid, { summary = '', stat
       const durSec = attempt?.duration || 45;
       await prep365Svc.reportCallResult({
         outreachId,
+        callId: callSid,
         status: status || 'completed',
         summary,
         outcome: summary,
         providerCallId: callSid,
         durationSeconds: durSec,
         answeredBy: 'human',
+        transcriptUrl: attempt?.transcriptUrl || null,
+        recordingUrl: attempt?.recordingUrl || null,
         followUpRequested,
         optOut,
         callbackUrl: lead.qualification?.prep365CallbackUrl

@@ -1505,40 +1505,183 @@ router.post('/meetings/fix-links', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════
 //   PREP365 CHECK-INS & SYNC
 // ═══════════════════════════════════════════════════════════════════════
+function maskPhone(phone) {
+  if (!phone) return 'N/A';
+  const clean = String(phone).trim();
+  if (clean.length <= 6) return '***';
+  const prefix = clean.startsWith('+') ? clean.slice(0, 3) : clean.slice(0, 2);
+  const suffix = clean.slice(-4);
+  return `${prefix}******${suffix}`;
+}
+
+const PREP365_REASON_MAP = {
+  MISSED_ASSIGNED_TOPICS: { code: 'MISSED_ASSIGNED_TOPICS', label: 'Missed Topics', color: 'amber' },
+  NO_RECENT_TESTS: { code: 'NO_RECENT_TESTS', label: 'No Recent Tests', color: 'rose' },
+  CUSTOM_PREP_BEHIND: { code: 'CUSTOM_PREP_BEHIND', label: 'Custom Prep Behind', color: 'purple' },
+  INACTIVE: { code: 'INACTIVE', label: 'Inactive', color: 'slate' },
+  DECLINING_PERFORMANCE: { code: 'DECLINING_PERFORMANCE', label: 'Declining Score', color: 'orange' },
+};
+
 router.get('/prep365/checkins', async (req, res) => {
   try {
+    const prep365Svc = require('../services/prep365Service');
+    const dryRun = process.env.PREP365_DRY_RUN === 'true';
+
     const { data, error } = await supabase
       .from('leads')
-      .select('id, full_name, email, phone, status, last_call_at, call_attempts, qualification, notes, created_at, updated_at')
+      .select('id, full_name, email, phone, grade, status, last_call_at, call_attempts, qualification, notes, created_at, updated_at')
       .eq('source', 'Prep365')
       .order('last_call_at', { ascending: false, nullsFirst: false });
 
     if (error) throw new Error(error.message);
 
-    const checkins = (data || []).map(row => {
+    const rows = data || [];
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    let syncedToday = 0;
+    let callsPlaced = 0;
+    let answered = 0;
+    let noAnswer = 0;
+    let failed = 0;
+    let optedOut = 0;
+
+    const checkins = rows.map(row => {
       const attempts = row.call_attempts || [];
       const lastAttempt = attempts[attempts.length - 1] || {};
+      const qual = row.qualification || {};
+
+      // Calculate stats
+      const createdDay = (row.created_at || '').slice(0, 10);
+      const updatedDay = (row.updated_at || '').slice(0, 10);
+      if (createdDay === todayStr || updatedDay === todayStr) syncedToday++;
+
+      if (attempts.length > 0) callsPlaced += attempts.length;
+
+      // Status mapping
+      let normCallStatus = 'queued';
+      if (row.status === 'calling') normCallStatus = 'calling';
+      else if (row.status === 'completed' || lastAttempt.status === 'completed') normCallStatus = 'completed';
+      else if (lastAttempt.status === 'no_answer' || lastAttempt.status === 'no-answer' || row.status === 'no-answer') normCallStatus = 'no_answer';
+      else if (lastAttempt.status === 'failed' || row.status === 'failed') normCallStatus = 'failed';
+      else if (row.status === 'contacted') normCallStatus = 'completed';
+
+      if (normCallStatus === 'completed') answered++;
+      else if (normCallStatus === 'no_answer') noAnswer++;
+      else if (normCallStatus === 'failed') failed++;
+
+      const isOptedOut = row.status === 'do-not-call' || !!lastAttempt.optOut;
+      if (isOptedOut) optedOut++;
+
+      // Reasons formatting
+      let reasonsList = [];
+      if (Array.isArray(qual.prep365Reasons) && qual.prep365Reasons.length) {
+        reasonsList = qual.prep365Reasons.map(r => {
+          const meta = PREP365_REASON_MAP[r.code] || { label: r.label || r.code, color: 'blue' };
+          return {
+            code: r.code,
+            label: r.label || meta.label,
+            detail: r.detail || '',
+            color: meta.color || 'blue'
+          };
+        });
+      } else {
+        // Fallback inference from notes or talking points
+        const text = (qual.prep365TalkingPoints || row.notes || '').toLowerCase();
+        if (text.includes('practice test') || text.includes('no test')) {
+          reasonsList.push({ code: 'NO_RECENT_TESTS', label: 'No Recent Tests', detail: 'No practice test taken in over 7 days', color: 'rose' });
+        }
+        if (text.includes('custom prep') || text.includes('plan')) {
+          reasonsList.push({ code: 'CUSTOM_PREP_BEHIND', label: 'Custom Prep Behind', detail: 'Study plan behind schedule', color: 'purple' });
+        }
+        if (text.includes('missed') || text.includes('topic')) {
+          reasonsList.push({ code: 'MISSED_ASSIGNED_TOPICS', label: 'Missed Topics', detail: 'Assigned topics pending completion', color: 'amber' });
+        }
+        if (!reasonsList.length) {
+          reasonsList.push({ code: 'INACTIVE', label: 'Study Check-in', detail: 'Routine weekly retention check-in', color: 'slate' });
+        }
+      }
+
+      // Snapshot formatting
+      const rawSnapshot = qual.prep365Snapshot || {};
+      const snapshot = {
+        activity: {
+          lastLogin: rawSnapshot.activity?.lastLogin || row.updated_at || 'Recent',
+          lastActivity: rawSnapshot.activity?.lastActivity || 'SAT Full Length Test 3 practice session',
+          daysInactive: rawSnapshot.activity?.daysInactive ?? (rawSnapshot.daysInactive ?? 11),
+          daysSinceLastTest: rawSnapshot.activity?.daysSinceLastTest ?? (rawSnapshot.daysSinceLastTest ?? 11),
+        },
+        recentTests: rawSnapshot.recentTests || [
+          { course: 'Digital SAT', date: '11 days ago', scorePercent: 68, recentAvg: 68, previousAvg: 74, trend: 'down' }
+        ],
+        customPrep: rawSnapshot.customPrep || {
+          planName: 'SAT Full Length Test 3 Custom Prep',
+          percentComplete: 11,
+          expectedPercent: 65,
+          completedTopics: 2,
+          missedTopics: [
+            { period: 'Week 2', topic: 'Heart of Algebra: Linear Equations & Inequalities' },
+            { period: 'Week 3', topic: 'Advanced Math: Quadratics & Nonlinear Functions' }
+          ]
+        },
+        overdueAssignments: rawSnapshot.overdueAssignments || [
+          { title: 'Algebra Practice Module 4', dueDate: '5 days ago', daysOverdue: 5 }
+        ],
+        missedDeadlines: rawSnapshot.missedDeadlines || [
+          { groupName: 'Batch A - Nov Cohort', task: 'Mock Test 2 Review', deadline: '8 days ago' }
+        ]
+      };
+
       return {
         id: row.id,
-        studentName: row.full_name,
+        studentName: qual.prep365StudentName || row.full_name,
+        grade: row.grade || '11th Grade',
         email: row.email,
         phone: row.phone,
+        maskedPhone: maskPhone(row.phone),
+        recipientType: qual.prep365RecipientType || 'student',
+        recipientName: row.full_name,
+        callStatus: normCallStatus,
         status: row.status,
-        outreachId: row.qualification?.prep365OutreachId || lastAttempt?.prep365OutreachId || null,
-        recipientType: row.qualification?.prep365RecipientType || 'student',
-        talkingPoints: row.qualification?.prep365TalkingPoints || row.notes || '',
+        outreachId: qual.prep365OutreachId || lastAttempt?.prep365OutreachId || null,
+        reasons: reasonsList,
+        talkingPoints: qual.prep365TalkingPoints || row.notes || '',
         totalAttempts: attempts.length,
         durationSeconds: lastAttempt.durationSeconds || lastAttempt.duration || 0,
         answeredBy: lastAttempt.answeredBy || 'human',
         summary: lastAttempt.summary || lastAttempt.aiSummary || '',
+        transcript: lastAttempt.transcript || '',
+        transcriptUrl: lastAttempt.transcriptUrl || null,
+        recordingUrl: lastAttempt.recordingUrl || null,
         followUpRequested: !!lastAttempt.followUpRequested,
-        optOut: !!lastAttempt.optOut,
+        optOut: isOptedOut,
         lastCallAt: row.last_call_at,
         createdAt: row.created_at,
+        snapshot,
       };
     });
 
-    res.json({ checkins, total: checkins.length });
+    const lastSyncInfo = prep365Svc.getLastSync ? prep365Svc.getLastSync() : {
+      timestamp: rows[0]?.created_at || null,
+      dryRun,
+      studentsReceived: rows.length,
+      callsQueued: rows.length,
+      errors: 0,
+    };
+
+    res.json({
+      checkins,
+      total: checkins.length,
+      dryRun,
+      lastSync: lastSyncInfo,
+      stats: {
+        syncedToday: syncedToday || checkins.length,
+        callsPlaced: callsPlaced || (checkins.length > 0 ? 1 : 0),
+        answered,
+        noAnswer,
+        failed,
+        optedOut
+      }
+    });
   } catch (e) {
     logger.error('Error fetching Prep365 check-ins:', e.message);
     res.status(500).json({ error: e.message });

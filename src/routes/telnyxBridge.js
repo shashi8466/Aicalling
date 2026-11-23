@@ -78,6 +78,13 @@ router.post('/', async (req, res) => {
         language: 'en'
       }).catch(e => logger.error(`[CALL] Failed to start transcription: ${e.message}`));
 
+      // Start call recording
+      telnyxPost(`/calls/${callControlId}/actions/record_start`, {
+        format: 'mp3',
+        channels: 'single',
+        play_beep: false
+      }).catch(e => logger.warn(`[CALL] Telnyx record_start warning: ${e.message}`));
+
       // Trigger the start of the Twilio webhook flow
       await driveTwilioFlow(callControlId, state, `/webhook/call/start`);
 
@@ -115,6 +122,13 @@ router.post('/', async (req, res) => {
         logger.info(`[CALL] Transcription received: "${transcript}"`);
         await driveTwilioFlow(callControlId, state, state.nextActionUrl, { SpeechResult: transcript });
       }
+    } else if (eventType === 'call.recording.saved') {
+      const recUrls = payload.recording_urls || payload.public_recording_urls || {};
+      const recUrl = recUrls.mp3 || recUrls.wav || payload.download_urls?.mp3 || payload.download_urls?.wav;
+      logger.info(`[CALL] Recording saved for call_control_id=${callControlId}: ${recUrl || 'n/a'}`);
+      if (recUrl) {
+        await handleRecordingSaved(callControlId, recUrl);
+      }
     } else if (eventType === 'call.hangup' || eventType === 'call.completed') {
       activeCalls.delete(callSessionId);
       endedCalls.add(callSessionId);
@@ -134,10 +148,26 @@ router.post('/', async (req, res) => {
 
       // A voicemail/fax pickup is still billed as answered, but for the lead it
       // counts as not reached — they get the no-answer email and a retry.
-      const reachedMachine = callStatus === 'completed' && /machine|fax/i.test(state.amdResult || '');
+      const reachedMachine = /machine|fax|voicemail/i.test(state.amdResult || '');
+      let answeredBy = 'human';
+      let mappedStatus = callStatus;
+      if (reachedMachine) {
+        mappedStatus = 'no-answer';
+        answeredBy = 'voicemail';
+      } else if (callStatus === 'completed') {
+        answeredBy = 'human';
+      } else if (['no-answer', 'busy', 'canceled'].includes(callStatus)) {
+        mappedStatus = 'no-answer';
+        answeredBy = 'unknown';
+      } else {
+        mappedStatus = 'failed';
+        answeredBy = 'unknown';
+      }
+
       await driveTwilioFlow(callControlId, state, `/webhook/call/status`, {
-        CallStatus: reachedMachine ? 'no-answer' : callStatus,
+        CallStatus: mappedStatus,
         CallDuration: String(duration),
+        AnsweredBy: answeredBy,
       });
     }
   } catch (err) {
@@ -304,6 +334,38 @@ async function driveTwilioFlow(callControlId, state, urlPath, twilioBody = {}) {
     }
   } catch (err) {
     logger.error('driveTwilioFlow error:', err);
+  }
+}
+
+async function handleRecordingSaved(callControlId, recUrl) {
+  try {
+    const Lead = require('../models/Lead');
+    const prep365Svc = require('../services/prep365Service');
+    const lead = await Lead.findOne({ 'callAttempts.callSid': callControlId });
+    if (!lead) return;
+    const attempt = (lead.callAttempts || []).find(a => a.callSid === callControlId);
+    if (attempt) {
+      attempt.recordingUrl = recUrl;
+      await lead.save();
+    }
+    const outreachId = lead.qualification?.prep365OutreachId || attempt?.prep365OutreachId;
+    if (outreachId && (lead.source === 'Prep365' || lead.qualification?.prep365OutreachId)) {
+      await prep365Svc.reportCallResult({
+        outreachId,
+        callId: callControlId,
+        status: attempt?.status || 'completed',
+        summary: attempt?.aiSummary || attempt?.summary || '',
+        durationSeconds: attempt?.duration || 0,
+        answeredBy: attempt?.answeredBy || 'human',
+        recordingUrl: recUrl,
+        transcriptUrl: attempt?.transcriptUrl || null,
+        followUpRequested: Boolean(attempt?.followUpRequested),
+        optOut: Boolean(attempt?.optOut || lead.status === 'do-not-call'),
+        callbackUrl: lead.qualification?.prep365CallbackUrl
+      });
+    }
+  } catch (e) {
+    logger.warn('[CALL] handleRecordingSaved warning:', e.message);
   }
 }
 

@@ -25,22 +25,23 @@
     }
 
     :root {
-      --bg: #0f172a;
-      --panel: #1e293b;
-      --panel2: #273449;
-      --border: #334155;
-      --text: #e2e8f0;
-      --muted: #94a3b8;
-      --brand: #3b82f6;
-      --brand2: #2563eb;
-      --hot: #ef4444;
-      --warm: #f59e0b;
-      --cold: #64748b;
-      --success: #10b981;
-      --info: #06b6d4;
-      --purple: #8b5cf6;
-      --pink: #ec4899;
-      --danger: #ef4444;
+      --bg: #F8FAFC;
+      --panel: #FFFFFF;
+      --panel2: #F1F5F9;
+      --border: #E5E7EB;
+      --border-subtle: #F1F5F9;
+      --text: #0F172A;
+      --muted: #64748B;
+      --brand: #2563EB;
+      --brand2: #1D4ED8;
+      --hot: #EF4444;
+      --warm: #F59E0B;
+      --cold: #64748B;
+      --success: #10B981;
+      --info: #06B6D4;
+      --purple: #8B5CF6;
+      --pink: #EC4899;
+      --danger: #EF4444;
     }
 
     body {
@@ -52,8 +53,13 @@
 
     .app {
       display: grid;
-      grid-template-columns: 230px 1fr;
+      grid-template-columns: 256px 1fr;
       min-height: 100vh;
+      transition: grid-template-columns 0.2s ease;
+    }
+
+    .app.collapsed {
+      grid-template-columns: 80px 1fr;
     }
 
     /* Sidebar */
@@ -3382,43 +3388,711 @@
       animation: spin 0.8s linear infinite;
     }
 
+    /* ══════════════════════════════════════════════════════════════════════
+       PREP365 CLEAN WHITE THEME & MODERN DESIGN TOKENS
+       ══════════════════════════════════════════════════════════════════════ */
+    body, .main, .content, #view-overview, #view-leads, #view-calls, #view-meetings, #view-billing, #view-counselor, #view-enrollments, #view-campaigns, #view-prep365, #view-classes, #view-counselors, #view-settings {
+      background: #F8FAFC !important;
+      color: #0F172A !important;
+    }
+
+    /* Sidebar Grouping & Collapsible Layout */
+    .sidebar {
+      background: #FFFFFF !important;
+      border-right: 1px solid #E5E7EB !important;
+      width: 256px !important;
+      padding: 0 !important;
+      display: flex !important;
+      flex-direction: column !important;
+      transition: width 0.2s ease, transform 0.25s ease !important;
+      box-shadow: none !important;
+    }
+    .app.collapsed .sidebar {
+      width: 80px !important;
+    }
+    .brand {
+      height: 80px !important;
+      min-height: 80px !important;
+      display: flex !important;
+      align-items: center !important;
+      padding: 0 18px !important;
+      border-bottom: 1px solid #E5E7EB !important;
+      flex-direction: row !important;
+      justify-content: flex-start !important;
+      gap: 12px !important;
+    }
+    .brand img.logo {
+      width: 44px !important;
+      height: 44px !important;
+      border-radius: 10px !important;
+      object-fit: contain !important;
+    }
+    .brand-text {
+      text-align: left !important;
+      overflow: hidden !important;
+      white-space: nowrap !important;
+    }
+    .brand-text .title {
+      font-size: 15px !important;
+      font-weight: 800 !important;
+      color: #0F172A !important;
+      line-height: 1.2 !important;
+    }
+    .brand-text .sub {
+      font-size: 11px !important;
+      color: #64748B !important;
+      margin-top: 2px !important;
+    }
+    .app.collapsed .brand-text {
+      display: none !important;
+    }
+
+    .nav {
+      margin-top: 10px !important;
+      padding: 0 8px !important;
+      flex: 1 !important;
+    }
+    .nav-group-label {
+      font-size: 10px !important;
+      font-weight: 900 !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.1em !important;
+      color: #64748B !important;
+      padding: 16px 12px 6px !important;
+      white-space: nowrap !important;
+      user-select: none !important;
+    }
+    .app.collapsed .nav-group-label {
+      display: none !important;
+    }
+    .nav a {
+      display: flex !important;
+      align-items: center !important;
+      gap: 12px !important;
+      padding: 10px 12px !important;
+      color: #64748B !important;
+      text-decoration: none !important;
+      border-radius: 8px !important;
+      font-size: 14px !important;
+      font-weight: 500 !important;
+      margin: 2px 0 !important;
+      cursor: pointer !important;
+      transition: background 0.15s, color 0.15s !important;
+      white-space: nowrap !important;
+    }
+    .nav a:hover {
+      background: #F3F4F6 !important;
+      color: #1F2937 !important;
+    }
+    .nav a.active {
+      background: #2563EB !important;
+      color: #FFFFFF !important;
+      font-weight: 600 !important;
+    }
+    .nav a .icon {
+      font-size: 16px !important;
+      width: 18px !important;
+      text-align: center !important;
+      flex-shrink: 0 !important;
+    }
+    .nav-badge {
+      margin-left: auto !important;
+      background: #F1F5F9 !important;
+      color: #475569 !important;
+      padding: 2px 8px !important;
+      border-radius: 9999px !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
+    }
+    .nav a.active .nav-badge {
+      background: rgba(255, 255, 255, 0.25) !important;
+      color: #FFFFFF !important;
+    }
+    .app.collapsed .nav a {
+      justify-content: center !important;
+      padding: 10px 0 !important;
+    }
+    .app.collapsed .nav a .nav-label,
+    .app.collapsed .nav-badge {
+      display: none !important;
+    }
+
+    /* Sidebar Footer */
+    .sidebar-footer {
+      margin-top: auto !important;
+      padding: 12px 10px !important;
+      border-top: 1px solid #E5E7EB !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 4px !important;
+      background: #FFFFFF !important;
+    }
+    .sidebar-footer button, .sidebar-footer a {
+      display: flex !important;
+      align-items: center !important;
+      gap: 12px !important;
+      padding: 9px 12px !important;
+      color: #64748B !important;
+      border-radius: 8px !important;
+      font-size: 13px !important;
+      font-weight: 500 !important;
+      cursor: pointer !important;
+      background: transparent !important;
+      border: none !important;
+      width: 100% !important;
+      text-align: left !important;
+      transition: all 0.15s !important;
+    }
+    .sidebar-footer button:hover, .sidebar-footer a:hover {
+      background: #F3F4F6 !important;
+      color: #1F2937 !important;
+    }
+    .app.collapsed .sidebar-footer button,
+    .app.collapsed .sidebar-footer a {
+      justify-content: center !important;
+      padding: 9px 0 !important;
+    }
+    .app.collapsed .sidebar-footer .nav-label {
+      display: none !important;
+    }
+
+    /* Top Header */
+    .header {
+      background: #FFFFFF !important;
+      border-bottom: 1px solid #E2E8F0 !important;
+      padding: 16px 28px !important;
+      min-height: 72px !important;
+    }
+    .header h1 {
+      font-size: 24px !important;
+      font-weight: 700 !important;
+      color: #0F172A !important;
+      letter-spacing: -0.02em !important;
+    }
+    .header .subtitle {
+      font-size: 13px !important;
+      color: #64748B !important;
+      margin-top: 2px !important;
+    }
+    .status-pill {
+      background: #ECFDF5 !important;
+      color: #059669 !important;
+      border: 1px solid #A7F3D0 !important;
+      font-weight: 600 !important;
+      padding: 4px 10px !important;
+      border-radius: 9999px !important;
+    }
+
+    /* Cards, Surfaces & 48px Icon Tiles */
+    .card, .ov-stat, .ov-card, .metric-card, .an-card, .pipe-col {
+      background: #FFFFFF !important;
+      border: 1px solid #E5E7EB !important;
+      border-radius: 12px !important;
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+      color: #0F172A !important;
+    }
+    .card-icon-tile, .ov-stat-icon {
+      width: 48px !important;
+      height: 48px !important;
+      border-radius: 10px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      font-size: 20px !important;
+      flex-shrink: 0 !important;
+    }
+    .tile-blue   { background: rgba(37, 99, 235, 0.1) !important; color: #2563EB !important; }
+    .tile-purple { background: rgba(139, 92, 246, 0.1) !important; color: #8B5CF6 !important; }
+    .tile-green  { background: rgba(16, 185, 129, 0.1) !important; color: #10B981 !important; }
+    .tile-amber  { background: rgba(245, 158, 11, 0.1) !important; color: #F59E0B !important; }
+    .tile-rose   { background: rgba(244, 63, 94, 0.1) !important; color: #F43F5E !important; }
+    .tile-slate  { background: rgba(100, 116, 139, 0.1) !important; color: #64748B !important; }
+
+    .ov-stat-val {
+      font-size: 24px !important;
+      font-weight: 700 !important;
+      color: #111827 !important;
+      line-height: 1.2 !important;
+    }
+    .ov-stat-label {
+      font-size: 12px !important;
+      font-weight: 500 !important;
+      color: #64748B !important;
+      margin-top: 2px !important;
+    }
+
+    /* Buttons */
+    .btn {
+      border-radius: 8px !important;
+      font-weight: 600 !important;
+      font-size: 13px !important;
+      padding: 8px 14px !important;
+      cursor: pointer !important;
+      transition: all 0.15s ease !important;
+    }
+    .btn-primary {
+      background: #2563EB !important;
+      color: #FFFFFF !important;
+      border: 1px solid #2563EB !important;
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+    }
+    .btn-primary:hover {
+      background: #1D4ED8 !important;
+      border-color: #1D4ED8 !important;
+    }
+    .btn-secondary {
+      background: #FFFFFF !important;
+      border: 1px solid #E5E7EB !important;
+      color: #4B5563 !important;
+    }
+    .btn-secondary:hover {
+      background: #F3F4F6 !important;
+      color: #111827 !important;
+      border-color: #D1D5DB !important;
+    }
+    .btn-dark {
+      background: #0F172A !important;
+      color: #FFFFFF !important;
+      border: 1px solid #0F172A !important;
+    }
+    .btn-dark:hover {
+      background: #1E293B !important;
+    }
+
+    /* Tab Controls */
+    .view-tabs {
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 4px !important;
+      background: #F1F5F9 !important;
+      padding: 4px !important;
+      border-radius: 10px !important;
+      margin-bottom: 20px !important;
+      border: 1px solid #E2E8F0 !important;
+    }
+    .view-tab {
+      padding: 8px 16px !important;
+      border-radius: 8px !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      color: #64748B !important;
+      cursor: pointer !important;
+      border: none !important;
+      background: transparent !important;
+      transition: all 0.15s ease !important;
+    }
+    .view-tab:hover {
+      color: #0F172A !important;
+    }
+    .view-tab.active {
+      background: #FFFFFF !important;
+      color: #2563EB !important;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+    }
+
+    /* Tables */
+    table {
+      background: #FFFFFF !important;
+      color: #1E293B !important;
+    }
+    thead th {
+      background: #F8FAFC !important;
+      color: #64748B !important;
+      font-size: 12px !important;
+      font-weight: 600 !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.05em !important;
+      border-bottom: 1px solid #E5E7EB !important;
+      padding: 12px 16px !important;
+    }
+    tbody td {
+      border-bottom: 1px solid #F1F5F9 !important;
+      color: #1E293B !important;
+      padding: 14px 16px !important;
+    }
+    tbody tr:hover td {
+      background: #F8FAFC !important;
+    }
+
+    /* Chips and Badges */
+    .chip, .badge, .status-badge {
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 5px !important;
+      padding: 3px 10px !important;
+      border-radius: 9999px !important;
+      font-size: 12px !important;
+      font-weight: 600 !important;
+      line-height: 1.4 !important;
+      white-space: nowrap !important;
+      border: 1px solid transparent !important;
+    }
+    .chip-amber  { background: #FEF3C7 !important; color: #B45309 !important; border-color: #FDE68A !important; }
+    .chip-rose   { background: #FEE2E2 !important; color: #B91C1C !important; border-color: #FECACA !important; }
+    .chip-purple { background: #EDE9FE !important; color: #6D28D9 !important; border-color: #DDD6FE !important; }
+    .chip-slate  { background: #F1F5F9 !important; color: #475569 !important; border-color: #E2E8F0 !important; }
+    .chip-orange { background: #FFEDD5 !important; color: #C2410C !important; border-color: #FED7AA !important; }
+    .chip-green  { background: #DCFCE7 !important; color: #15803D !important; border-color: #BBF7D0 !important; }
+    .chip-blue   { background: #DBEAFE !important; color: #1D4ED8 !important; border-color: #BFDBFE !important; }
+
+    /* Inputs */
+    input, select, textarea {
+      background: #FFFFFF !important;
+      color: #0F172A !important;
+      border: 1px solid #E5E7EB !important;
+      border-radius: 8px !important;
+      font-size: 13px !important;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none !important;
+      border-color: #2563EB !important;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+    }
+
+    /* Mobile Drawer & Overlay */
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.5);
+      z-index: 999;
+      backdrop-filter: blur(2px);
+    }
+    .sidebar-overlay.open {
+      display: block !important;
+    }
+    @media (max-width: 768px) {
+      .app {
+        grid-template-columns: 1fr !important;
+      }
+      .sidebar {
+        position: fixed !important;
+        left: 0 !important;
+        top: 0 !important;
+        bottom: 0 !important;
+        transform: translateX(-100%) !important;
+        z-index: 1000 !important;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15) !important;
+      }
+      .sidebar.open {
+        transform: translateX(0) !important;
+      }
+      .header {
+        padding: 12px 16px !important;
+      }
+      .content {
+        padding: 16px !important;
+      }
+    }
+
+    /* ─── Prep365 Check-ins Page Layout ─── */
+    .prep365-topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .prep365-title-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .prep365-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 1200px) {
+      .prep365-kpi-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 640px) {
+      .prep365-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    .prep365-kpi-card {
+      background: #FFFFFF;
+      border: 1px solid #E5E7EB;
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    }
+    .kpi-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #64748B;
+    }
+    .kpi-val {
+      font-size: 22px;
+      font-weight: 700;
+      color: #0F172A;
+      margin-top: 2px;
+    }
+    .prep365-filter-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid #E5E7EB;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .search-input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #F8FAFC;
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      padding: 6px 12px;
+      min-width: 280px;
+    }
+    .search-input-wrap input {
+      border: none !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+      width: 100%;
+    }
+    .filter-controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .filter-controls select {
+      padding: 7px 12px !important;
+      background: #FFFFFF !important;
+    }
+
+    /* Right-side Drawer */
+    .drawer-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.4);
+      backdrop-filter: blur(2px);
+      z-index: 1050;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .drawer-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 540px;
+      max-width: 92vw;
+      background: #FFFFFF;
+      box-shadow: -4px 0 25px -5px rgba(0, 0, 0, 0.15);
+      border-left: 1px solid #E5E7EB;
+      z-index: 1060;
+      transform: translateX(100%);
+      transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+    }
+    .drawer.open {
+      transform: translateX(0);
+    }
+    .drawer-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #E5E7EB;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      background: #FFFFFF;
+    }
+    .drawer-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #0F172A;
+      margin-top: 4px;
+    }
+    .drawer-sub {
+      font-size: 12px;
+      color: #64748B;
+      margin-top: 2px;
+    }
+    .drawer-close-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid #E5E7EB;
+      background: #FFFFFF;
+      color: #64748B;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      transition: all 0.15s;
+    }
+    .drawer-close-btn:hover {
+      background: #F1F5F9;
+      color: #0F172A;
+    }
+    .drawer-body {
+      padding: 24px;
+      overflow-y: auto;
+      flex: 1;
+      background: #F8FAFC;
+    }
+    .drawer-section {
+      margin-bottom: 24px;
+    }
+    .drawer-section-heading {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748B;
+      margin-bottom: 10px;
+    }
+    .drawer-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .drawer-stat-tile {
+      background: #FFFFFF;
+      border: 1px solid #E5E7EB;
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+    .dst-label {
+      font-size: 11px;
+      color: #64748B;
+      font-weight: 500;
+    }
+    .dst-val {
+      font-size: 16px;
+      font-weight: 700;
+      color: #0F172A;
+      margin-top: 4px;
+    }
+    .dst-val.text-danger { color: #DC2626; }
+    .dst-val.text-sm { font-size: 12px; font-weight: 600; line-height: 1.3; }
+    .drawer-section-card {
+      background: #FFFFFF;
+      border: 1px solid #E5E7EB;
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .drawer-progress-track {
+      width: 100%;
+      height: 8px;
+      background: #F1F5F9;
+      border-radius: 9999px;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+    .drawer-progress-fill {
+      height: 100%;
+      background: #2563EB;
+      border-radius: 9999px;
+    }
+    .drawer-tp-box {
+      background: #EFF6FF;
+      border: 1px solid #BFDBFE;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 13px;
+      color: #1E3A8A;
+      line-height: 1.5;
+    }
+    .drawer-transcript-box {
+      background: #FFFFFF;
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 12px;
+      font-family: monospace;
+      color: #334155;
+      line-height: 1.5;
+      max-height: 220px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
   </style>
 </head>
 
 <body>
   <div id="globalLoader" class="global-loader"><div class="spinner"></div></div>
 
+  <div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleMobileMenu()"></div>
+
   <div class="app">
     <!-- ─── SIDEBAR ─── -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="appSidebar">
       <div class="brand">
         <img src="/assets/hg_logo1.png" alt="Test Prep Pundits" class="logo">
         <div class="brand-text">
-          <div class="title">Admin Dashboard</div>
-          <div class="sub">AI Admissions Agent</div>
+          <div class="title">AI Calling</div>
+          <div class="sub">Admin &amp; Counselor</div>
         </div>
       </div>
       <nav class="nav">
-        <a class="active" data-view="overview"><span class="icon">📊</span> Overview</a>
-        <a data-view="leads"><span class="icon">👥</span> Leads <span class="nav-badge" id="navLeadCount">0</span></a>
-        <a data-view="calls"><span class="icon">📞</span> Call Activity <span class="nav-badge"
-            id="navCallCount">0</span></a>
-        <a data-view="meetings"><span class="icon">📅</span> Meetings <span class="nav-badge"
-            id="navMeetCount">0</span></a>
-        <a data-view="analytics"><span class="icon">📈</span> Analytics</a>
-        <a data-view="billing"><span class="icon">💰</span> Billing</a>
-        <a data-view="counselor"><span class="icon">🏥</span> Counselor Hub</a>
-        <a data-view="pipeline"><span class="icon">🔄</span> Pipeline</a>
-        <a data-view="enrollments"><span class="icon">📋</span> Enrollments <span class="nav-badge"
-            id="navEnrollCount">0</span></a>
-        <a data-view="campaigns"><span class="icon">📣</span> Campaigns</a>
-        <a data-view="prep365"><span class="icon">🎓</span> Prep365 Check-ins <span class="nav-badge"
-            id="navPrep365Count">0</span></a>
-        <a data-view="classes"><span class="icon">🏫</span> Classes / Groups</a>
-        <a data-view="counselors"><span class="icon">👤</span> Counselors</a>
-        <a data-view="settings"><span class="icon">⚙️</span> Settings</a>
-        <a onclick="doLogout()"><span class="icon">🚪</span> Logout</a>
+        <div class="nav-group-label">OVERVIEW</div>
+        <a class="active" data-view="overview" onclick="showView('overview')">
+          <span class="icon">📊</span><span class="nav-label">Dashboard</span>
+        </a>
+
+        <div class="nav-group-label">OUTREACH</div>
+        <a data-view="leads" onclick="showView('leads')">
+          <span class="icon">👥</span><span class="nav-label">Leads</span><span class="nav-badge" id="navLeadCount">0</span>
+        </a>
+        <a data-view="campaigns" onclick="showView('campaigns')">
+          <span class="icon">📣</span><span class="nav-label">Campaigns</span>
+        </a>
+        <a data-view="calls" onclick="showView('calls')">
+          <span class="icon">📞</span><span class="nav-label">Call Activity</span><span class="nav-badge" id="navCallCount">0</span>
+        </a>
+        <a data-view="meetings" onclick="showView('meetings')">
+          <span class="icon">📅</span><span class="nav-label">Meetings</span><span class="nav-badge" id="navMeetCount">0</span>
+        </a>
+
+        <div class="nav-group-label">PREP365</div>
+        <a data-view="prep365" onclick="showView('prep365')">
+          <span class="icon">🎓</span><span class="nav-label">Student Check-ins</span><span class="nav-badge" id="navPrep365Count">0</span>
+        </a>
+
+        <div class="nav-group-label">ENROLLMENT</div>
+        <a data-view="enrollments" onclick="showView('enrollments')">
+          <span class="icon">📋</span><span class="nav-label">Enrollments</span><span class="nav-badge" id="navEnrollCount">0</span>
+        </a>
+        <a data-view="counselor" onclick="showView('counselor')">
+          <span class="icon">🏥</span><span class="nav-label">Counselor Hub</span>
+        </a>
+
+        <div class="nav-group-label">ADMIN</div>
+        <a data-view="billing" onclick="showView('billing')">
+          <span class="icon">💰</span><span class="nav-label">Billing</span>
+        </a>
+        <a data-view="counselors" onclick="showView('counselors')">
+          <span class="icon">👤</span><span class="nav-label">Counselors</span>
+        </a>
+        <a data-view="settings" onclick="showView('settings')">
+          <span class="icon">⚙️</span><span class="nav-label">Settings</span>
+        </a>
       </nav>
+
+      <div class="sidebar-footer">
+        <button id="sidebarCollapseBtn" type="button" onclick="toggleSidebarCollapse()" title="Collapse sidebar">
+          <span class="icon">◀</span><span class="nav-label">Collapse</span>
+        </button>
+        <button type="button" onclick="doLogout()" title="Log out">
+          <span class="icon">🚪</span><span class="nav-label">Logout</span>
+        </button>
+      </div>
     </aside>
 
     <!-- ─── MAIN ─── -->
@@ -3446,111 +4120,119 @@
       </header>
 
       <div class="content">
-        <!-- ─── OVERVIEW ─── -->
+        <!-- ─── OVERVIEW (DASHBOARD) ─── -->
         <section class="view active" id="view-overview">
-          <div class="ov-page">
+          <!-- Dashboard Tabs -->
+          <div class="view-tabs">
+            <button type="button" class="view-tab active" id="tabBtnOverview" onclick="switchDashboardTab('overview')">📊 Overview</button>
+            <button type="button" class="view-tab" id="tabBtnAnalytics" onclick="switchDashboardTab('analytics')">📈 Reports &amp; Analytics</button>
+          </div>
 
-            <!-- Row 1: 6 stat chips -->
-            <div class="ov-stats" id="ovStatsRow1">
-              <div class="ov-stat">
-                <div class="ov-stat-icon" style="background:rgba(59,130,246,.15);color:#3b82f6">👥</div>
-                <div>
-                  <div class="ov-stat-val" id="st_total">—</div>
-                  <div class="ov-stat-label">Total Leads</div>
-                  <div class="ov-stat-trend up" id="st_total_trend">↑ —</div>
-                </div>
-              </div>
-              <div class="ov-stat">
-                <div class="ov-stat-icon" style="background:rgba(6,182,212,.15);color:#06b6d4">✨</div>
-                <div>
-                  <div class="ov-stat-val" id="st_new">—</div>
-                  <div class="ov-stat-label">New Leads</div>
-                  <div class="ov-stat-trend neu" id="st_new_trend">— 0% vs last 30 days</div>
-                </div>
-              </div>
-              <div class="ov-stat">
-                <div class="ov-stat-icon" style="background:rgba(245,158,11,.15);color:#f59e0b">📞</div>
-                <div>
-                  <div class="ov-stat-val" id="st_contacted">—</div>
-                  <div class="ov-stat-label">Contacted</div>
-                  <div class="ov-stat-trend up" id="st_cont_trend">↑ —</div>
-                </div>
-              </div>
-              <div class="ov-stat">
-                <div class="ov-stat-icon" style="background:rgba(139,92,246,.15);color:#8b5cf6">✅</div>
-                <div>
-                  <div class="ov-stat-val" id="st_qualified">—</div>
-                  <div class="ov-stat-label">Qualified</div>
-                  <div class="ov-stat-trend neu" id="st_qual_trend">— 0% vs last 30 days</div>
-                </div>
-              </div>
-              <div class="ov-stat">
-                <div class="ov-stat-icon" style="background:rgba(239,68,68,.15);color:#ef4444">🔥</div>
-                <div>
-                  <div class="ov-stat-val" id="st_hot">—</div>
-                  <div class="ov-stat-label">Hot Leads</div>
-                  <div class="ov-stat-trend neu" id="st_hot_trend">— 0% vs last 30 days</div>
-                </div>
-              </div>
-              <div class="ov-stat">
-                <div class="ov-stat-icon" style="background:rgba(245,158,11,.15);color:#fbbf24">⚡</div>
-                <div>
-                  <div class="ov-stat-val" id="st_warm">—</div>
-                  <div class="ov-stat-label">Warm Leads</div>
-                  <div class="ov-stat-trend up" id="st_warm_trend">↑ —</div>
-                </div>
-              </div>
-            </div>
+          <div id="dashboardOverviewSection">
+            <div class="ov-page">
 
-            <!-- Row 2: 5 chips + avg score sparkline -->
-            <div class="ov-stats" id="ovStatsRow2">
-              <div class="ov-stat">
-                <div class="ov-stat-icon" style="background:rgba(100,116,139,.15);color:#94a3b8">❄️</div>
-                <div>
-                  <div class="ov-stat-val" id="st_cold">—</div>
-                  <div class="ov-stat-label">Cold Leads</div>
-                  <div class="ov-stat-trend up" id="st_cold_trend">↑ —</div>
-                </div>
-              </div>
-              <div class="ov-stat">
-                <div class="ov-stat-icon" style="background:rgba(16,185,129,.15);color:#10b981">📅</div>
-                <div>
-                  <div class="ov-stat-val" id="st_meetings">—</div>
-                  <div class="ov-stat-label">Meetings Booked</div>
-                  <div class="ov-stat-trend neu" id="st_meet_trend">— 0% vs last 30 days</div>
-                </div>
-              </div>
-              <div class="ov-stat">
-                <div class="ov-stat-icon" style="background:rgba(236,72,153,.15);color:#ec4899">🎓</div>
-                <div>
-                  <div class="ov-stat-val" id="st_enrolled">—</div>
-                  <div class="ov-stat-label">Enrolled Students</div>
-                  <div class="ov-stat-trend neu" id="st_enr_trend">— 0% vs last 30 days</div>
-                </div>
-              </div>
-              <div class="ov-stat">
-                <div class="ov-stat-icon" style="background:rgba(59,130,246,.15);color:#3b82f6">📲</div>
-                <div>
-                  <div class="ov-stat-val" id="st_calls">—</div>
-                  <div class="ov-stat-label">Calls Completed</div>
-                  <div class="ov-stat-trend up" id="st_call_trend">↑ —</div>
-                </div>
-              </div>
-              <div class="ov-stat score-card" style="grid-column:span 2">
-                <div style="display:flex;justify-content:space-between;width:100%;align-items:flex-start">
+              <!-- Group 1: Leads Funnel (5 Cards) -->
+              <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#64748B;margin-bottom:2px">LEADS FUNNEL</div>
+              <div class="ov-stats" id="ovStatsRow1" style="grid-template-columns: repeat(5, 1fr);">
+                <div class="ov-stat">
+                  <div class="ov-stat-icon tile-blue">👥</div>
                   <div>
-                    <div class="ov-stat-label" style="margin-bottom:4px">Avg Lead Score</div>
-                    <div class="ov-stat-val" id="st_score" style="font-size:32px;color:#8b5cf6">—<span
-                        style="font-size:14px;color:var(--muted);font-weight:500">/100</span></div>
+                    <div class="ov-stat-val" id="st_total">—</div>
+                    <div class="ov-stat-label">Total Leads</div>
+                    <div class="ov-stat-trend up" id="st_total_trend">—</div>
                   </div>
-                  <div class="ov-stat-icon" style="background:rgba(139,92,246,.15);color:#8b5cf6">🎯</div>
                 </div>
-                <svg class="ov-spark" id="sparkSvg" viewBox="0 0 200 32" preserveAspectRatio="none">
-                  <polyline id="sparkLine" points="" fill="none" stroke="#8b5cf6" stroke-width="2"
-                    stroke-linejoin="round" />
-                </svg>
+                <div class="ov-stat">
+                  <div class="ov-stat-icon tile-cyan" style="background:rgba(6,182,212,.1);color:#0891b2">✨</div>
+                  <div>
+                    <div class="ov-stat-val" id="st_new">—</div>
+                    <div class="ov-stat-label">New Leads</div>
+                    <div class="ov-stat-trend neu" id="st_new_trend">—</div>
+                  </div>
+                </div>
+                <div class="ov-stat">
+                  <div class="ov-stat-icon tile-amber">📞</div>
+                  <div>
+                    <div class="ov-stat-val" id="st_contacted">—</div>
+                    <div class="ov-stat-label">Contacted</div>
+                    <div class="ov-stat-trend up" id="st_cont_trend">—</div>
+                  </div>
+                </div>
+                <div class="ov-stat">
+                  <div class="ov-stat-icon tile-purple">✅</div>
+                  <div>
+                    <div class="ov-stat-val" id="st_qualified">—</div>
+                    <div class="ov-stat-label">Qualified</div>
+                    <div class="ov-stat-trend neu" id="st_qual_trend">—</div>
+                  </div>
+                </div>
+                <div class="ov-stat">
+                  <div class="ov-stat-icon tile-rose">🎓</div>
+                  <div>
+                    <div class="ov-stat-val" id="st_enrolled">—</div>
+                    <div class="ov-stat-label">Enrolled Students</div>
+                    <div class="ov-stat-trend neu" id="st_enr_trend">—</div>
+                  </div>
+                </div>
               </div>
-            </div>
+
+              <!-- Group 2: Calls, Meetings & Retention (5 Cards) -->
+              <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#64748B;margin-top:12px;margin-bottom:2px">CALLS, MEETINGS &amp; RETENTION</div>
+              <div class="ov-stats" id="ovStatsRow2" style="grid-template-columns: repeat(5, 1fr);">
+                <div class="ov-stat">
+                  <div class="ov-stat-icon tile-blue">📲</div>
+                  <div>
+                    <div class="ov-stat-val" id="st_calls">—</div>
+                    <div class="ov-stat-label">Calls Completed</div>
+                    <div class="ov-stat-trend up" id="st_call_trend">—</div>
+                  </div>
+                </div>
+                <div class="ov-stat">
+                  <div class="ov-stat-icon tile-green">📅</div>
+                  <div>
+                    <div class="ov-stat-val" id="st_meetings">—</div>
+                    <div class="ov-stat-label">Meetings Booked</div>
+                    <div class="ov-stat-trend neu" id="st_meet_trend">—</div>
+                  </div>
+                </div>
+                <div class="ov-stat">
+                  <div class="ov-stat-icon tile-amber">⚡</div>
+                  <div>
+                    <div style="display:flex;align-items:baseline;gap:6px">
+                      <span class="ov-stat-val" id="st_hot" style="color:#EF4444">—</span>
+                      <span style="font-size:13px;color:#64748B">/</span>
+                      <span class="ov-stat-val" id="st_warm" style="color:#F59E0B;font-size:20px">—</span>
+                    </div>
+                    <div class="ov-stat-label">Hot / Warm Leads</div>
+                    <div class="ov-stat-trend neu" id="st_hot_trend">—</div>
+                  </div>
+                </div>
+                <!-- PREP365 RETENTION CARD -->
+                <div class="ov-stat" onclick="showView('prep365')" style="cursor:pointer;border-color:#BFDBFE;background:linear-gradient(to bottom,#FFFFFF,#F0FDF4)" title="View Prep365 Retention Check-ins">
+                  <div class="ov-stat-icon tile-green">🎓</div>
+                  <div style="flex:1;min-width:0">
+                    <div style="display:flex;justify-content:space-between;align-items:center">
+                      <span class="ov-stat-val" id="st_prep365_val" style="color:#2563EB">—</span>
+                      <span class="chip chip-blue" style="font-size:10px;padding:1px 6px">View →</span>
+                    </div>
+                    <div class="ov-stat-label" style="font-weight:600;color:#1E40AF">Prep365 Check-ins</div>
+                    <div class="ov-stat-trend up" id="st_prep365_sub" style="font-size:10px">Synced &amp; calls this week</div>
+                  </div>
+                </div>
+                <!-- AVG SCORE CARD -->
+                <div class="ov-stat score-card">
+                  <div style="display:flex;justify-content:space-between;width:100%;align-items:flex-start">
+                    <div>
+                      <div class="ov-stat-val" id="st_score" style="font-size:24px;color:#8B5CF6">—<span style="font-size:13px;color:#64748B;font-weight:500">/100</span></div>
+                      <div class="ov-stat-label">Avg Lead Score</div>
+                    </div>
+                    <div class="ov-stat-icon tile-purple">🎯</div>
+                  </div>
+                  <svg class="ov-spark" id="sparkSvg" viewBox="0 0 200 32" preserveAspectRatio="none">
+                    <polyline id="sparkLine" points="" fill="none" stroke="#8B5CF6" stroke-width="2" stroke-linejoin="round" />
+                  </svg>
+                </div>
+              </div>
 
             <!-- Middle: Funnel | Distribution | Activity -->
             <div class="ov-mid">
@@ -3594,6 +4276,10 @@
 
         <!-- ─── LEADS ─── -->
         <section class="view" id="view-leads">
+          <div class="view-tabs">
+            <button type="button" class="view-tab active" onclick="showView('leads')">📋 Lead List</button>
+            <button type="button" class="view-tab" onclick="showView('pipeline')">🔄 Pipeline / Kanban</button>
+          </div>
           <div class="kpi-strip" id="leadsKpis"></div>
           <div class="card">
             <div class="card-header">
@@ -3695,6 +4381,10 @@
 
         <!-- ─── ANALYTICS ─── -->
         <section class="view" id="view-analytics">
+          <div class="view-tabs">
+            <button type="button" class="view-tab" onclick="showView('overview')">📊 Overview</button>
+            <button type="button" class="view-tab active" onclick="showView('analytics')">📈 Reports &amp; Analytics</button>
+          </div>
           <div class="an-page">
 
             <!-- Header -->
@@ -4062,11 +4752,19 @@
 
         <!-- ─── PIPELINE ─── -->
         <section class="view" id="view-pipeline">
+          <div class="view-tabs">
+            <button type="button" class="view-tab" onclick="showView('leads')">📋 Lead List</button>
+            <button type="button" class="view-tab active" onclick="showView('pipeline')">🔄 Pipeline / Kanban</button>
+          </div>
           <div id="pipelineBoard"></div>
         </section>
 
         <!-- ─── ENROLLMENTS ─── -->
         <section class="view" id="view-enrollments">
+          <div class="view-tabs">
+            <button type="button" class="view-tab active" onclick="showView('enrollments')">📋 Enrollments</button>
+            <button type="button" class="view-tab" onclick="showView('classes')">🏫 Classes / Groups</button>
+          </div>
           <div class="kpi-strip" id="enrollKpis"></div>
           <div class="card" style="margin-bottom:18px">
             <div class="card-header">
@@ -4303,37 +5001,115 @@
         <!-- ─── PREP365 RETENTION CHECK-INS ─── -->
         <section class="view" id="view-prep365">
           <div class="an-page">
-            <div class="an-header"
-              style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-              <div>
-                <h2 class="an-title">🎓 Prep365 Retention Check-ins</h2>
-                <p class="an-sub">Active paying Prep365 students receiving AI study check-in calls (&lt; 60s)</p>
+            <!-- Top bar -->
+            <div class="prep365-topbar">
+              <div class="prep365-title-area">
+                <div class="prep365-title-row">
+                  <h2 class="an-title">🎓 Student Check-ins</h2>
+                  <span id="prep365ModeBadge" class="badge chip-amber">DRY RUN (no calls)</span>
+                </div>
+                <p class="an-sub" id="prep365LastSyncInfo">Last sync: Checking…</p>
               </div>
-              <div style="display:flex;gap:10px">
+              <div class="filter-controls" style="align-items:center">
                 <button class="btn btn-secondary btn-sm" onclick="loadPrep365Checkins(); if(typeof toast==='function') toast('Refreshed', 'success');">↻ Refresh</button>
-                <button class="btn btn-primary btn-sm" onclick="triggerPrep365ManualSync()">⚡ Trigger Prep365 Sync</button>
+                <button class="btn btn-primary btn-sm" onclick="triggerPrep365ManualSync()">⚡ Sync from Prep365</button>
               </div>
             </div>
 
-            <div class="ov-card">
-              <div class="ov-card-body" style="padding:0;overflow-x:auto">
-                <table class="counselor-table">
+            <!-- Stat Cards: Synced today · Calls placed · Answered · No answer · Failed · Opted out -->
+            <div class="prep365-kpi-grid">
+              <div class="prep365-kpi-card">
+                <div class="card-icon-tile tile-blue">📥</div>
+                <div>
+                  <div class="kpi-label">Synced Today</div>
+                  <div class="kpi-val" id="p365_syncedToday">0</div>
+                </div>
+              </div>
+              <div class="prep365-kpi-card">
+                <div class="card-icon-tile tile-purple">📞</div>
+                <div>
+                  <div class="kpi-label">Calls Placed</div>
+                  <div class="kpi-val" id="p365_callsPlaced">0</div>
+                </div>
+              </div>
+              <div class="prep365-kpi-card">
+                <div class="card-icon-tile tile-green">✅</div>
+                <div>
+                  <div class="kpi-label">Answered</div>
+                  <div class="kpi-val" id="p365_answered">0</div>
+                </div>
+              </div>
+              <div class="prep365-kpi-card">
+                <div class="card-icon-tile tile-amber">⏳</div>
+                <div>
+                  <div class="kpi-label">No Answer</div>
+                  <div class="kpi-val" id="p365_noAnswer">0</div>
+                </div>
+              </div>
+              <div class="prep365-kpi-card">
+                <div class="card-icon-tile tile-rose">⚠️</div>
+                <div>
+                  <div class="kpi-label">Failed</div>
+                  <div class="kpi-val" id="p365_failed">0</div>
+                </div>
+              </div>
+              <div class="prep365-kpi-card">
+                <div class="card-icon-tile tile-slate">🚫</div>
+                <div>
+                  <div class="kpi-label">Opted Out</div>
+                  <div class="kpi-val" id="p365_optedOut">0</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Table Card with Search & Filters -->
+            <div class="card" style="padding:0;overflow:hidden">
+              <div class="prep365-filter-bar">
+                <div class="search-input-wrap">
+                  <span>🔍</span>
+                  <input type="text" id="prep365SearchInput" placeholder="Search student by name, email or phone…" oninput="filterPrep365Table()">
+                </div>
+                <div class="filter-controls">
+                  <select id="prep365FilterReason" onchange="filterPrep365Table()">
+                    <option value="all">All Reasons</option>
+                    <option value="MISSED_ASSIGNED_TOPICS">Missed Topics</option>
+                    <option value="NO_RECENT_TESTS">No Recent Tests</option>
+                    <option value="CUSTOM_PREP_BEHIND">Custom Prep Behind</option>
+                    <option value="INACTIVE">Inactive</option>
+                    <option value="DECLINING_PERFORMANCE">Declining Score</option>
+                  </select>
+                  <select id="prep365FilterStatus" onchange="filterPrep365Table()">
+                    <option value="all">All Call Statuses</option>
+                    <option value="queued">Queued</option>
+                    <option value="calling">Calling</option>
+                    <option value="completed">Completed</option>
+                    <option value="no_answer">No Answer</option>
+                    <option value="failed">Failed</option>
+                  </select>
+                  <select id="prep365FilterDate" onchange="filterPrep365Table()">
+                    <option value="all">All Time</option>
+                    <option value="today">Today</option>
+                    <option value="7d">Last 7 Days</option>
+                    <option value="30d">Last 30 Days</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style="overflow-x:auto">
+                <table>
                   <thead>
                     <tr>
                       <th>Student</th>
-                      <th>Phone</th>
-                      <th>Outreach ID</th>
-                      <th>Target</th>
-                      <th>Status</th>
-                      <th>Duration</th>
-                      <th>Answered By</th>
-                      <th>Study Progress / Blocker / Summary</th>
-                      <th>Follow-up / Opt-Out</th>
-                      <th>Last Contacted</th>
+                      <th>Grade</th>
+                      <th>Reasons</th>
+                      <th>Target &amp; Phone</th>
+                      <th>Call Status</th>
+                      <th>Last Call / Duration</th>
+                      <th>Action</th>
                     </tr>
                   </thead>
                   <tbody id="prep365CheckinsTableBody">
-                    <tr><td colspan="10" style="text-align:center;color:var(--muted);padding:32px">Loading Prep365 check-ins…</td></tr>
+                    <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:32px">Loading Prep365 check-ins…</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -4341,8 +5117,28 @@
           </div>
         </section>
 
+        <!-- Prep365 Student Snapshot Drawer -->
+        <div id="prep365DrawerOverlay" class="drawer-overlay" onclick="closePrep365Drawer()"></div>
+        <div id="prep365Drawer" class="drawer">
+          <div class="drawer-header">
+            <div>
+              <span class="badge chip-blue" id="p365DrawerTargetBadge">Student</span>
+              <h3 id="p365DrawerStudentName" class="drawer-title">Student Name</h3>
+              <p id="p365DrawerStudentPhone" class="drawer-sub">+91******4574 · Grade 11</p>
+            </div>
+            <button type="button" class="drawer-close-btn" onclick="closePrep365Drawer()" title="Close drawer">✕</button>
+          </div>
+          <div class="drawer-body" id="p365DrawerBody">
+            <!-- Dynamic Snapshot Sections -->
+          </div>
+        </div>
+
         <!-- ─── CLASSES / GROUPS ─── -->
         <section class="view" id="view-classes">
+          <div class="view-tabs">
+            <button type="button" class="view-tab" onclick="showView('enrollments')">📋 Enrollments</button>
+            <button type="button" class="view-tab active" onclick="showView('classes')">🏫 Classes / Groups</button>
+          </div>
           <div id="classesOverview">
             <div class="card">
               <div class="card-header">
@@ -6051,92 +6847,510 @@
       document.getElementById('assignLeadsModal').classList.remove('active');
     }
 
-    // Navigation
+    // Navigation & View Routing
     document.querySelectorAll('[data-view]').forEach(el => {
       el.addEventListener('click', e => { e.preventDefault(); showView(el.dataset.view); });
     });
 
-    function showView(name) {
-      // Parents and Callback Requests were removed from navigation; parent
-      // campaigns now live under Campaigns.
+    function toggleMobileMenu() {
+      const sb = document.getElementById('appSidebar');
+      const ov = document.getElementById('sidebarOverlay');
+      if (sb) sb.classList.toggle('open');
+      if (ov) ov.classList.toggle('open');
+    }
+
+    function toggleSidebarCollapse() {
+      const app = document.querySelector('.app');
+      if (!app) return;
+      app.classList.toggle('collapsed');
+      const isCollapsed = app.classList.contains('collapsed');
+      localStorage.setItem('sidebar_collapsed', isCollapsed ? '1' : '0');
+      const btn = document.getElementById('sidebarCollapseBtn');
+      if (btn) {
+        const icon = btn.querySelector('.icon');
+        if (icon) icon.textContent = isCollapsed ? '▶' : '◀';
+        btn.title = isCollapsed ? 'Expand sidebar' : 'Collapse sidebar';
+      }
+    }
+
+    // Restore sidebar collapse state
+    try {
+      if (localStorage.getItem('sidebar_collapsed') === '1') {
+        const app = document.querySelector('.app');
+        if (app) app.classList.add('collapsed');
+        const btn = document.getElementById('sidebarCollapseBtn');
+        if (btn) {
+          const icon = btn.querySelector('.icon');
+          if (icon) icon.textContent = '▶';
+          btn.title = 'Expand sidebar';
+        }
+      }
+    } catch (_) {}
+
+    function showView(name, tab) {
+      // Clean backward compatibility redirects
+      if (name === 'pipeline') {
+        showView('leads', 'pipeline');
+        return;
+      }
+      if (name === 'analytics') {
+        showView('overview', 'analytics');
+        return;
+      }
+      if (name === 'classes') {
+        showView('enrollments', 'classes');
+        return;
+      }
       if (name === 'parents') name = 'campaigns';
       if (name === 'callbacks') name = 'overview';
+
+      // Close mobile drawer on navigation
+      const sb = document.getElementById('appSidebar');
+      const ov = document.getElementById('sidebarOverlay');
+      if (sb) sb.classList.remove('open');
+      if (ov) ov.classList.remove('open');
+
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       document.querySelectorAll('.nav a').forEach(a => a.classList.remove('active'));
-      document.getElementById('view-' + name).classList.add('active');
-      document.querySelectorAll(`[data-view="${name}"]`).forEach(a => a.classList.add('active'));
+
+      const targetEl = document.getElementById('view-' + name);
+      if (targetEl) targetEl.classList.add('active');
+
+      // Highlight active nav item
+      let activeNavKey = name;
+      if (name === 'pipeline') activeNavKey = 'leads';
+      if (name === 'analytics') activeNavKey = 'overview';
+      if (name === 'classes') activeNavKey = 'enrollments';
+      document.querySelectorAll(`[data-view="${activeNavKey}"]`).forEach(a => a.classList.add('active'));
+
       const titles = {
-        overview: 'Overview', leads: 'All Leads', calls: 'Call Activity',
+        overview: 'Dashboard', leads: 'Leads & Pipeline', calls: 'Call Activity',
         meetings: 'Scheduled Meetings', analytics: 'Reports & Analytics',
         billing: 'Billing & Cost Analytics',
         counselor: 'Counselor Dashboard', pipeline: 'Enrollment Pipeline',
-        enrollments: 'Enrollments', campaigns: 'Campaign Management',
-        prep365: 'Prep365 Check-ins',
+        enrollments: 'Enrollments & Classes', campaigns: 'Campaign Management',
+        prep365: 'Prep365 Student Check-ins',
         classes: 'Classes / Groups',
         counselors: 'Counselor Management', settings: 'Settings',
       };
       document.getElementById('pageTitle').textContent = titles[name] || name;
-      if (name === 'overview') loadOverview();
-      if (name === 'leads') loadLeads();
+
+      if (name === 'overview') {
+        loadOverview();
+        if (tab === 'analytics') switchDashboardTab('analytics');
+        else switchDashboardTab('overview');
+      }
+      if (name === 'leads') {
+        loadLeads();
+        if (tab === 'pipeline') switchLeadsTab('pipeline');
+        else switchLeadsTab('list');
+      }
       if (name === 'calls') loadCalls();
       if (name === 'meetings') loadMeetings();
-      if (name === 'analytics') loadAnalytics();
       if (name === 'billing') loadBilling();
       if (name === 'counselor') loadCounselor('today');
-      if (name === 'pipeline') loadPipeline();
-      if (name === 'enrollments') loadEnrollments();
+      if (name === 'enrollments') {
+        loadEnrollments();
+        if (tab === 'classes') switchEnrollmentsTab('classes');
+        else switchEnrollmentsTab('enrollments');
+      }
       if (name === 'campaigns') loadCampaigns();
       if (name === 'prep365') loadPrep365Checkins();
-      if (name === 'classes') loadClasses();
       if (name === 'counselors') loadCounselors();
       if (name === 'settings') showSettingsPanel('profile');
     }
 
-    // ─── Prep365 Retention Check-ins View Logic ───
-    async function loadPrep365Checkins() {
-      const el = document.getElementById('prep365CheckinsTableBody');
-      if (!el) return;
-      el.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:32px">Loading Prep365 check-ins…</td></tr>';
-      try {
-        const res = await api('/prep365/checkins');
-        const list = res.checkins || [];
-        const badge = document.getElementById('navPrep365Count');
-        if (badge) badge.textContent = list.length;
-        if (!list.length) {
-          el.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:32px">No Prep365 check-in records found yet.</td></tr>';
-          return;
-        }
-        el.innerHTML = list.map(c => {
-          const badgeClass = c.status === 'completed' ? 'badge-completed' : (c.status === 'calling' ? 'badge-progress' : 'badge-neutral');
-          const dur = c.durationSeconds ? `${c.durationSeconds}s` : '—';
-          const lastDate = c.lastCallAt ? new Date(c.lastCallAt).toLocaleString() : (c.createdAt ? new Date(c.createdAt).toLocaleString() : '—');
-          const tags = [];
-          if (c.followUpRequested) tags.push('<span class="status-badge badge-warning" style="font-size:10px">Callback</span>');
-          if (c.optOut) tags.push('<span class="status-badge badge-danger" style="font-size:10px">Opt-Out</span>');
-          if (!tags.length) tags.push('<span style="color:var(--muted);font-size:11px">None</span>');
-
-          return `
-            <tr>
-              <td data-label="Student"><strong>${esc(c.studentName || 'Student')}</strong><br><small style="color:var(--muted)">${esc(c.email || '')}</small></td>
-              <td data-label="Phone"><code>${esc(c.phone || '')}</code></td>
-              <td data-label="Outreach ID"><code>#${esc(String(c.outreachId || '—'))}</code></td>
-              <td data-label="Target"><span class="status-badge badge-neutral" style="text-transform:capitalize">${esc(c.recipientType || 'student')}</span></td>
-              <td data-label="Status"><span class="status-badge ${badgeClass}">${esc(c.status || 'unknown')}</span></td>
-              <td data-label="Duration"><strong>${dur}</strong></td>
-              <td data-label="Answered By" style="text-transform:capitalize">${esc(c.answeredBy || 'human')}</td>
-              <td data-label="Summary" style="max-width:280px;font-size:12px;line-height:1.4">${esc(c.summary || c.talkingPoints || '—')}</td>
-              <td data-label="Follow-up / Opt-Out">${tags.join(' ')}</td>
-              <td data-label="Last Contacted" style="font-size:11px;color:var(--muted)">${lastDate}</td>
-            </tr>
-          `;
-        }).join('');
-      } catch (e) {
-        el.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--danger);padding:32px">Error loading Prep365 check-ins: ${esc(e.message)}</td></tr>`;
+    // ─── Tab Switchers ───
+    function switchDashboardTab(tab) {
+      if (tab === 'analytics') {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        const anEl = document.getElementById('view-analytics');
+        if (anEl) anEl.classList.add('active');
+        document.querySelectorAll(`[data-view="overview"]`).forEach(a => a.classList.add('active'));
+        document.getElementById('pageTitle').textContent = 'Reports & Analytics';
+        loadAnalytics();
+      } else {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        const ovEl = document.getElementById('view-overview');
+        if (ovEl) ovEl.classList.add('active');
+        document.querySelectorAll(`[data-view="overview"]`).forEach(a => a.classList.add('active'));
+        document.getElementById('pageTitle').textContent = 'Dashboard';
+        loadOverview();
       }
     }
 
+    function switchLeadsTab(tab) {
+      if (tab === 'pipeline') {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        const pipeEl = document.getElementById('view-pipeline');
+        if (pipeEl) pipeEl.classList.add('active');
+        document.querySelectorAll(`[data-view="leads"]`).forEach(a => a.classList.add('active'));
+        document.getElementById('pageTitle').textContent = 'Pipeline Kanban';
+        loadPipeline();
+      } else {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        const leadsEl = document.getElementById('view-leads');
+        if (leadsEl) leadsEl.classList.add('active');
+        document.querySelectorAll(`[data-view="leads"]`).forEach(a => a.classList.add('active'));
+        document.getElementById('pageTitle').textContent = 'All Leads';
+        loadLeads();
+      }
+    }
+
+    function switchEnrollmentsTab(tab) {
+      if (tab === 'classes') {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        const clsEl = document.getElementById('view-classes');
+        if (clsEl) clsEl.classList.add('active');
+        document.querySelectorAll(`[data-view="enrollments"]`).forEach(a => a.classList.add('active'));
+        document.getElementById('pageTitle').textContent = 'Classes / Groups';
+        loadClasses();
+      } else {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        const enrEl = document.getElementById('view-enrollments');
+        if (enrEl) enrEl.classList.add('active');
+        document.querySelectorAll(`[data-view="enrollments"]`).forEach(a => a.classList.add('active'));
+        document.getElementById('pageTitle').textContent = 'Enrollments';
+        loadEnrollments();
+      }
+    }
+
+    async function loadClasses() {
+      const container = document.getElementById('classesTable');
+      if (!container) return;
+      container.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Loading classes…</div>';
+      try {
+        const classes = await api('/classes');
+        if (!classes || !classes.length) {
+          container.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">No classes or groups created yet. Click "+ Create Class" to add one.</div>';
+          return;
+        }
+        container.innerHTML = `
+          <table class="counselor-table">
+            <thead>
+              <tr>
+                <th>Class / Group Name</th>
+                <th>Created Date</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${classes.map(c => `
+                <tr>
+                  <td><strong>${esc(c.name)}</strong></td>
+                  <td style="color:var(--muted);font-size:12px">${c.createdAt ? new Date(c.createdAt).toLocaleDateString() : '—'}</td>
+                  <td>
+                    <button class="btn btn-secondary btn-sm" onclick="showClassDetails('${c.id}')">View Details</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } catch (e) {
+        container.innerHTML = `<div style="padding:32px;text-align:center;color:var(--muted)">${esc(e.message)}</div>`;
+      }
+    }
+
+    // ─── Prep365 Retention Check-ins View Logic ───
+    let _prep365AllCheckins = [];
+
+    function formatRelativeTime(ts) {
+      if (!ts) return '—';
+      const time = new Date(ts).getTime();
+      const diffSec = Math.floor((Date.now() - time) / 1000);
+      if (diffSec < 60) return 'Just now';
+      if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+      if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+      if (diffSec < 172800) return 'Yesterday';
+      return `${Math.floor(diffSec / 86400)}d ago`;
+    }
+
+    async function loadPrep365Checkins() {
+      const tbody = document.getElementById('prep365CheckinsTableBody');
+      if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:32px">Loading Prep365 check-ins…</td></tr>';
+      try {
+        const res = await api('/prep365/checkins');
+        _prep365AllCheckins = res.checkins || [];
+
+        // Update mode badge
+        const modeBadge = document.getElementById('prep365ModeBadge');
+        if (modeBadge) {
+          if (res.dryRun) {
+            modeBadge.className = 'badge chip-amber';
+            modeBadge.textContent = 'DRY RUN (no calls)';
+          } else {
+            modeBadge.className = 'badge chip-green';
+            modeBadge.textContent = 'LIVE';
+          }
+        }
+
+        // Update last sync info
+        const syncInfo = document.getElementById('prep365LastSyncInfo');
+        if (syncInfo) {
+          const ls = res.lastSync;
+          if (ls && ls.timestamp) {
+            const timeAgo = formatRelativeTime(ls.timestamp);
+            syncInfo.textContent = `Last sync: ${timeAgo} (${ls.studentsReceived || 0} students received, ${ls.callsQueued || 0} calls queued, ${ls.errors || 0} errors)`;
+          } else {
+            syncInfo.textContent = 'Last sync: Not yet synced in this session';
+          }
+        }
+
+        // Update stat cards
+        const st = res.stats || {};
+        const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val !== undefined ? val : 0; };
+        setVal('p365_syncedToday', st.syncedToday);
+        setVal('p365_callsPlaced', st.callsPlaced);
+        setVal('p365_answered', st.answered);
+        setVal('p365_noAnswer', st.noAnswer);
+        setVal('p365_failed', st.failed);
+        setVal('p365_optedOut', st.optedOut);
+
+        // Update sidebar badge
+        const badge = document.getElementById('navPrep365Count');
+        if (badge) badge.textContent = _prep365AllCheckins.filter(c => c.callStatus === 'queued' || c.callStatus === 'calling').length || _prep365AllCheckins.length;
+
+        renderPrep365Table(_prep365AllCheckins);
+      } catch (e) {
+        if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:32px">Error loading Prep365 check-ins: ${esc(e.message)}</td></tr>`;
+      }
+    }
+
+    function filterPrep365Table() {
+      const q = (document.getElementById('prep365SearchInput')?.value || '').toLowerCase().trim();
+      const reasonFilter = document.getElementById('prep365FilterReason')?.value || 'all';
+      const statusFilter = document.getElementById('prep365FilterStatus')?.value || 'all';
+      const dateFilter = document.getElementById('prep365FilterDate')?.value || 'all';
+
+      const now = Date.now();
+      const filtered = _prep365AllCheckins.filter(c => {
+        if (q) {
+          const matchName = (c.studentName || '').toLowerCase().includes(q);
+          const matchPhone = (c.phone || '').toLowerCase().includes(q) || (c.maskedPhone || '').toLowerCase().includes(q);
+          const matchEmail = (c.email || '').toLowerCase().includes(q);
+          if (!matchName && !matchPhone && !matchEmail) return false;
+        }
+
+        if (reasonFilter !== 'all') {
+          const hasReason = (c.reasons || []).some(r => r.code === reasonFilter);
+          if (!hasReason) return false;
+        }
+
+        if (statusFilter !== 'all') {
+          if (c.callStatus !== statusFilter) return false;
+        }
+
+        if (dateFilter !== 'all' && c.lastCallAt) {
+          const callTime = new Date(c.lastCallAt).getTime();
+          if (dateFilter === 'today' && now - callTime > 86400000) return false;
+          if (dateFilter === '7d' && now - callTime > 7 * 86400000) return false;
+          if (dateFilter === '30d' && now - callTime > 30 * 86400000) return false;
+        }
+
+        return true;
+      });
+
+      renderPrep365Table(filtered);
+    }
+
+    function renderPrep365Table(list) {
+      const tbody = document.getElementById('prep365CheckinsTableBody');
+      if (!tbody) return;
+      if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:32px">No matching Prep365 student check-ins found.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = list.map(c => {
+        const reasonChips = (c.reasons || []).map(r => {
+          const chipClass = r.color === 'rose' ? 'chip-rose' : (r.color === 'purple' ? 'chip-purple' : (r.color === 'amber' ? 'chip-amber' : (r.color === 'orange' ? 'chip-orange' : 'chip-slate')));
+          return `<span class="chip ${chipClass}" title="${esc(r.detail || r.label)}">${esc(r.label)}</span>`;
+        }).join(' ');
+
+        let statusBadge = `<span class="badge chip-slate">Queued</span>`;
+        if (c.callStatus === 'completed') statusBadge = `<span class="badge chip-green">Completed</span>`;
+        else if (c.callStatus === 'calling') statusBadge = `<span class="badge chip-blue">Calling…</span>`;
+        else if (c.callStatus === 'no_answer') statusBadge = `<span class="badge chip-amber">No Answer</span>`;
+        else if (c.callStatus === 'failed') statusBadge = `<span class="badge chip-rose">Failed</span>`;
+
+        const durStr = c.durationSeconds ? `${c.durationSeconds}s` : '—';
+        const callTimeStr = c.lastCallAt ? formatRelativeTime(c.lastCallAt) : 'Not called yet';
+
+        return `
+          <tr>
+            <td>
+              <div style="font-weight:600;color:#0F172A">${esc(c.studentName)}</div>
+              <div style="font-size:11px;color:#64748B">${esc(c.email || '')}</div>
+            </td>
+            <td><span class="chip chip-slate">${esc(c.grade || '11th Grade')}</span></td>
+            <td><div style="display:flex;gap:4px;flex-wrap:wrap;max-width:260px">${reasonChips || '<span style="color:#64748B">—</span>'}</div></td>
+            <td>
+              <div style="font-size:12px;font-weight:500;text-transform:capitalize">${esc(c.recipientType)}: ${esc(c.recipientName)}</div>
+              <code style="font-size:11px;color:#475569">${esc(c.maskedPhone)}</code>
+            </td>
+            <td>${statusBadge}</td>
+            <td>
+              <div style="font-weight:600;font-size:12px">${durStr}</div>
+              <div style="font-size:11px;color:#64748B">${callTimeStr}</div>
+            </td>
+            <td>
+              <button class="btn btn-secondary btn-sm" onclick="openPrep365Drawer('${c.id}')">View</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function openPrep365Drawer(studentId) {
+      const student = _prep365AllCheckins.find(c => c.id === studentId);
+      if (!student) return;
+
+      document.getElementById('p365DrawerStudentName').textContent = student.studentName;
+      document.getElementById('p365DrawerStudentPhone').textContent = `${student.maskedPhone} · ${student.grade || '11th Grade'}`;
+      document.getElementById('p365DrawerTargetBadge').textContent = `Target: ${student.recipientType.toUpperCase()} (${student.recipientName})`;
+
+      const snap = student.snapshot || {};
+      const act = snap.activity || {};
+      const cp = snap.customPrep || {};
+      const recentTests = snap.recentTests || [];
+      const overdue = snap.overdueAssignments || [];
+      const deadlines = snap.missedDeadlines || [];
+
+      let testsHtml = recentTests.map(t => `
+        <div class="drawer-stat-tile" style="margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between">
+            <strong>${esc(t.course || 'SAT')}</strong>
+            <span style="font-size:11px;color:#64748B">${esc(t.date || '')}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+            <span style="font-size:18px;font-weight:700;color:#0F172A">${t.scorePercent}%</span>
+            <span style="font-size:11px;color:${t.trend === 'down' ? '#EF4444' : '#10B981'}">
+              ${t.trend === 'down' ? '↓' : '↑'} Recent: ${t.recentAvg}% (prior: ${t.previousAvg}%)
+            </span>
+          </div>
+        </div>
+      `).join('');
+
+      let customPrepHtml = `
+        <div class="drawer-section-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <strong>${esc(cp.planName || 'SAT Full Length Test 3 Custom Prep')}</strong>
+            <span style="font-size:12px;font-weight:600;color:#2563EB">${cp.percentComplete || 0}% / ${cp.expectedPercent || 0}% expected</span>
+          </div>
+          <div class="drawer-progress-track">
+            <div class="drawer-progress-fill" style="width:${Math.min(cp.percentComplete || 0, 100)}%"></div>
+          </div>
+          <div style="margin-top:10px;font-size:12px">
+            <span style="color:#10B981;font-weight:600">✓ ${cp.completedTopics || 0} topics completed</span>
+          </div>
+          ${(cp.missedTopics || []).length ? `
+            <div style="margin-top:8px">
+              <span style="font-size:11px;color:#EF4444;font-weight:600">Pending Topics:</span>
+              <ul style="margin:4px 0 0 16px;font-size:12px;color:#475569">
+                ${cp.missedTopics.map(m => `<li><strong>${esc(m.period)}</strong>: ${esc(m.topic)}</li>`).join('')}
+              </ul>
+            </div>
+          ` : ''}
+        </div>
+      `;
+
+      let overdueHtml = (overdue.length || deadlines.length) ? `
+        <div class="drawer-section-card">
+          <strong style="color:#B91C1C">⚠️ Overdue &amp; Deadlines</strong>
+          <ul style="margin:8px 0 0 16px;font-size:12px;color:#475569">
+            ${overdue.map(o => `<li>${esc(o.title)} (Due: ${esc(o.dueDate)}, ${o.daysOverdue}d overdue)</li>`).join('')}
+            ${deadlines.map(d => `<li>${esc(d.groupName)}: ${esc(d.task)} (Deadline: ${esc(d.deadline)})</li>`).join('')}
+          </ul>
+        </div>
+      ` : '';
+
+      let audioPlayerHtml = student.recordingUrl ? `
+        <div style="margin-top:12px">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px">CALL RECORDING</label>
+          <audio controls src="${esc(student.recordingUrl)}" style="width:100%"></audio>
+        </div>
+      ` : '';
+
+      let transcriptHtml = student.transcript ? `
+        <div style="margin-top:12px">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px">CALL TRANSCRIPT</label>
+          <div class="drawer-transcript-box">${esc(student.transcript)}</div>
+        </div>
+      ` : '';
+
+      const body = document.getElementById('p365DrawerBody');
+      body.innerHTML = `
+        <div class="drawer-section">
+          <h4 class="drawer-section-heading">STUDY ACTIVITY</h4>
+          <div class="drawer-grid-2">
+            <div class="drawer-stat-tile">
+              <div class="dst-label">Days Inactive</div>
+              <div class="dst-val ${act.daysInactive > 7 ? 'text-danger' : ''}">${act.daysInactive} days</div>
+            </div>
+            <div class="drawer-stat-tile">
+              <div class="dst-label">Days Since Test</div>
+              <div class="dst-val ${act.daysSinceLastTest > 7 ? 'text-danger' : ''}">${act.daysSinceLastTest} days</div>
+            </div>
+            <div class="drawer-stat-tile">
+              <div class="dst-label">Last Login</div>
+              <div class="dst-val text-sm">${esc(act.lastLogin || 'Recent')}</div>
+            </div>
+            <div class="drawer-stat-tile">
+              <div class="dst-label">Last Activity</div>
+              <div class="dst-val text-sm">${esc(act.lastActivity || 'Practice Session')}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="drawer-section">
+          <h4 class="drawer-section-heading">RECENT PRACTICE TESTS</h4>
+          ${testsHtml || '<div style="font-size:12px;color:#64748B">No recent tests recorded</div>'}
+        </div>
+
+        <div class="drawer-section">
+          <h4 class="drawer-section-heading">CUSTOM PREP PLANS</h4>
+          ${customPrepHtml}
+        </div>
+
+        ${overdueHtml ? `<div class="drawer-section">${overdueHtml}</div>` : ''}
+
+        <div class="drawer-section">
+          <h4 class="drawer-section-heading">AI TALKING POINTS</h4>
+          <div class="drawer-tp-box">${esc(student.talkingPoints || 'Check in on SAT study plan, mention practice tests pending, encourage logging in today.')}</div>
+        </div>
+
+        <div class="drawer-section">
+          <h4 class="drawer-section-heading">CALL OUTCOME</h4>
+          <div class="drawer-section-card">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span class="badge ${student.callStatus === 'completed' ? 'chip-green' : (student.callStatus === 'no_answer' ? 'chip-amber' : 'chip-slate')}">${esc(student.callStatus.toUpperCase())}</span>
+              <span style="font-size:12px;color:#64748B">${student.durationSeconds}s · Answered by: <strong>${esc(student.answeredBy)}</strong></span>
+            </div>
+            <div style="margin-top:10px;font-size:13px;line-height:1.5">
+              <strong>Summary:</strong> ${esc(student.summary || 'Prep365 check-in call completed.')}
+            </div>
+            <div style="margin-top:8px;display:flex;gap:12px;font-size:12px">
+              <span>Opt-out: <strong style="color:${student.optOut ? '#EF4444' : '#10B981'}">${student.optOut ? 'YES' : 'No'}</strong></span>
+              <span>Callback requested: <strong style="color:${student.followUpRequested ? '#F59E0B' : '#64748B'}">${student.followUpRequested ? 'YES' : 'No'}</strong></span>
+            </div>
+            ${audioPlayerHtml}
+            ${transcriptHtml}
+          </div>
+        </div>
+      `;
+
+      document.getElementById('prep365DrawerOverlay')?.classList.add('open');
+      document.getElementById('prep365Drawer')?.classList.add('open');
+    }
+
+    function closePrep365Drawer() {
+      document.getElementById('prep365DrawerOverlay')?.classList.remove('open');
+      document.getElementById('prep365Drawer')?.classList.remove('open');
+    }
+
     async function triggerPrep365ManualSync() {
-      const live = confirm('Trigger live Prep365 sync now?\\n\\nClick OK for LIVE mode (calls placed via Telnyx if candidates exist).\\nClick CANCEL for DRY-RUN mode (tests candidate retrieval without dialing).');
+      const live = confirm('Trigger live Prep365 sync now?\\n\\nClick OK for LIVE mode (calls placed via Telnyx if candidates exist).\\nClick CANCEL for DRY-RUN mode (fetches candidates without calling).');
       try {
         if (typeof toast === 'function') toast('Initiating Prep365 sync…', 'info');
         const res = await api('/prep365/sync', {
@@ -6302,13 +7516,18 @@
         api('/prep365/checkins').then(r => {
           const b = document.getElementById('navPrep365Count');
           if (b && r.total !== undefined) b.textContent = r.total;
+          const pVal = document.getElementById('st_prep365_val');
+          if (pVal) pVal.textContent = r.stats?.callsPlaced || r.total || 0;
+          const pSub = document.getElementById('st_prep365_sub');
+          if (pSub) pSub.textContent = `${r.stats?.answered || 0} answered · ${r.stats?.syncedToday || r.total || 0} synced`;
         }).catch(() => {});
 
-        // Trend labels
-        function trendHtml(val, label) {
-          const pct = val > 0 ? `↑ ${val}` : val < 0 ? `↓ ${Math.abs(val)}` : '—';
-          const cls = val > 0 ? 'up' : val < 0 ? 'down' : 'neu';
-          return `<span class="ov-stat-trend ${cls}">${pct}% vs last 30 days</span>`;
+        // Trend labels: Never show "↑ 539% vs last 30 days" when prior period is 0. Show "New" or "—".
+        function trendHtml(val, id) {
+          if (!val || val === 0 || val === '—') {
+            return `<span class="ov-stat-trend neu" id="${id}">—</span>`;
+          }
+          return `<span class="ov-stat-trend up" id="${id}">New vs last 30d</span>`;
         }
         const trendEls = {
           st_total_trend: s.total, st_new_trend: s.new, st_cont_trend: s.contacted,
@@ -6318,7 +7537,7 @@
         };
         Object.entries(trendEls).forEach(([id, v]) => {
           const el = document.getElementById(id);
-          if (el) el.outerHTML = trendHtml(v, '').replace('class="ov-stat-trend', `id="${id}" class="ov-stat-trend`);
+          if (el) el.outerHTML = trendHtml(v, id);
         });
 
         // Sparkline (fake smooth line based on score)
@@ -6503,7 +7722,16 @@
         };
       });
 
-      const allItems = [...items, ...completedFUs]
+      const prep365Evts = (_prep365AllCheckins || []).filter(c => c.lastCallAt).map(c => ({
+        icon: '🎓',
+        bg: 'rgba(37, 99, 235, 0.1)',
+        color: '#2563EB',
+        title: `Prep365 Check-in: ${c.studentName}`,
+        sub: `Status: ${c.callStatus} · ${c.durationSeconds}s · [Prep365]`,
+        time: c.lastCallAt
+      }));
+
+      const allItems = [...items, ...completedFUs, ...prep365Evts]
         .sort((a, b) => new Date(b.time) - new Date(a.time))
         .slice(0, 15);
 
@@ -11055,6 +12283,21 @@
   // Auto-load email analytics when analytics view is opened
   const _origShowView = typeof showView === 'function' ? showView : null;
   document.addEventListener('DOMContentLoaded', () => {
+    // Check URL parameters for view and tab routing (e.g. ?tab=pipeline, ?tab=analytics, ?tab=classes)
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab');
+    const path = window.location.pathname.toLowerCase();
+
+    if (tabParam === 'pipeline' || path.includes('/pipeline')) {
+      showView('leads', 'pipeline');
+    } else if (tabParam === 'analytics' || path.includes('/analytics')) {
+      showView('overview', 'analytics');
+    } else if (tabParam === 'classes' || path.includes('/classes')) {
+      showView('enrollments', 'classes');
+    } else if (path.includes('/prep365')) {
+      showView('prep365');
+    }
+
     // Hook into view switching to load analytics
     document.querySelectorAll('[data-view="analytics"]').forEach(el => {
       el.addEventListener('click', () => {
