@@ -1,0 +1,51 @@
+name: Prep365 Daily Sync
+
+on:
+  schedule:
+    # Runs daily at 14:00 UTC (9:00 AM EST) — completely free
+    - cron: '0 14 * * *'
+  # Allows 1-click manual run from the GitHub Actions tab anytime
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run in dry-run mode (preview candidates, place no calls)'
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  sync:
+    name: Trigger Prep365 Candidate Sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping and Wake Render Instance (if sleeping)
+        run: |
+          echo "Pinging calling app on Render..."
+          curl -s --max-time 60 https://aicalling-xfyr.onrender.com/health || true
+
+      - name: Trigger Candidate Sync
+        env:
+          PREP365_KEY: ${{ secrets.PREP365_API_KEY || '8ad4cbca7f4777009dff700a7fe2879a9a4b9f3257eecf0c047259c690ba09a3' }}
+          DRY_RUN_INPUT: ${{ github.event.inputs.dry_run || 'true' }}
+        run: |
+          echo "Triggering POST /api/prep365/sync (dryRun=$DRY_RUN_INPUT)..."
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST https://aicalling-xfyr.onrender.com/api/prep365/sync \
+            -H "Authorization: Bearer $PREP365_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"dryRun\": $DRY_RUN_INPUT}" \
+            --max-time 120)
+
+          HTTP_BODY=$(echo "$RESPONSE" | sed '$d')
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+
+          echo "HTTP Status: $HTTP_STATUS"
+          echo "Response Body:"
+          echo "$HTTP_BODY"
+
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "::error::Sync failed with HTTP status $HTTP_STATUS"
+            exit 1
+          fi
