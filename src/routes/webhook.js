@@ -1172,6 +1172,22 @@ router.post('/call/status', async (req, res) => {
     const TERMINAL_STATUSES = ['completed', 'canceled', 'no-answer', 'busy', 'failed'];
     if (CallSid && TERMINAL_STATUSES.includes(CallStatus)) {
       billingSvc.captureFromCall(CallSid, { lead, callStatus: CallStatus }).catch(() => {});
+
+      // ── Prep365 outcome reporting ──────────────────────────────────────────
+      const prep365OutreachId = lead.qualification?.prep365OutreachId || attempt?.prep365OutreachId;
+      if (prep365OutreachId) {
+        const prep365Svc = require('../services/prep365Service');
+        const outcomeStatus = CallStatus === 'completed' ? 'completed' : 'no_answer';
+        const outcomeText = attempt?.aiSummary || `Call ${CallStatus}. Duration: ${CallDuration || 0}s`;
+        prep365Svc.reportCallResult({
+          outreachId: prep365OutreachId,
+          status: outcomeStatus,
+          outcome: outcomeText,
+          providerCallId: CallSid,
+          duration: parseInt(CallDuration) || 0,
+          callbackUrl: lead.qualification?.prep365CallbackUrl
+        }).catch(err => logger.error('[Prep365] Failed to report call result', { msg: err.message }));
+      }
     }
 
     // Callback Request specific status management

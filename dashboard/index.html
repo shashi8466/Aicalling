@@ -3434,6 +3434,7 @@
           <button class="btn btn-secondary btn-sm" onclick="refreshAll()">↻ Refresh</button>
           <button class="btn btn-secondary btn-sm" onclick="exportLeads()">⬇ Export CSV</button>
           <button class="btn btn-primary btn-sm" onclick="pollNow()">⚡ Poll Sheets Now</button>
+          <button class="btn btn-secondary btn-sm" onclick="syncPrep365Now()" title="Fetch candidate students from Prep365">🔄 Sync Prep365</button>
           <div class="user-pill" onclick="showView('settings')" title="Account settings">
             <div class="user-avatar" id="headerAvatar">?</div>
             <span id="headerUserShort">User</span>
@@ -3707,6 +3708,7 @@
                 </select>
                 <button class="btn btn-secondary btn-sm" onclick="exportLeads()">⬇ Export CSV</button>
                 <button class="btn btn-primary btn-sm" onclick="pollNow()">⚡ Poll Sheets Now</button>
+          <button class="btn btn-secondary btn-sm" onclick="syncPrep365Now()" title="Fetch candidate students from Prep365">🔄 Sync Prep365</button>
               </div>
             </div>
 
@@ -8304,6 +8306,15 @@
       try {
         await api('/poll', { method: 'POST' });
         toast('Sheets polled successfully', 'success');
+        setTimeout(loadLeads, 1500);
+      } catch (e) { toast(e.message, 'error'); }
+    }
+    async function syncPrep365Now() {
+      toast('Syncing candidates from Prep365…', 'info');
+      try {
+        const res = await api('/prep365/sync', { method: 'POST' });
+        const count = res.studentCount ?? (res.plannedCalls?.length || 0);
+        toast(`Prep365 sync: ${count} student(s) received (dryRun=${res.dryRun})`, 'success');
         setTimeout(loadLeads, 1500);
       } catch (e) { toast(e.message, 'error'); }
     }

@@ -131,4 +131,12 @@ module.exports = {
       lastUpdated: 14,  // column O
     },
   },
+
+  // Prep365 integration
+  prep365: {
+    apiKey: process.env.PREP365_API_KEY || '',
+    dryRun: process.env.PREP365_DRY_RUN !== 'false', // default true
+    baseUrl: process.env.PREP365_BASE_URL || 'https://www.prep365.ai/api/ai-calls',
+    cronSchedule: process.env.PREP365_CRON_SCHEDULE || '0 14 * * *', // Daily 14:00 UTC (9:00 AM EST)
+  },
 };

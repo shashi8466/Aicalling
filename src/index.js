@@ -35,6 +35,7 @@ const emailCallbackPoller = require('./jobs/emailCallbackPoller');
 const meetingReminderPoller = require('./jobs/meetingReminderPoller');
 const billingPoller    = require('./jobs/billingPoller');
 const transcriptionProcessor = require('./jobs/transcriptionProcessor');
+const prep365Poller    = require('./jobs/prep365Poller');
 
 const app = express();
 
@@ -90,6 +91,49 @@ app.post('/api/meeting/token', async (req, res) => {
 // browser EventSource API cannot send Authorization headers. Registered BEFORE
 // the blanket requireAuth below (which would 401 the header-less EventSource).
 app.get('/api/crm/updates/stream', requireAuthQuery, crmRouter.streamHandler);
+
+// ── Prep365 Manual Sync Endpoint ─────────────────────────────────────────────
+// Can be triggered by:
+// 1) Bearer <PREP365_API_KEY>
+// 2) Header x-api-key: <PREP365_API_KEY> or x-prep365-secret: <PREP365_API_KEY>
+// 3) Supabase user / admin JWT
+app.post(['/api/prep365/sync', '/prep365/sync'], async (req, res) => {
+  const authHeader = req.headers['authorization'] || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  const apiKeyHeader = req.headers['x-api-key'] || req.headers['x-prep365-secret'] || '';
+  const configuredKey = cfg.prep365?.apiKey || process.env.PREP365_API_KEY || '';
+
+  let authorized = false;
+  if (configuredKey && (token === configuredKey || apiKeyHeader === configuredKey)) {
+    authorized = true;
+  }
+
+  // Also check if valid dashboard JWT
+  if (!authorized && token) {
+    try {
+      const supabase = require('./db/supabase');
+      const { data, error } = await supabase.auth.getUser(token);
+      if (!error && data?.user) authorized = true;
+    } catch (_) {}
+  }
+
+  if (!authorized) {
+    return res.status(401).json({
+      ok: false,
+      error: 'Unauthorized: valid PREP365_API_KEY Bearer token or Admin JWT required.'
+    });
+  }
+
+  try {
+    const prep365Svc = require('./services/prep365Service');
+    const dryRunParam = req.body?.dryRun !== undefined ? req.body.dryRun : req.query?.dryRun;
+    const result = await prep365Svc.sync({ dryRun: dryRunParam });
+    res.json(result);
+  } catch (err) {
+    logger.error('Prep365 manual sync error', { msg: err.message });
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 // Protected dashboard API — all /api/* (except public routes above) require a valid Supabase JWT
 app.use('/api', requireAuth);
@@ -250,6 +294,7 @@ async function boot() {
     meetingReminderPoller.start();
     billingPoller.start();
     transcriptionProcessor.start();
+    prep365Poller.start();
     require('./services/bulkCallService').start(); // watchdog + resume interrupted bulk runs
 
     // One-time historical billing import — scans every existing call and
@@ -292,6 +337,7 @@ async function shutdown(signal) {
   logger.info(`${signal} received — shutting down…`);
   tunnelMgr.stopTunnel();
   poller.stop();
+  prep365Poller.stop();
   process.exit(0);
 }
 process.on('SIGTERM', () => shutdown('SIGTERM'));

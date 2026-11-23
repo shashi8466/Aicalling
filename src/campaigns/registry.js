@@ -41,6 +41,35 @@ function customScriptExpectsReply(script) {
 
 // ── Campaign definitions ────────────────────────────────────────────────────
 const CAMPAIGNS = {
+  'prep365-retention': {
+    type: 'prep365-retention',
+    name: 'Prep365 Study Plan Check-in',
+    program: 'Prep365',
+    turn0Line: (lead) => {
+      const recipientType = lead.qualification?.prep365RecipientType || 'student';
+      const studentName = lead.qualification?.prep365StudentName || lead.fullName;
+      if (recipientType === 'parent') {
+        return `Hello, I'm calling from Prep365 regarding ${studentName}'s test prep progress. We noticed they have some pending study tasks and haven't taken a practice test recently. Are you free for a quick minute to discuss their study plan?`;
+      }
+      return `Hi ${firstName(lead)}, I'm calling from Prep365 to check in on your test preparation progress. We noticed you have some unfinished study topics and haven't taken a practice test in a few days. Do you have a quick moment?`;
+    },
+    systemContext: (lead) => {
+      const points = lead.qualification?.prep365TalkingPoints || lead.notes || '';
+      return `━━━ CAMPAIGN: PREP365 RETENTION & STUDY CHECK-IN ━━━
+You are an AI Academic Advisor calling from Prep365.
+Student Name: ${lead.fullName}
+Context & Talking Points:
+${points}
+
+GOAL:
+- Check in with the student or parent regarding their Prep365 study plan.
+- Mention their pending topics/tasks and encourage them to log in to Prep365 today and take their next practice test.
+- Be supportive, motivating, and helpful.
+- If they need academic counseling or help with their curriculum, offer to schedule a free 15-minute consultation [OFFER_MEETING].
+- Keep responses concise, warm, and professional.`;
+    }
+  },
+
   'custom-script': {
     type: 'custom-script',
     name: 'Custom Campaign',

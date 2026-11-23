@@ -87,3 +87,9 @@ services:
         value: "3"
       - key: CALL_RETRY_DELAY_MINUTES
         value: "60"
+
+      # Prep365 Integration
+      - key: PREP365_API_KEY
+        sync: false
+      - key: PREP365_DRY_RUN
+        value: "true"
