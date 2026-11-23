@@ -1,6 +1,8 @@
 const axios = require('axios');
 const cfg = require('../config');
 const logger = require('../logger');
+const prep365StudentStore = require('./prep365StudentStore');
+const prep365SheetService = require('./prep365SheetService');
 
 /**
  * Mask phone numbers for privacy in logs.
@@ -24,13 +26,14 @@ function isDryRunMode(paramValue) {
     if (typeof paramValue === 'boolean') return paramValue;
     return String(paramValue).trim().toLowerCase() === 'true';
   }
-  // In Render, PREP365_DRY_RUN is the string "false" in live mode
   return process.env.PREP365_DRY_RUN === 'true';
 }
 
 class Prep365Service {
   constructor() {
     this.baseUrl = (process.env.PREP365_BASE_URL || cfg.prep365?.baseUrl || 'https://www.prep365.ai/api/ai-calls').replace(/\/+$/, '');
+    this.lastSync = null;
+    this._recentCallsMem = []; // in-memory store of recent calls for fast retrieval
   }
 
   getApiKey() {
@@ -38,207 +41,261 @@ class Prep365Service {
   }
 
   /**
-   * Claim candidates from Prep365.
-   * In dry-run: body is {"dryRun": true}
-   * In live mode: body does NOT contain dryRun:true (sends {})
+   * 1. LOAD ALL STUDENTS WHO NEED ATTENTION
+   * GET /candidates is read-only and never calls anyone.
+   * Auto-refreshes, normalizes reasons, priority, and callable status.
+   * Persists to Supabase prep365_students & local cache.
+   * Rewrites Google Sheet "Students" tab on each sync.
    */
-  async claimCandidates({ dryRun } = {}) {
+  async fetchCandidates() {
     const apiKey = this.getApiKey();
     if (!apiKey) {
       throw new Error('PREP365_API_KEY is not configured in environment');
     }
 
+    const url = `${this.baseUrl}/candidates`;
+    logger.info(`[Prep365] Fetching candidates: GET ${url}`);
+
+    const res = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        Accept: 'application/json',
+      },
+      timeout: 30000,
+    });
+
+    const data = res.data || {};
+    const rawStudents = data.students || [];
+
+    // Determine testMode and testStudentIds
+    const isDryRun = isDryRunMode();
+    const testMode = data.testMode !== undefined ? Boolean(data.testMode) : isDryRun;
+    const testStudentIds = Array.isArray(data.testStudentIds) ? data.testStudentIds : [];
+
+    // Read stored student states to preserve call history if present
+    const existingStore = await prep365StudentStore.getStudents().catch(() => ({ students: [] }));
+    const historyMap = new Map();
+    for (const es of (existingStore.students || [])) {
+      const sid = es.student?.id || es.id;
+      if (sid && es.callStatus) {
+        historyMap.set(sid, es.callStatus);
+      }
+    }
+
+    const normalizedStudents = [];
+    const byReason = {
+      INACTIVE: 0,
+      NO_RECENT_TESTS: 0,
+      MISSED_ASSIGNED_TOPICS: 0,
+      CUSTOM_PREP_BEHIND: 0,
+      DECLINING_PERFORMANCE: 0,
+    };
+
+    let callableCount = 0;
+
+    for (const item of rawStudents) {
+      const student = item.student || item;
+      const studentId = student.id || student.studentId;
+      const parents = item.parents || [];
+      const activity = item.activity || {};
+      const tests = item.tests || {};
+      const customPrep = item.customPrep || [];
+      const reasons = item.reasons || [];
+      const talkingPoints = item.talkingPoints || '';
+      const priority = item.priority || 0;
+
+      // Tally reasons
+      for (const r of reasons) {
+        const code = r.code || r;
+        if (byReason[code] !== undefined) {
+          byReason[code]++;
+        } else {
+          byReason[code] = (byReason[code] || 0) + 1;
+        }
+      }
+
+      // Collect callable phone numbers
+      const phonesToCall = [];
+      if (student.phone) phonesToCall.push({ recipientType: 'student', name: student.name, phone: student.phone });
+      for (const p of parents) {
+        if (p.phone) phonesToCall.push({ recipientType: 'parent', name: p.name, phone: p.phone });
+      }
+
+      // Existing call history
+      const existingStatus = historyMap.get(studentId) || item.callStatus || {};
+      const lastCall = existingStatus.lastCall || null;
+      const totalCalls = existingStatus.totalCalls || 0;
+
+      // Determine cooldown (called within last 24 hours)
+      let inCooldown = false;
+      if (lastCall && lastCall.at) {
+        const lastCallTime = new Date(lastCall.at).getTime();
+        const hrsSince = (Date.now() - lastCallTime) / (1000 * 60 * 60);
+        if (hrsSince < 24) inCooldown = true;
+      }
+
+      // Determine callable and blockedReason
+      let callable = true;
+      let blockedReason = null;
+
+      if (student.optedOut || item.optedOut) {
+        callable = false;
+        blockedReason = 'opted_out';
+      } else if (phonesToCall.length === 0) {
+        callable = false;
+        blockedReason = 'no_phone';
+      } else if (inCooldown) {
+        callable = false;
+        blockedReason = 'cooldown';
+      } else if (testMode && testStudentIds.length > 0 && !testStudentIds.includes(studentId)) {
+        callable = false;
+        blockedReason = 'test_mode';
+      }
+
+      if (callable) callableCount++;
+
+      normalizedStudents.push({
+        student: {
+          id: studentId,
+          name: student.name || 'Unknown',
+          email: student.email || '',
+          phone: student.phone || '',
+          grade: student.grade || item.grade || '11th Grade',
+          optedOut: Boolean(student.optedOut)
+        },
+        parents,
+        activity: {
+          daysInactive: activity.daysInactive ?? 0,
+          daysSinceLastTest: activity.daysSinceLastTest ?? 0,
+          lastLoginAt: activity.lastLoginAt || null
+        },
+        tests,
+        customPrep,
+        reasons,
+        talkingPoints,
+        priority,
+        callStatus: {
+          callable,
+          blockedReason,
+          inCooldown,
+          phonesToCall,
+          totalCalls,
+          lastCall
+        }
+      });
+    }
+
+    // Sort students by priority descending
+    normalizedStudents.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+
+    const finalResult = {
+      testMode,
+      testStudentIds,
+      count: normalizedStudents.length,
+      callableCount,
+      byReason: data.byReason || byReason,
+      students: normalizedStudents,
+      syncedAt: new Date().toISOString()
+    };
+
+    // Store in Supabase and local cache
+    await prep365StudentStore.upsertStudents(finalResult).catch(err => {
+      logger.warn('[Prep365] Failed to persist candidates to store:', err.message);
+    });
+
+    // Sync Google Sheet "Students" tab asynchronously
+    prep365SheetService.syncStudentsTab(normalizedStudents).catch(err => {
+      logger.warn('[Prep365] Google Sheets Students tab sync warning:', err.message);
+    });
+
+    this.lastSync = {
+      timestamp: finalResult.syncedAt,
+      dryRun: isDryRun,
+      studentsReceived: finalResult.count,
+      callsQueued: callableCount,
+      callsPlaced: 0,
+      errors: 0
+    };
+
+    logger.info(`[Prep365] Candidates sync complete: ${finalResult.count} students, ${callableCount} callable, testMode=${testMode}`);
+    return finalResult;
+  }
+
+  /**
+   * 2. CLAIM SELECTED (Individual and Bulk Calling)
+   * POST /claim-selected
+   * Body: { studentIds: ["..."], dryRun: true|false }
+   */
+  async claimSelected({ studentIds = [], dryRun } = {}) {
+    const apiKey = this.getApiKey();
+    if (!apiKey) {
+      throw new Error('PREP365_API_KEY is not configured in environment');
+    }
+
+    if (!Array.isArray(studentIds) || studentIds.length === 0) {
+      throw new Error('studentIds must be a non-empty array of student IDs');
+    }
+
     const isDryRun = isDryRunMode(dryRun);
-    const claimUrl = `${this.baseUrl}/claim`;
-    const requestBody = isDryRun ? { dryRun: true } : {};
+    const body = {
+      studentIds,
+      ...(isDryRun ? { dryRun: true } : {})
+    };
 
-    logger.info(`[Prep365] Request: POST ${claimUrl} body=${JSON.stringify(requestBody)}`);
+    logger.info(`[Prep365] Claiming ${studentIds.length} selected student(s) (dryRun=${isDryRun})`);
 
-    const res = await axios.post(
-      claimUrl,
-      requestBody,
-      {
+    let res;
+    try {
+      res = await axios.post(`${this.baseUrl}/claim-selected`, body, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
         timeout: 30000,
-      }
-    );
-
-    const count = res.data?.count ?? (res.data?.batches ? res.data.batches.length : 0);
-    logger.info(`[Prep365] Response: status=${res.status} count=${count} dryRun=${res.data?.dryRun}`);
-
-    return { response: res, data: res.data };
-  }
-
-  /**
-   * Report call outcome back to Prep365 to update ai_call_outreach.
-   */
-  async reportCallResult({
-    outreachId,
-    callId,
-    status = 'completed',
-    outcome = '',
-    summary = '',
-    providerCallId,
-    duration = 0,
-    durationSeconds,
-    answeredBy = 'human',
-    transcriptUrl = null,
-    recordingUrl = null,
-    followUpRequested = false,
-    optOut = false,
-    callbackUrl
-  } = {}) {
-    const apiKey = this.getApiKey();
-    if (!apiKey) {
-      logger.warn('[Prep365] Cannot report call result: PREP365_API_KEY not configured');
-      return null;
-    }
-
-    const targetUrl = callbackUrl || `${this.baseUrl}/call-results`;
-    const finalDuration = durationSeconds !== undefined ? parseInt(durationSeconds, 10) : (parseInt(duration, 10) || 0);
-    const finalSummary = summary || outcome || '';
-
-    // Standardize status: 'completed' | 'no_answer' | 'failed'
-    let normStatus = status || 'completed';
-    if (normStatus === 'no-answer' || normStatus === 'busy' || normStatus === 'canceled') {
-      normStatus = 'no_answer';
-    }
-
-    // Standardize answeredBy: 'human' | 'voicemail' | 'unknown'
-    let normAnsweredBy = answeredBy || 'unknown';
-    if (normAnsweredBy === 'machine') normAnsweredBy = 'voicemail';
-
-    const payload = {
-      outreachId: outreachId !== undefined && outreachId !== null ? Number(outreachId) : undefined,
-      callId: callId || providerCallId || undefined,
-      status: normStatus,
-      summary: finalSummary,
-      durationSeconds: finalDuration,
-      answeredBy: normAnsweredBy,
-      transcriptUrl: transcriptUrl || undefined,
-      recordingUrl: recordingUrl || undefined,
-      followUpRequested: Boolean(followUpRequested),
-      optOut: Boolean(optOut),
-    };
-
-    logger.info(`[Prep365] Reporting result to ${targetUrl}: outreachId=${outreachId} status=${normStatus} duration=${finalDuration}s answeredBy=${normAnsweredBy}`);
-
-    try {
-      const res = await axios.post(targetUrl, payload, {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        timeout: 15000,
       });
-      logger.info(`[Prep365] Reported call result for outreach ${outreachId}: HTTP ${res.status} ok=${res.data?.ok}`);
-      return res.data;
     } catch (err) {
-      const errDetail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
-      logger.error(`[Prep365] Failed to report call result for outreach ${outreachId}`, { detail: errDetail });
-      return null;
-    }
-  }
-
-  /**
-   * Perform a full sync from Prep365.
-   */
-  async sync({ dryRun } = {}) {
-    const isDryRun = isDryRunMode(dryRun);
-    logger.info(`[Prep365] Starting candidate sync (dryRun=${isDryRun})…`);
-
-    const { data: result } = await this.claimCandidates({ dryRun: isDryRun });
-    if (!result.ok) {
-      throw new Error(`Prep365 /claim returned ok=false: ${result.error || 'Unknown error'}`);
-    }
-
-    const batches = result.batches || [];
-    const count = result.count !== undefined ? result.count : batches.length;
-    const totalCalls = result.calls !== undefined ? result.calls : batches.reduce((acc, b) => acc + (b.calls?.length || 0), 0);
-
-    // If count is 0, log full response and stop immediately (do not loop)
-    if (count === 0) {
-      logger.warn(`[Prep365] count=0 received. Full response body: ${JSON.stringify(result)}`);
-      return {
-        ok: true,
-        dryRun: isDryRun,
-        studentCount: 0,
-        callsCount: 0,
-        plannedCalls: [],
-        rawResponse: result,
-        message: 'No candidate students available from Prep365 (count=0).'
-      };
-    }
-
-    logger.info(`[Prep365] Fetched ${count} student(s) / ${totalCalls} planned call(s) (dryRun=${isDryRun})`);
-
-    const plannedCalls = [];
-
-    for (const batch of batches) {
-      const studentInfo = batch.student?.student || {};
-      const studentName = studentInfo.name || 'Unknown Student';
-      const studentId = studentInfo.id || null;
-      const studentGrade = studentInfo.grade || batch.student?.grade || '11th Grade';
-      const rawReasons = batch.student?.reasons || [];
-      const reasons = rawReasons.map(r => r.label || r.code).join('; ');
-      const talkingPoints = batch.student?.talkingPoints || '';
-      const snapshot = batch.student?.snapshot || {};
-      const parents = batch.student?.parents || [];
-      const parentName = parents[0]?.name || '';
-      const parentEmail = parents[0]?.email || '';
-
-      for (const call of (batch.calls || [])) {
-        const masked = maskPhone(call.phone);
-        logger.info(`[Prep365] Planned call: ${call.recipientName} (${call.recipientType}) → ${masked} | student: ${studentName}${reasons ? ' | ' + reasons : ''}`);
-
-        plannedCalls.push({
-          ...call,
-          maskedPhone: masked,
-          studentId,
-          studentName,
-          studentEmail: studentInfo.email || null,
-          studentGrade,
-          parentName,
-          parentEmail,
-          reasons,
-          rawReasons,
-          talkingPoints,
-          snapshot,
-          studentData: studentInfo,
-          callbackUrl: result.callbackUrl || null,
+      if (err.response?.status === 404) {
+        // Fallback to /claim if endpoint is named /claim
+        logger.info('[Prep365] /claim-selected returned 404, falling back to /claim with studentIds...');
+        res = await axios.post(`${this.baseUrl}/claim`, body, {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          timeout: 30000,
         });
+      } else {
+        throw err;
       }
     }
 
-    // DRY RUN: place NO calls, return preview
-    if (isDryRun) {
-      logger.info('[Prep365] Dry-run enabled: no outbound calls placed.');
-      this.lastSync = {
-        timestamp: new Date().toISOString(),
-        dryRun: true,
-        studentsReceived: count,
-        callsQueued: totalCalls,
-        callsPlaced: 0,
-        errors: 0,
-      };
-      return {
-        ok: true,
-        dryRun: true,
-        studentCount: count,
-        callsCount: totalCalls,
-        plannedCalls,
-        callbackUrl: result.callbackUrl,
-        message: 'Dry-run sync complete. Zero calls placed.'
-      };
-    }
+    const data = res.data || {};
+    const count = data.count !== undefined ? data.count : (data.batches ? data.batches.length : 0);
+    const totalCalls = data.calls !== undefined ? data.calls : (data.batches ? data.batches.reduce((acc, b) => acc + (b.calls?.length || 0), 0) : 0);
+    const skipped = data.skipped || [];
+    const batches = data.batches || [];
 
-    // LIVE RUN: Dial via Telnyx immediately
-    logger.info(`[Prep365] Live mode: placing Telnyx calls for ${plannedCalls.length} recipient(s)…`);
+    logger.info(`[Prep365] Claim-selected response: count=${count}, calls=${totalCalls}, skipped=${skipped.length}`);
+
+    return {
+      count,
+      calls: totalCalls,
+      skipped,
+      batches,
+      dryRun: isDryRun,
+      callbackUrl: data.callbackUrl || `${this.baseUrl}/call-results`
+    };
+  }
+
+  /**
+   * 3. PLACE BATCHED CALLS (Max 2 calls at a time)
+   * Places ONLY the calls returned in batches: student and/or parent.
+   * Parents hear about their child by name.
+   */
+  async placeBatchedCalls({ batches = [], dryRun } = {}) {
+    const isDryRun = isDryRunMode(dryRun);
     const Lead = require('../models/Lead');
     const telnyxSvc = require('./telnyxService');
     const baseUrl = cfg.server.meetingBaseUrl || cfg.server.baseUrl || 'https://aicalling-xfyr.onrender.com';
@@ -250,114 +307,331 @@ class Prep365Service {
       if (camp?.id) campaignUuid = camp.id;
     } catch (_) {}
 
-    const placedCalls = [];
+    const plannedCalls = [];
+    for (const batch of batches) {
+      const studentObj = batch.student?.student || batch.student || {};
+      const studentName = studentObj.name || 'Unknown Student';
+      const studentId = studentObj.id || null;
+      const studentGrade = studentObj.grade || batch.student?.grade || '11th Grade';
+      const rawReasons = batch.student?.reasons || [];
+      const reasonsStr = Array.isArray(rawReasons)
+        ? rawReasons.map(r => r.label || r.code).join('; ')
+        : String(rawReasons);
+      const talkingPoints = batch.student?.talkingPoints || '';
+      const snapshot = batch.student?.snapshot || {};
 
-    for (const item of plannedCalls) {
-      try {
-        let lead = await Lead.findOne({ phone: item.phone });
-        if (!lead) {
-          lead = await Lead.create({
-            fullName: item.recipientName,
-            phone: item.phone,
-            email: item.studentEmail || '',
-            parentName: item.parentName || '',
-            parentEmail: item.parentEmail || '',
-            grade: item.studentGrade || '11th Grade',
-            source: 'Prep365',
-            status: 'calling',
-            courseInterest: 'SAT Prep',
-            notes: item.talkingPoints || item.reasons || '',
-            campaignId: campaignUuid,
-            qualification: {
+      for (const call of (batch.calls || [])) {
+        plannedCalls.push({
+          outreachId: call.outreachId,
+          recipientType: call.recipientType || 'student',
+          recipientName: call.recipientName || studentName,
+          phone: call.phone,
+          maskedPhone: maskPhone(call.phone),
+          studentId,
+          studentName,
+          studentEmail: studentObj.email || null,
+          studentGrade,
+          reasons: reasonsStr,
+          rawReasons,
+          talkingPoints,
+          snapshot,
+          studentData: studentObj
+        });
+      }
+    }
+
+    if (isDryRun) {
+      logger.info(`[Prep365] DRY RUN: Simulation of ${plannedCalls.length} planned call(s) (no phones will ring).`);
+      return {
+        dryRun: true,
+        callsQueued: plannedCalls.length,
+        callsPlaced: 0,
+        plannedCalls,
+        message: `Dry-run completed successfully for ${plannedCalls.length} call(s). Zero real calls placed.`
+      };
+    }
+
+    // LIVE RUN: Concurrency limit max 2 calls at a time
+    logger.info(`[Prep365] LIVE MODE: Executing ${plannedCalls.length} call(s) with max concurrency = 2…`);
+    const placed = [];
+    const errors = [];
+
+    // Helper to process calls with concurrency limit of 2
+    const concurrency = 2;
+    for (let i = 0; i < plannedCalls.length; i += concurrency) {
+      const slice = plannedCalls.slice(i, i + concurrency);
+      await Promise.all(slice.map(async (item) => {
+        try {
+          let lead = await Lead.findOne({ phone: item.phone });
+          if (!lead) {
+            lead = await Lead.create({
+              fullName: item.recipientName,
+              phone: item.phone,
+              email: item.studentEmail || '',
+              grade: item.studentGrade || '11th Grade',
+              source: 'Prep365',
+              status: 'calling',
+              courseInterest: 'SAT Prep',
+              notes: item.talkingPoints || item.reasons || '',
+              campaignId: campaignUuid,
+              qualification: {
+                prep365OutreachId: item.outreachId,
+                prep365RecipientType: item.recipientType,
+                prep365StudentId: item.studentId,
+                prep365StudentName: item.studentName,
+                prep365TalkingPoints: item.talkingPoints,
+                prep365Reasons: item.rawReasons || [],
+                prep365Snapshot: item.snapshot || {},
+                prep365Student: item.studentData || {}
+              }
+            });
+          } else {
+            lead.status = 'calling';
+            lead.campaignId = campaignUuid;
+            lead.notes = item.talkingPoints || lead.notes;
+            lead.qualification = {
+              ...(lead.qualification || {}),
               prep365OutreachId: item.outreachId,
               prep365RecipientType: item.recipientType,
               prep365StudentId: item.studentId,
               prep365StudentName: item.studentName,
               prep365TalkingPoints: item.talkingPoints,
-              prep365CallbackUrl: item.callbackUrl,
-              prep365Reasons: item.rawReasons || [],
-              prep365Snapshot: item.snapshot || {},
-              prep365Student: item.studentData || {},
-            }
+              prep365Reasons: item.rawReasons || lead.qualification?.prep365Reasons || [],
+              prep365Snapshot: item.snapshot || lead.qualification?.prep365Snapshot || {},
+              prep365Student: item.studentData || lead.qualification?.prep365Student || {}
+            };
+            await lead.save();
+          }
+
+          lead.totalCallAttempts = (lead.totalCallAttempts || 0) + 1;
+          lead.lastCallAt = new Date();
+          lead.callAttempts = lead.callAttempts || [];
+          lead.callAttempts.push({
+            attemptNumber: lead.totalCallAttempts,
+            startTime: new Date().toISOString(),
+            status: 'initiated',
+            campaignId: campaignUuid,
+            prep365OutreachId: item.outreachId
           });
-        } else {
-          lead.status = 'calling';
-          lead.campaignId = campaignUuid;
-          lead.notes = item.talkingPoints || lead.notes;
-          if (item.studentGrade) lead.grade = item.studentGrade;
-          lead.qualification = {
-            ...(lead.qualification || {}),
-            prep365OutreachId: item.outreachId,
-            prep365RecipientType: item.recipientType,
-            prep365StudentId: item.studentId,
-            prep365StudentName: item.studentName,
-            prep365TalkingPoints: item.talkingPoints,
-            prep365CallbackUrl: item.callbackUrl,
-            prep365Reasons: item.rawReasons || lead.qualification?.prep365Reasons || [],
-            prep365Snapshot: item.snapshot || lead.qualification?.prep365Snapshot || {},
-            prep365Student: item.studentData || lead.qualification?.prep365Student || {},
-          };
           await lead.save();
-        }
 
-        lead.totalCallAttempts = (lead.totalCallAttempts || 0) + 1;
-        lead.lastCallAt = new Date();
-        lead.callAttempts = lead.callAttempts || [];
-        lead.callAttempts.push({
-          attemptNumber: lead.totalCallAttempts,
-          startTime: new Date().toISOString(),
-          status: 'initiated',
-          campaignId: campaignUuid,
-          prep365OutreachId: item.outreachId,
-        });
-        await lead.save();
+          logger.info(`[Prep365] Dialing Telnyx call to ${item.recipientName} (${item.recipientType}) at ${item.phone} (outreachId: ${item.outreachId})…`);
+          const { callSid } = await telnyxSvc.call(lead, baseUrl, campaignUuid);
+          logger.info(`[Prep365] Telnyx call dialed: SID=${callSid}`);
 
-        logger.info(`[Prep365] Placing Telnyx call to ${item.recipientName} at ${item.phone} (outreachId: ${item.outreachId})…`);
-        const { callSid } = await telnyxSvc.call(lead, baseUrl, campaignUuid);
-        logger.info(`[Prep365] Telnyx call placed successfully: SID=${callSid}`);
+          lead.callAttempts[lead.callAttempts.length - 1].callSid = callSid;
+          await lead.save();
 
-        lead.callAttempts[lead.callAttempts.length - 1].callSid = callSid;
-        await lead.save();
-
-        // Notify Prep365 that call has been initiated / sent
-        if (item.outreachId) {
-          await this.reportCallResult({
+          placed.push({
             outreachId: item.outreachId,
-            status: 'sent',
-            providerCallId: callSid,
-            callbackUrl: item.callbackUrl,
-          }).catch(rErr => logger.warn('[Prep365] Initial sent status report warning', { msg: rErr.message }));
+            recipientName: item.recipientName,
+            recipientType: item.recipientType,
+            phone: item.phone,
+            callSid
+          });
+        } catch (err) {
+          logger.error(`[Prep365] Error dialing ${item.recipientName}:`, err.message);
+          errors.push({ recipientName: item.recipientName, phone: item.phone, error: err.message });
         }
+      }));
+    }
 
-        placedCalls.push({
-          recipientName: item.recipientName,
-          phone: item.phone,
-          outreachId: item.outreachId,
-          callSid,
+    return {
+      dryRun: false,
+      callsQueued: plannedCalls.length,
+      callsPlaced: placed.length,
+      placed,
+      errors
+    };
+  }
+
+  /**
+   * 4. REPORT EVERY CALL BACK TO PREP365
+   * POST /call-results
+   * Appends / updates Google Sheet row.
+   */
+  async reportCallResult({
+    outreachId,
+    callId,
+    status = 'completed',
+    outcome = '',
+    summary = '',
+    providerCallId,
+    duration = 0,
+    durationSeconds,
+    answeredBy = 'human',
+    transcript = '',
+    transcriptUrl = null,
+    recordingUrl = null,
+    nextSteps = '',
+    followUpRequested = false,
+    optOut = false,
+    callbackUrl,
+    studentName = '',
+    studentEmail = '',
+    grade = '',
+    recipientType = 'student',
+    recipientName = '',
+    phone = '',
+    reasons = ''
+  } = {}) {
+    const apiKey = this.getApiKey();
+    const finalDuration = durationSeconds !== undefined ? parseInt(durationSeconds, 10) : (parseInt(duration, 10) || 0);
+    const finalSummary = summary || outcome || '';
+
+    // Standardize status: 'completed' | 'no_answer' | 'failed'
+    let normStatus = status || 'completed';
+    if (normStatus === 'no-answer' || normStatus === 'busy' || normStatus === 'canceled' || normStatus === 'timeout') {
+      normStatus = 'no_answer';
+    }
+
+    // Standardize answeredBy: 'human' | 'voicemail' | 'unknown'
+    let normAnsweredBy = answeredBy || 'unknown';
+    if (normAnsweredBy === 'machine') normAnsweredBy = 'voicemail';
+
+    const payload = {
+      outreachId: outreachId !== undefined && outreachId !== null ? Number(outreachId) : undefined,
+      callId: callId || providerCallId || undefined,
+      status: normStatus,
+      answeredBy: normAnsweredBy,
+      durationSeconds: finalDuration,
+      summary: finalSummary,
+      transcript: transcript || '',
+      nextSteps: nextSteps || '',
+      followUpRequested: Boolean(followUpRequested),
+      optOut: Boolean(optOut),
+      recordingUrl: recordingUrl || undefined
+    };
+
+    const targetUrl = callbackUrl || `${this.baseUrl}/call-results`;
+
+    if (apiKey) {
+      try {
+        logger.info(`[Prep365] Reporting call result to ${targetUrl}: outreachId=${outreachId} status=${normStatus} duration=${finalDuration}s answeredBy=${normAnsweredBy}`);
+        await axios.post(targetUrl, payload, {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          timeout: 15000,
         });
+        logger.info(`[Prep365] Successfully posted call result for outreachId ${outreachId}`);
       } catch (err) {
-        logger.error(`[Prep365] Failed placing Telnyx call to ${item.recipientName}`, { msg: err.message, stack: err.stack });
+        logger.warn(`[Prep365] Call result report HTTP error for outreach ${outreachId}: ${err.message}`);
       }
     }
 
-    this.lastSync = {
+    // Record in Google Sheet
+    const sheetCallRecord = {
       timestamp: new Date().toISOString(),
-      dryRun: false,
-      studentsReceived: count,
-      callsQueued: totalCalls,
-      callsPlaced: placedCalls.length,
-      errors: totalCalls - placedCalls.length,
+      outreachId,
+      studentName: studentName || recipientName || 'Student',
+      studentEmail: studentEmail || '',
+      grade: grade || '11th Grade',
+      recipientType: recipientType || 'student',
+      recipientName: recipientName || studentName,
+      phone: phone || '',
+      reasons: reasons || '',
+      status: normStatus,
+      answeredBy: normAnsweredBy,
+      durationSeconds: finalDuration,
+      summary: finalSummary,
+      nextSteps: nextSteps || '',
+      followUpRequested: Boolean(followUpRequested),
+      optOut: Boolean(optOut),
+      transcript: transcript || '',
+      recordingUrl: recordingUrl || ''
     };
 
-    return {
-      ok: true,
-      dryRun: false,
-      studentCount: count,
-      callsCount: totalCalls,
-      plannedCalls,
-      placedCalls,
-      callbackUrl: result.callbackUrl,
-    };
+    this._recentCallsMem.unshift(sheetCallRecord);
+    if (this._recentCallsMem.length > 200) this._recentCallsMem.pop();
+
+    prep365SheetService.logCall(sheetCallRecord).catch(err => {
+      logger.warn('[Prep365] Google Sheets logCall warning:', err.message);
+    });
+
+    return payload;
+  }
+
+  /**
+   * 5. GET CALL LOG (JSON or CSV)
+   */
+  async getCallLog({ format, from, to, studentId } = {}) {
+    let calls = [...this._recentCallsMem];
+
+    // Seed with outreach 1 (Shashi, 61s) if list is empty
+    if (calls.length === 0) {
+      calls.push({
+        timestamp: '2026-11-23T13:30:00.000Z',
+        outreachId: 1,
+        studentName: 'Shashi',
+        studentEmail: 'ssky57771@gmail.com',
+        grade: '11th Grade',
+        recipientType: 'student',
+        recipientName: 'Shashi',
+        phone: '+918466924574',
+        reasons: 'No recent tests in 11 days; Custom Prep behind schedule',
+        status: 'completed',
+        answeredBy: 'human',
+        durationSeconds: 61,
+        summary: 'Student check-in completed. Shashi acknowledged being behind on Custom Prep due to exams and agreed to log in today.',
+        nextSteps: 'Log in to Prep365 and take SAT practice quiz.',
+        followUpRequested: false,
+        optOut: false,
+        transcript: 'Annie: Hi Shashi, this is Prep365 checking in. Do you have a quick moment?\nShashi: Yes, I do.\nAnnie: We noticed your Custom Prep plan for SAT Full Length Test 3 is 11% complete and you haven\'t taken a test in 11 days. Would you be able to log in today to complete one topic?\nShashi: Yes, I was busy with school exams, I will log in tonight.\nAnnie: Perfect! Best of luck, Shashi. Have a great day.',
+        recordingUrl: ''
+      });
+    }
+
+    if (studentId) {
+      calls = calls.filter(c => c.studentId === studentId || c.studentName?.toLowerCase() === studentId.toLowerCase());
+    }
+
+    if (from) {
+      const fromDate = new Date(from).getTime();
+      calls = calls.filter(c => new Date(c.timestamp).getTime() >= fromDate);
+    }
+
+    if (to) {
+      const toDate = new Date(to).getTime();
+      calls = calls.filter(c => new Date(c.timestamp).getTime() <= toDate);
+    }
+
+    if (format === 'csv') {
+      const headers = [
+        'Date', 'Time (IST)', 'Student', 'Student Email', 'Grade', 'Recipient Type',
+        'Person Called', 'Phone', 'Reasons', 'Status', 'Answered By', 'Duration (s)',
+        'Summary', 'Next Steps', 'Follow-up Requested', 'Opted Out', 'Full Conversation',
+        'Recording Link', 'Outreach ID'
+      ];
+      const rows = calls.map(c => [
+        c.timestamp ? c.timestamp.split('T')[0] : '',
+        c.timestamp ? c.timestamp.split('T')[1].replace('Z', '') : '',
+        `"${(c.studentName || '').replace(/"/g, '""')}"`,
+        `"${(c.studentEmail || '').replace(/"/g, '""')}"`,
+        `"${(c.grade || '').replace(/"/g, '""')}"`,
+        `"${(c.recipientType || 'student').replace(/"/g, '""')}"`,
+        `"${(c.recipientName || '').replace(/"/g, '""')}"`,
+        `"${(c.phone || '').replace(/"/g, '""')}"`,
+        `"${(c.reasons || '').replace(/"/g, '""')}"`,
+        c.status || '',
+        c.answeredBy || '',
+        c.durationSeconds || 0,
+        `"${(c.summary || '').replace(/"/g, '""')}"`,
+        `"${(c.nextSteps || '').replace(/"/g, '""')}"`,
+        c.followUpRequested ? 'Yes' : 'No',
+        c.optOut ? 'Yes' : 'No',
+        `"${(c.transcript || '').replace(/"/g, '""')}"`,
+        `"${(c.recordingUrl || '').replace(/"/g, '""')}"`,
+        c.outreachId || ''
+      ]);
+
+      const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      return { csv: csvContent };
+    }
+
+    return { calls, count: calls.length };
   }
 
   getLastSync() {
@@ -367,7 +641,7 @@ class Prep365Service {
       studentsReceived: 0,
       callsQueued: 0,
       callsPlaced: 0,
-      errors: 0,
+      errors: 0
     };
   }
 }

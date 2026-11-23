@@ -5001,6 +5001,12 @@
         <!-- ─── PREP365 RETENTION CHECK-INS ─── -->
         <section class="view" id="view-prep365">
           <div class="an-page">
+            <!-- Test Mode Yellow Alert Banner -->
+            <div id="prep365TestModeBanner" style="display:none;background:#FEF3C7;border:1px solid #FCD34D;color:#92400E;padding:12px 18px;border-radius:10px;margin-bottom:16px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:10px">
+              <span style="font-size:16px">⚠️</span>
+              <span>Test mode: only test students can be called. Everyone else is view-only.</span>
+            </div>
+
             <!-- Top bar -->
             <div class="prep365-topbar">
               <div class="prep365-title-area">
@@ -5010,50 +5016,53 @@
                 </div>
                 <p class="an-sub" id="prep365LastSyncInfo">Last sync: Checking…</p>
               </div>
-              <div class="filter-controls" style="align-items:center">
-                <button class="btn btn-secondary btn-sm" onclick="loadPrep365Checkins(); if(typeof toast==='function') toast('Refreshed', 'success');">↻ Refresh</button>
-                <button class="btn btn-primary btn-sm" onclick="triggerPrep365ManualSync()">⚡ Sync from Prep365</button>
+              <div class="filter-controls" style="align-items:center;flex-wrap:wrap;gap:8px">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="loadPrep365Checkins(); if(typeof toast==='function') toast('Refreshed', 'success');">↻ Refresh</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="triggerPrep365ManualSync()">⚡ Sync from Prep365</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="openPrep365GoogleSheet()">📊 Open Google Sheet</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="downloadPrep365Excel()">📥 Download Excel</button>
+                <button type="button" id="btnPrep365BulkCall" class="btn btn-primary btn-sm" style="display:none;background:#10B981;border-color:#10B981" onclick="openPrep365BulkCallModal()">📞 Call selected (0)</button>
               </div>
             </div>
 
-            <!-- Stat Cards: Synced today · Calls placed · Answered · No answer · Failed · Opted out -->
-            <div class="prep365-kpi-grid">
-              <div class="prep365-kpi-card">
-                <div class="card-icon-tile tile-blue">📥</div>
+            <!-- Stat Cards: Row 1 Primary KPIs (Clickable) -->
+            <div class="prep365-kpi-grid" style="margin-bottom:12px">
+              <div class="prep365-kpi-card" onclick="setPrep365Filter('all')" style="cursor:pointer" title="Filter: All students needing attention">
+                <div class="card-icon-tile tile-blue">🎯</div>
                 <div>
-                  <div class="kpi-label">Synced Today</div>
-                  <div class="kpi-val" id="p365_syncedToday">0</div>
+                  <div class="kpi-label">Needs Attention</div>
+                  <div class="kpi-val" id="p365_needsAttention">0</div>
                 </div>
               </div>
-              <div class="prep365-kpi-card">
+              <div class="prep365-kpi-card" onclick="setPrep365Filter('callable')" style="cursor:pointer" title="Filter: Callable students">
                 <div class="card-icon-tile tile-purple">📞</div>
                 <div>
-                  <div class="kpi-label">Calls Placed</div>
-                  <div class="kpi-val" id="p365_callsPlaced">0</div>
+                  <div class="kpi-label">Callable</div>
+                  <div class="kpi-val" id="p365_callable">0</div>
                 </div>
               </div>
-              <div class="prep365-kpi-card">
+              <div class="prep365-kpi-card" onclick="setPrep365Filter('called_today')" style="cursor:pointer" title="Filter: Called today">
+                <div class="card-icon-tile tile-blue">📅</div>
+                <div>
+                  <div class="kpi-label">Called Today</div>
+                  <div class="kpi-val" id="p365_calledToday">0</div>
+                </div>
+              </div>
+              <div class="prep365-kpi-card" onclick="setPrep365Filter('completed')" style="cursor:pointer" title="Filter: Answered calls">
                 <div class="card-icon-tile tile-green">✅</div>
                 <div>
                   <div class="kpi-label">Answered</div>
                   <div class="kpi-val" id="p365_answered">0</div>
                 </div>
               </div>
-              <div class="prep365-kpi-card">
+              <div class="prep365-kpi-card" onclick="setPrep365Filter('no_answer')" style="cursor:pointer" title="Filter: No answer calls">
                 <div class="card-icon-tile tile-amber">⏳</div>
                 <div>
                   <div class="kpi-label">No Answer</div>
                   <div class="kpi-val" id="p365_noAnswer">0</div>
                 </div>
               </div>
-              <div class="prep365-kpi-card">
-                <div class="card-icon-tile tile-rose">⚠️</div>
-                <div>
-                  <div class="kpi-label">Failed</div>
-                  <div class="kpi-val" id="p365_failed">0</div>
-                </div>
-              </div>
-              <div class="prep365-kpi-card">
+              <div class="prep365-kpi-card" onclick="setPrep365Filter('opted_out')" style="cursor:pointer" title="Filter: Opted out">
                 <div class="card-icon-tile tile-slate">🚫</div>
                 <div>
                   <div class="kpi-label">Opted Out</div>
@@ -5062,35 +5071,74 @@
               </div>
             </div>
 
+            <!-- Stat Cards: Row 2 byReason Breakdown (Clickable) -->
+            <div class="prep365-kpi-grid" style="grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));margin-bottom:16px">
+              <div class="prep365-kpi-card" onclick="setPrep365Filter('reason_INACTIVE')" style="cursor:pointer" title="Filter by Inactive 14+ days">
+                <div class="card-icon-tile tile-slate" style="font-size:16px">💤</div>
+                <div>
+                  <div class="kpi-label">Inactive (14d+)</div>
+                  <div class="kpi-val" id="p365_reason_inactive" style="font-size:20px">0</div>
+                </div>
+              </div>
+              <div class="prep365-kpi-card" onclick="setPrep365Filter('reason_NO_RECENT_TESTS')" style="cursor:pointer" title="Filter by No test in 7+ days">
+                <div class="card-icon-tile tile-rose" style="font-size:16px">📝</div>
+                <div>
+                  <div class="kpi-label">No Recent Tests</div>
+                  <div class="kpi-val" id="p365_reason_no_recent_tests" style="font-size:20px">0</div>
+                </div>
+              </div>
+              <div class="prep365-kpi-card" onclick="setPrep365Filter('reason_MISSED_ASSIGNED_TOPICS')" style="cursor:pointer" title="Filter by Missed Topics">
+                <div class="card-icon-tile tile-amber" style="font-size:16px">📚</div>
+                <div>
+                  <div class="kpi-label">Missed Topics</div>
+                  <div class="kpi-val" id="p365_reason_missed_topics" style="font-size:20px">0</div>
+                </div>
+              </div>
+              <div class="prep365-kpi-card" onclick="setPrep365Filter('reason_CUSTOM_PREP_BEHIND')" style="cursor:pointer" title="Filter by Custom Prep Behind">
+                <div class="card-icon-tile tile-purple" style="font-size:16px">⏱️</div>
+                <div>
+                  <div class="kpi-label">Custom Prep Behind</div>
+                  <div class="kpi-val" id="p365_reason_custom_prep_behind" style="font-size:20px">0</div>
+                </div>
+              </div>
+              <div class="prep365-kpi-card" onclick="setPrep365Filter('reason_DECLINING_PERFORMANCE')" style="cursor:pointer" title="Filter by Declining Score">
+                <div class="card-icon-tile tile-rose" style="font-size:16px">📉</div>
+                <div>
+                  <div class="kpi-label">Declining Scores</div>
+                  <div class="kpi-val" id="p365_reason_declining_score" style="font-size:20px">0</div>
+                </div>
+              </div>
+            </div>
+
             <!-- Table Card with Search & Filters -->
             <div class="card" style="padding:0;overflow:hidden">
-              <div class="prep365-filter-bar">
-                <div class="search-input-wrap">
+              <div class="prep365-filter-bar" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #E5E7EB;flex-wrap:wrap;gap:12px">
+                <div class="search-input-wrap" style="flex:1;min-width:260px">
                   <span>🔍</span>
                   <input type="text" id="prep365SearchInput" placeholder="Search student by name, email or phone…" oninput="filterPrep365Table()">
                 </div>
-                <div class="filter-controls">
-                  <select id="prep365FilterReason" onchange="filterPrep365Table()">
+                <div class="filter-controls" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                  <select id="prep365FilterReason" onchange="filterPrep365Table()" class="form-select form-select-sm" style="height:36px;padding:4px 10px;border-radius:6px;border:1px solid #CBD5E1;font-size:13px">
                     <option value="all">All Reasons</option>
-                    <option value="MISSED_ASSIGNED_TOPICS">Missed Topics</option>
+                    <option value="MISSED_ASSIGNED_TOPICS">Missed Assigned Topics</option>
                     <option value="NO_RECENT_TESTS">No Recent Tests</option>
                     <option value="CUSTOM_PREP_BEHIND">Custom Prep Behind</option>
-                    <option value="INACTIVE">Inactive</option>
+                    <option value="INACTIVE">Inactive (14d+)</option>
                     <option value="DECLINING_PERFORMANCE">Declining Score</option>
                   </select>
-                  <select id="prep365FilterStatus" onchange="filterPrep365Table()">
+                  <select id="prep365FilterStatus" onchange="filterPrep365Table()" class="form-select form-select-sm" style="height:36px;padding:4px 10px;border-radius:6px;border:1px solid #CBD5E1;font-size:13px">
                     <option value="all">All Call Statuses</option>
-                    <option value="queued">Queued</option>
-                    <option value="calling">Calling</option>
-                    <option value="completed">Completed</option>
+                    <option value="completed">Completed / Answered</option>
                     <option value="no_answer">No Answer</option>
                     <option value="failed">Failed</option>
+                    <option value="calling">Calling Now</option>
+                    <option value="queued">Queued</option>
                   </select>
-                  <select id="prep365FilterDate" onchange="filterPrep365Table()">
-                    <option value="all">All Time</option>
-                    <option value="today">Today</option>
-                    <option value="7d">Last 7 Days</option>
-                    <option value="30d">Last 30 Days</option>
+                  <select id="prep365FilterCalled" onchange="filterPrep365Table()" class="form-select form-select-sm" style="height:36px;padding:4px 10px;border-radius:6px;border:1px solid #CBD5E1;font-size:13px">
+                    <option value="all">All Students</option>
+                    <option value="called">Called</option>
+                    <option value="not_called">Not Called</option>
+                    <option value="callable">Callable Only</option>
                   </select>
                 </div>
               </div>
@@ -5099,23 +5147,45 @@
                 <table>
                   <thead>
                     <tr>
+                      <th style="width:40px;text-align:center">
+                        <input type="checkbox" id="prep365SelectAllCheckbox" onchange="togglePrep365SelectAll(this.checked)" title="Select all callable">
+                      </th>
                       <th>Student</th>
                       <th>Grade</th>
                       <th>Reasons</th>
-                      <th>Target &amp; Phone</th>
-                      <th>Call Status</th>
-                      <th>Last Call / Duration</th>
+                      <th>Days Inactive</th>
+                      <th>Days Since Test</th>
+                      <th>Student Phone</th>
+                      <th>Parent Contact</th>
+                      <th>Last Call</th>
                       <th>Action</th>
                     </tr>
                   </thead>
                   <tbody id="prep365CheckinsTableBody">
-                    <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:32px">Loading Prep365 check-ins…</td></tr>
+                    <tr><td colspan="10" style="text-align:center;color:var(--muted);padding:32px">Loading Prep365 students…</td></tr>
                   </tbody>
                 </table>
               </div>
             </div>
           </div>
         </section>
+
+        <!-- Bulk Call Confirm Modal -->
+        <div id="prep365BulkModal" class="modal-backdrop" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,0.6);z-index:9999;align-items:center;justify-content:center">
+          <div style="background:#FFFFFF;border-radius:14px;max-width:500px;width:90%;padding:24px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+              <h3 style="margin:0;font-size:18px;font-weight:700;color:#0F172A">📞 Confirm Outreach Calls</h3>
+              <button type="button" style="background:none;border:none;font-size:18px;cursor:pointer;color:#64748B" onclick="closePrep365BulkModal()">✕</button>
+            </div>
+            <div id="prep365BulkModalBody" style="font-size:14px;color:#334155;line-height:1.6">
+              <!-- Content populated dynamically -->
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px">
+              <button type="button" class="btn btn-secondary" onclick="closePrep365BulkModal()">Cancel</button>
+              <button type="button" id="btnConfirmBulkCall" class="btn btn-primary" onclick="executePrep365BulkCall()">Start Calls</button>
+            </div>
+          </div>
+        </div>
 
         <!-- Prep365 Student Snapshot Drawer -->
         <div id="prep365DrawerOverlay" class="drawer-overlay" onclick="closePrep365Drawer()"></div>
@@ -7066,17 +7136,28 @@
       return `${Math.floor(diffSec / 86400)}d ago`;
     }
 
+    let _prep365AllCheckins = [];
+    let _prep365SelectedStudentIds = new Set();
+    let _prep365SheetUrl = 'https://docs.google.com/spreadsheets/d/1BXutZ1i9zn4Te2cc66Dlm-CXcURsCHRXdL67N4JFiyE/edit';
+
     async function loadPrep365Checkins() {
       const tbody = document.getElementById('prep365CheckinsTableBody');
-      if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:32px">Loading Prep365 check-ins…</td></tr>';
+      if (tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:32px">Loading Prep365 students…</td></tr>';
       try {
         const res = await api('/prep365/checkins');
-        _prep365AllCheckins = res.checkins || [];
+        _prep365AllCheckins = res.students || res.checkins || [];
+        if (res.sheetUrl) _prep365SheetUrl = res.sheetUrl;
 
-        // Update mode badge
+        // Test Mode Banner
+        const testBanner = document.getElementById('prep365TestModeBanner');
+        if (testBanner) {
+          testBanner.style.display = res.testMode ? 'flex' : 'none';
+        }
+
+        // Mode badge
         const modeBadge = document.getElementById('prep365ModeBadge');
         if (modeBadge) {
-          if (res.dryRun) {
+          if (res.dryRun || res.testMode) {
             modeBadge.className = 'badge chip-amber';
             modeBadge.textContent = 'DRY RUN (no calls)';
           } else {
@@ -7085,67 +7166,117 @@
           }
         }
 
-        // Update last sync info
+        // Last sync info
         const syncInfo = document.getElementById('prep365LastSyncInfo');
         if (syncInfo) {
           const ls = res.lastSync;
           if (ls && ls.timestamp) {
             const timeAgo = formatRelativeTime(ls.timestamp);
-            syncInfo.textContent = `Last sync: ${timeAgo} (${ls.studentsReceived || 0} students received, ${ls.callsQueued || 0} calls queued, ${ls.errors || 0} errors)`;
+            syncInfo.textContent = `Last sync: ${timeAgo} (${ls.studentsReceived || _prep365AllCheckins.length} students received, ${ls.callsQueued || res.callableCount || 0} callable)`;
           } else {
-            syncInfo.textContent = 'Last sync: Not yet synced in this session';
+            syncInfo.textContent = `Synced: ${_prep365AllCheckins.length} students (${res.callableCount || 0} callable)`;
           }
         }
 
-        // Update stat cards
+        // Update Stat Cards (Row 1 Primary)
         const st = res.stats || {};
         const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val !== undefined ? val : 0; };
-        setVal('p365_syncedToday', st.syncedToday);
-        setVal('p365_callsPlaced', st.callsPlaced);
+        setVal('p365_needsAttention', st.needsAttention !== undefined ? st.needsAttention : _prep365AllCheckins.length);
+        setVal('p365_callable', st.callable !== undefined ? st.callable : res.callableCount);
+        setVal('p365_calledToday', st.calledToday);
         setVal('p365_answered', st.answered);
         setVal('p365_noAnswer', st.noAnswer);
-        setVal('p365_failed', st.failed);
         setVal('p365_optedOut', st.optedOut);
 
-        // Update sidebar badge
+        // Update Stat Cards (Row 2 byReason)
+        const br = res.byReason || {};
+        setVal('p365_reason_inactive', br.INACTIVE || 0);
+        setVal('p365_reason_no_recent_tests', br.NO_RECENT_TESTS || 0);
+        setVal('p365_reason_missed_topics', br.MISSED_ASSIGNED_TOPICS || 0);
+        setVal('p365_reason_custom_prep_behind', br.CUSTOM_PREP_BEHIND || 0);
+        setVal('p365_reason_declining_score', br.DECLINING_PERFORMANCE || 0);
+
+        // Sidebar count
         const badge = document.getElementById('navPrep365Count');
-        if (badge) badge.textContent = _prep365AllCheckins.filter(c => c.callStatus === 'queued' || c.callStatus === 'calling').length || _prep365AllCheckins.length;
+        if (badge) badge.textContent = res.callableCount || _prep365AllCheckins.filter(s => s.callStatus?.callable).length || _prep365AllCheckins.length;
+
+        // Reset selection
+        _prep365SelectedStudentIds.clear();
+        updatePrep365BulkCallBtn();
 
         renderPrep365Table(_prep365AllCheckins);
       } catch (e) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:32px">Error loading Prep365 check-ins: ${esc(e.message)}</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--danger);padding:32px">Error loading Prep365 students: ${esc(e.message)}</td></tr>`;
       }
+    }
+
+    function setPrep365Filter(type) {
+      const reasonSel = document.getElementById('prep365FilterReason');
+      const statusSel = document.getElementById('prep365FilterStatus');
+      const calledSel = document.getElementById('prep365FilterCalled');
+
+      if (type === 'all') {
+        if (reasonSel) reasonSel.value = 'all';
+        if (statusSel) statusSel.value = 'all';
+        if (calledSel) calledSel.value = 'all';
+      } else if (type === 'callable') {
+        if (calledSel) calledSel.value = 'callable';
+      } else if (type === 'called_today') {
+        if (calledSel) calledSel.value = 'called';
+      } else if (type === 'completed' || type === 'no_answer') {
+        if (statusSel) statusSel.value = type;
+      } else if (type === 'opted_out') {
+        if (calledSel) calledSel.value = 'all';
+        if (statusSel) statusSel.value = 'all';
+      } else if (type.startsWith('reason_')) {
+        const code = type.replace('reason_', '');
+        if (reasonSel) reasonSel.value = code;
+      }
+
+      filterPrep365Table();
     }
 
     function filterPrep365Table() {
       const q = (document.getElementById('prep365SearchInput')?.value || '').toLowerCase().trim();
       const reasonFilter = document.getElementById('prep365FilterReason')?.value || 'all';
       const statusFilter = document.getElementById('prep365FilterStatus')?.value || 'all';
-      const dateFilter = document.getElementById('prep365FilterDate')?.value || 'all';
+      const calledFilter = document.getElementById('prep365FilterCalled')?.value || 'all';
 
-      const now = Date.now();
-      const filtered = _prep365AllCheckins.filter(c => {
+      const filtered = _prep365AllCheckins.filter(s => {
+        const student = s.student || s;
+        const parents = s.parents || [];
+        const cs = s.callStatus || {};
+        const lastCall = cs.lastCall || {};
+
         if (q) {
-          const matchName = (c.studentName || '').toLowerCase().includes(q);
-          const matchPhone = (c.phone || '').toLowerCase().includes(q) || (c.maskedPhone || '').toLowerCase().includes(q);
-          const matchEmail = (c.email || '').toLowerCase().includes(q);
-          if (!matchName && !matchPhone && !matchEmail) return false;
+          const name = (student.name || '').toLowerCase();
+          const email = (student.email || '').toLowerCase();
+          const phone = (student.phone || '').toLowerCase();
+          const parentNames = parents.map(p => (p.name || '').toLowerCase()).join(' ');
+          const parentPhones = parents.map(p => (p.phone || '').toLowerCase()).join(' ');
+          const matches = name.includes(q) || email.includes(q) || phone.includes(q) || parentNames.includes(q) || parentPhones.includes(q);
+          if (!matches) return false;
         }
 
         if (reasonFilter !== 'all') {
-          const hasReason = (c.reasons || []).some(r => r.code === reasonFilter);
+          const hasReason = (s.reasons || []).some(r => (r.code === reasonFilter || r === reasonFilter));
           if (!hasReason) return false;
         }
 
         if (statusFilter !== 'all') {
-          if (c.callStatus !== statusFilter) return false;
+          const st = (lastCall.status || cs.status || '').toLowerCase();
+          if (statusFilter === 'completed' && st !== 'completed') return false;
+          if (statusFilter === 'no_answer' && (st !== 'no_answer' && st !== 'no-answer')) return false;
+          if (statusFilter === 'failed' && st !== 'failed') return false;
+          if (statusFilter === 'calling' && st !== 'calling') return false;
+          if (statusFilter === 'queued' && (st === 'completed' || st === 'calling' || st === 'failed' || st === 'no_answer')) return false;
         }
 
-        if (dateFilter !== 'all' && c.lastCallAt) {
-          const callTime = new Date(c.lastCallAt).getTime();
-          if (dateFilter === 'today' && now - callTime > 86400000) return false;
-          if (dateFilter === '7d' && now - callTime > 7 * 86400000) return false;
-          if (dateFilter === '30d' && now - callTime > 30 * 86400000) return false;
+        if (calledFilter !== 'all') {
+          const wasCalled = (cs.totalCalls > 0 || lastCall.status);
+          if (calledFilter === 'called' && !wasCalled) return false;
+          if (calledFilter === 'not_called' && wasCalled) return false;
+          if (calledFilter === 'callable' && !cs.callable) return false;
         }
 
         return true;
@@ -7158,124 +7289,321 @@
       const tbody = document.getElementById('prep365CheckinsTableBody');
       if (!tbody) return;
       if (!list.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:32px">No matching Prep365 student check-ins found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:32px">No matching Prep365 students found.</td></tr>';
         return;
       }
 
-      tbody.innerHTML = list.map(c => {
-        const reasonChips = (c.reasons || []).map(r => {
-          const chipClass = r.color === 'rose' ? 'chip-rose' : (r.color === 'purple' ? 'chip-purple' : (r.color === 'amber' ? 'chip-amber' : (r.color === 'orange' ? 'chip-orange' : 'chip-slate')));
-          return `<span class="chip ${chipClass}" title="${esc(r.detail || r.label)}">${esc(r.label)}</span>`;
+      tbody.innerHTML = list.map(s => {
+        const student = s.student || s;
+        const studentId = student.id || s.id;
+        const parents = s.parents || [];
+        const primaryParent = parents[0] || {};
+        const act = s.activity || {};
+        const cs = s.callStatus || {};
+        const lastCall = cs.lastCall || {};
+
+        const isCallable = Boolean(cs.callable);
+        const blockedReason = cs.blockedReason;
+
+        // Reason Chips
+        const reasonChips = (s.reasons || []).map(r => {
+          const code = r.code || r;
+          const label = r.label || code;
+          const detail = r.detail || label;
+          let chipClass = 'chip-blue';
+          if (code === 'NO_RECENT_TESTS') chipClass = 'chip-rose';
+          else if (code === 'CUSTOM_PREP_BEHIND') chipClass = 'chip-purple';
+          else if (code === 'MISSED_ASSIGNED_TOPICS') chipClass = 'chip-amber';
+          else if (code === 'DECLINING_PERFORMANCE') chipClass = 'chip-rose';
+          else if (code === 'INACTIVE') chipClass = 'chip-slate';
+
+          return `<span class="chip ${chipClass}" title="${esc(detail)}">${esc(label)}</span>`;
         }).join(' ');
 
-        let statusBadge = `<span class="badge chip-slate">Queued</span>`;
-        if (c.callStatus === 'completed') statusBadge = `<span class="badge chip-green">Completed</span>`;
-        else if (c.callStatus === 'calling') statusBadge = `<span class="badge chip-blue">Calling…</span>`;
-        else if (c.callStatus === 'no_answer') statusBadge = `<span class="badge chip-amber">No Answer</span>`;
-        else if (c.callStatus === 'failed') statusBadge = `<span class="badge chip-rose">Failed</span>`;
+        // Blocked Reason / Action Buttons
+        let actionHtml = '';
+        let disabledAttr = '';
+        if (isCallable) {
+          actionHtml = `
+            <div style="display:flex;gap:6px;align-items:center">
+              <button type="button" class="btn btn-primary btn-xs" style="padding:4px 10px;font-size:12px;background:#2563EB" onclick="triggerPrep365IndividualCall('${studentId}')">📞 Call</button>
+              <button type="button" class="btn btn-secondary btn-xs" style="padding:4px 10px;font-size:12px" onclick="openPrep365Drawer('${studentId}')">View</button>
+            </div>
+          `;
+        } else {
+          disabledAttr = 'disabled';
+          let blockedLabel = 'Blocked';
+          if (blockedReason === 'no_phone') blockedLabel = 'No phone';
+          else if (blockedReason === 'test_mode') blockedLabel = 'Test mode';
+          else if (blockedReason === 'cooldown') blockedLabel = 'Called recently';
+          else if (blockedReason === 'opted_out') blockedLabel = 'Opted out';
 
-        const durStr = c.durationSeconds ? `${c.durationSeconds}s` : '—';
-        const callTimeStr = c.lastCallAt ? formatRelativeTime(c.lastCallAt) : 'Not called yet';
+          actionHtml = `
+            <div style="display:flex;gap:6px;align-items:center">
+              <span class="badge chip-slate" style="font-size:11px" title="Cannot be called: ${blockedLabel}">${blockedLabel}</span>
+              <button type="button" class="btn btn-secondary btn-xs" style="padding:4px 10px;font-size:12px" onclick="openPrep365Drawer('${studentId}')">View</button>
+            </div>
+          `;
+        }
+
+        // Call status badge
+        const callSt = (lastCall.status || cs.status || 'not_called').toLowerCase();
+        let statusBadge = '<span class="badge chip-slate">Not called</span>';
+        if (callSt === 'completed') statusBadge = '<span class="badge chip-green">Completed</span>';
+        else if (callSt === 'calling') statusBadge = '<span class="badge chip-blue">Calling…</span>';
+        else if (callSt === 'no_answer' || callSt === 'no-answer') statusBadge = '<span class="badge chip-amber">No Answer</span>';
+        else if (callSt === 'failed') statusBadge = '<span class="badge chip-rose">Failed</span>';
+
+        const lastCallText = lastCall.at ? formatRelativeTime(lastCall.at) : '—';
+        const durText = lastCall.durationSeconds ? `${lastCall.durationSeconds}s` : '';
+
+        const isChecked = _prep365SelectedStudentIds.has(studentId) ? 'checked' : '';
 
         return `
-          <tr>
-            <td>
-              <div style="font-weight:600;color:#0F172A">${esc(c.studentName)}</div>
-              <div style="font-size:11px;color:#64748B">${esc(c.email || '')}</div>
-            </td>
-            <td><span class="chip chip-slate">${esc(c.grade || '11th Grade')}</span></td>
-            <td><div style="display:flex;gap:4px;flex-wrap:wrap;max-width:260px">${reasonChips || '<span style="color:#64748B">—</span>'}</div></td>
-            <td>
-              <div style="font-size:12px;font-weight:500;text-transform:capitalize">${esc(c.recipientType)}: ${esc(c.recipientName)}</div>
-              <code style="font-size:11px;color:#475569">${esc(c.maskedPhone)}</code>
-            </td>
-            <td>${statusBadge}</td>
-            <td>
-              <div style="font-weight:600;font-size:12px">${durStr}</div>
-              <div style="font-size:11px;color:#64748B">${callTimeStr}</div>
+          <tr data-student-id="${studentId}">
+            <td style="text-align:center">
+              <input type="checkbox" class="prep365-row-checkbox" value="${studentId}" ${disabledAttr} ${isChecked} onchange="togglePrep365StudentSelect('${studentId}', this.checked)">
             </td>
             <td>
-              <button class="btn btn-secondary btn-sm" onclick="openPrep365Drawer('${c.id}')">View</button>
+              <div style="font-weight:600;color:#0F172A">${esc(student.name || 'Unknown')}</div>
+              <div style="font-size:11px;color:#64748B">${esc(student.email || '')}</div>
             </td>
+            <td><span class="chip chip-slate">${esc(student.grade || s.grade || '11th Grade')}</span></td>
+            <td>
+              <div style="display:flex;gap:4px;flex-wrap:wrap;max-width:240px">
+                ${reasonChips || '<span style="color:#64748B">—</span>'}
+              </div>
+            </td>
+            <td style="text-align:center;font-weight:600;color:${act.daysInactive > 14 ? '#EF4444' : '#0F172A'}">
+              ${act.daysInactive !== undefined ? `${act.daysInactive}d` : '—'}
+            </td>
+            <td style="text-align:center;font-weight:600;color:${act.daysSinceLastTest > 7 ? '#F59E0B' : '#0F172A'}">
+              ${act.daysSinceLastTest !== undefined ? `${act.daysSinceLastTest}d` : '—'}
+            </td>
+            <td>
+              <code style="font-size:11px;color:#334155">${esc(student.phone || 'None')}</code>
+            </td>
+            <td>
+              <div style="font-size:12px;font-weight:500;color:#0F172A">${esc(primaryParent.name || '—')}</div>
+              <code style="font-size:11px;color:#64748B">${esc(primaryParent.phone || '')}</code>
+            </td>
+            <td>
+              <div style="font-size:12px">${statusBadge} ${durText ? `<span style="font-weight:600;margin-left:4px">${durText}</span>` : ''}</div>
+              <div style="font-size:11px;color:#64748B">${lastCallText}</div>
+            </td>
+            <td>${actionHtml}</td>
           </tr>
         `;
       }).join('');
     }
 
+    function togglePrep365StudentSelect(studentId, isChecked) {
+      if (isChecked) {
+        _prep365SelectedStudentIds.add(studentId);
+      } else {
+        _prep365SelectedStudentIds.delete(studentId);
+      }
+      updatePrep365BulkCallBtn();
+    }
+
+    function togglePrep365SelectAll(isChecked) {
+      _prep365SelectedStudentIds.clear();
+      if (isChecked) {
+        for (const s of _prep365AllCheckins) {
+          if (s.callStatus?.callable) {
+            const sid = s.student?.id || s.id;
+            _prep365SelectedStudentIds.add(sid);
+          }
+        }
+      }
+      document.querySelectorAll('.prep365-row-checkbox:not(:disabled)').forEach(cb => {
+        cb.checked = isChecked;
+      });
+      updatePrep365BulkCallBtn();
+    }
+
+    function updatePrep365BulkCallBtn() {
+      const btn = document.getElementById('btnPrep365BulkCall');
+      if (!btn) return;
+      const count = _prep365SelectedStudentIds.size;
+      if (count > 0) {
+        btn.style.display = 'inline-flex';
+        btn.textContent = `📞 Call selected (${count})`;
+      } else {
+        btn.style.display = 'none';
+      }
+    }
+
+    function openPrep365BulkCallModal() {
+      const count = _prep365SelectedStudentIds.size;
+      if (count === 0) {
+        if (typeof toast === 'function') toast('Please select at least 1 student to call', 'warning');
+        return;
+      }
+
+      // Count potential phone numbers
+      let totalPhones = 0;
+      const selectedNames = [];
+      for (const s of _prep365AllCheckins) {
+        const sid = s.student?.id || s.id;
+        if (_prep365SelectedStudentIds.has(sid)) {
+          selectedNames.push(s.student?.name || 'Student');
+          const phones = (s.callStatus?.phonesToCall || []);
+          totalPhones += (phones.length > 0 ? phones.length : 1);
+        }
+      }
+
+      const isDryRun = document.getElementById('prep365ModeBadge')?.textContent.includes('DRY RUN');
+      const body = document.getElementById('prep365BulkModalBody');
+      body.innerHTML = `
+        <p>You have selected <strong>${count} student(s)</strong> (${selectedNames.slice(0, 5).join(', ')}${selectedNames.length > 5 ? '…' : ''}).</p>
+        <p>Total outbound calls to be placed (student + parent): <strong>${totalPhones} call(s)</strong>.</p>
+        <div style="background:#F1F5F9;padding:12px;border-radius:8px;margin-top:12px;font-size:13px">
+          <div><strong>Mode:</strong> ${isDryRun ? '<span style="color:#D97706;font-weight:700">DRY RUN (no phones will ring)</span>' : '<span style="color:#059669;font-weight:700">LIVE OUTREACH (real phone calls via Telnyx)</span>'}</div>
+          <div style="margin-top:4px"><strong>Concurrency:</strong> Max 2 calls simultaneously</div>
+          <div style="margin-top:4px"><strong>Logging:</strong> All conversation summaries and transcripts will be automatically logged to Google Sheets.</div>
+        </div>
+        <div id="prep365BulkProgressArea" style="display:none;margin-top:16px">
+          <div style="font-weight:600;margin-bottom:6px">Initiating calls…</div>
+          <div style="height:6px;background:#E2E8F0;border-radius:3px;overflow:hidden">
+            <div id="prep365ProgressBar" style="width:30%;height:100%;background:#2563EB;animation:pulse 1s infinite"></div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('prep365BulkModal').style.display = 'flex';
+    }
+
+    function closePrep365BulkModal() {
+      document.getElementById('prep365BulkModal').style.display = 'none';
+    }
+
+    async function executePrep365BulkCall() {
+      const studentIds = Array.from(_prep365SelectedStudentIds);
+      if (!studentIds.length) return;
+
+      const btn = document.getElementById('btnConfirmBulkCall');
+      btn.disabled = true;
+      btn.textContent = 'Calling…';
+      document.getElementById('prep365BulkProgressArea').style.display = 'block';
+
+      try {
+        const res = await api('/prep365/call-selected', {
+          method: 'POST',
+          body: JSON.stringify({ studentIds })
+        });
+
+        if (typeof toast === 'function') {
+          toast(res.message || `Started ${res.calls || 0} call(s) for ${res.count || 0} student(s)`, 'success');
+        }
+
+        closePrep365BulkModal();
+        setTimeout(loadPrep365Checkins, 1500);
+      } catch (err) {
+        if (typeof toast === 'function') toast('Bulk call error: ' + err.message, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Start Calls';
+      }
+    }
+
+    async function triggerPrep365IndividualCall(studentId) {
+      if (!confirm('Start AI check-in call for this student?')) return;
+      try {
+        const res = await api('/prep365/call-selected', {
+          method: 'POST',
+          body: JSON.stringify({ studentIds: [studentId] })
+        });
+        if (typeof toast === 'function') toast(res.message || 'Call initiated', 'success');
+        setTimeout(loadPrep365Checkins, 1500);
+      } catch (e) {
+        if (typeof toast === 'function') toast('Call initiation error: ' + e.message, 'error');
+      }
+    }
+
+    function openPrep365GoogleSheet() {
+      window.open(_prep365SheetUrl, '_blank');
+    }
+
+    function downloadPrep365Excel() {
+      window.location.href = '/api/prep365/call-log?format=csv';
+    }
+
     function openPrep365Drawer(studentId) {
-      const student = _prep365AllCheckins.find(c => c.id === studentId);
+      const student = _prep365AllCheckins.find(s => (s.student?.id === studentId || s.id === studentId));
       if (!student) return;
 
-      document.getElementById('p365DrawerStudentName').textContent = student.studentName;
-      document.getElementById('p365DrawerStudentPhone').textContent = `${student.maskedPhone} · ${student.grade || '11th Grade'}`;
-      document.getElementById('p365DrawerTargetBadge').textContent = `Target: ${student.recipientType.toUpperCase()} (${student.recipientName})`;
+      const studentObj = student.student || student;
+      const parents = student.parents || [];
+      const primaryParent = parents[0] || {};
+      const act = student.activity || {};
+      const tests = student.tests || {};
+      const recentTests = tests.recent || [];
+      const customPrepList = Array.isArray(student.customPrep) ? student.customPrep : (student.customPrep ? [student.customPrep] : []);
+      const cs = student.callStatus || {};
+      const lastCall = cs.lastCall || {};
 
-      const snap = student.snapshot || {};
-      const act = snap.activity || {};
-      const cp = snap.customPrep || {};
-      const recentTests = snap.recentTests || [];
-      const overdue = snap.overdueAssignments || [];
-      const deadlines = snap.missedDeadlines || [];
+      document.getElementById('p365DrawerStudentName').textContent = studentObj.name || 'Student';
+      document.getElementById('p365DrawerStudentPhone').textContent = `${studentObj.phone || 'No phone'} · ${studentObj.grade || student.grade || '11th Grade'}`;
+      document.getElementById('p365DrawerTargetBadge').textContent = cs.callable ? 'Callable' : (cs.blockedReason ? `Blocked: ${cs.blockedReason}` : 'View Only');
 
+      // Tests HTML
       let testsHtml = recentTests.map(t => `
         <div class="drawer-stat-tile" style="margin-bottom:8px">
           <div style="display:flex;justify-content:space-between">
-            <strong>${esc(t.course || 'SAT')}</strong>
-            <span style="font-size:11px;color:#64748B">${esc(t.date || '')}</span>
+            <strong>${esc(t.course || 'Practice Quiz')}</strong>
+            <span style="font-size:11px;color:#64748B">${t.takenAt ? formatRelativeTime(t.takenAt) : (esc(t.date || ''))}</span>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
-            <span style="font-size:18px;font-weight:700;color:#0F172A">${t.scorePercent}%</span>
-            <span style="font-size:11px;color:${t.trend === 'down' ? '#EF4444' : '#10B981'}">
-              ${t.trend === 'down' ? '↓' : '↑'} Recent: ${t.recentAvg}% (prior: ${t.previousAvg}%)
-            </span>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:6px">
+            <span style="font-size:18px;font-weight:700;color:#0F172A">${t.scorePercent !== undefined ? `${t.scorePercent}%` : '—'}</span>
+            ${t.scaledScore ? `<span style="font-size:13px;font-weight:600;color:#2563EB">Scaled Score: ${t.scaledScore}${t.maxScaledScore ? `/${t.maxScaledScore}` : ''}</span>` : ''}
           </div>
         </div>
       `).join('');
 
-      let customPrepHtml = `
-        <div class="drawer-section-card">
+      // Custom Prep HTML
+      let customPrepHtml = customPrepList.map(cp => `
+        <div class="drawer-section-card" style="margin-bottom:10px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-            <strong>${esc(cp.planName || 'SAT Full Length Test 3 Custom Prep')}</strong>
-            <span style="font-size:12px;font-weight:600;color:#2563EB">${cp.percentComplete || 0}% / ${cp.expectedPercent || 0}% expected</span>
+            <strong>${esc(cp.planName || 'Custom Prep')}</strong>
+            <span style="font-size:12px;font-weight:600;color:#2563EB">${cp.percentComplete || 0}% / ${cp.expectedPercentByNow || 100}% expected</span>
           </div>
           <div class="drawer-progress-track">
             <div class="drawer-progress-fill" style="width:${Math.min(cp.percentComplete || 0, 100)}%"></div>
           </div>
           <div style="margin-top:10px;font-size:12px">
-            <span style="color:#10B981;font-weight:600">✓ ${cp.completedTopics || 0} topics completed</span>
+            <span style="color:#10B981;font-weight:600">✓ ${cp.completedTasks || (cp.completedTopics?.length) || 0} topics completed</span>
+            ${cp.tasksBehind ? `<span style="color:#EF4444;font-weight:600;margin-left:12px">⚠️ ${cp.tasksBehind} tasks behind</span>` : ''}
           </div>
           ${(cp.missedTopics || []).length ? `
             <div style="margin-top:8px">
               <span style="font-size:11px;color:#EF4444;font-weight:600">Pending Topics:</span>
               <ul style="margin:4px 0 0 16px;font-size:12px;color:#475569">
-                ${cp.missedTopics.map(m => `<li><strong>${esc(m.period)}</strong>: ${esc(m.topic)}</li>`).join('')}
+                ${cp.missedTopics.slice(0, 4).map(m => `<li><strong>${esc(m.period || '')}</strong>: ${esc(m.topic || m)}</li>`).join('')}
               </ul>
             </div>
           ` : ''}
         </div>
-      `;
+      `).join('');
 
-      let overdueHtml = (overdue.length || deadlines.length) ? `
-        <div class="drawer-section-card">
-          <strong style="color:#B91C1C">⚠️ Overdue &amp; Deadlines</strong>
-          <ul style="margin:8px 0 0 16px;font-size:12px;color:#475569">
-            ${overdue.map(o => `<li>${esc(o.title)} (Due: ${esc(o.dueDate)}, ${o.daysOverdue}d overdue)</li>`).join('')}
-            ${deadlines.map(d => `<li>${esc(d.groupName)}: ${esc(d.task)} (Deadline: ${esc(d.deadline)})</li>`).join('')}
-          </ul>
+      // Parent Contacts HTML
+      let parentsHtml = parents.map(p => `
+        <div class="drawer-stat-tile" style="margin-bottom:6px">
+          <div style="font-weight:600;color:#0F172A">${esc(p.name || 'Parent')}</div>
+          <div style="font-size:12px;color:#475569">${esc(p.email || '')} · <code style="color:#2563EB">${esc(p.phone || '')}</code></div>
         </div>
-      ` : '';
+      `).join('');
 
-      let audioPlayerHtml = student.recordingUrl ? `
+      let audioPlayerHtml = lastCall.recordingUrl ? `
         <div style="margin-top:12px">
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px">CALL RECORDING</label>
-          <audio controls src="${esc(student.recordingUrl)}" style="width:100%"></audio>
+          <audio controls src="${esc(lastCall.recordingUrl)}" style="width:100%"></audio>
         </div>
       ` : '';
 
-      let transcriptHtml = student.transcript ? `
+      let transcriptHtml = (lastCall.transcript || student.transcript) ? `
         <div style="margin-top:12px">
-          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px">CALL TRANSCRIPT</label>
-          <div class="drawer-transcript-box">${esc(student.transcript)}</div>
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px">CALL CONVERSATION</label>
+          <div class="drawer-transcript-box" style="white-space:pre-wrap;background:#F8FAFC;padding:12px;border-radius:8px;border:1px solid #E2E8F0;font-size:13px;line-height:1.6">${esc(lastCall.transcript || student.transcript)}</div>
         </div>
       ` : '';
 
@@ -7286,22 +7614,29 @@
           <div class="drawer-grid-2">
             <div class="drawer-stat-tile">
               <div class="dst-label">Days Inactive</div>
-              <div class="dst-val ${act.daysInactive > 7 ? 'text-danger' : ''}">${act.daysInactive} days</div>
+              <div class="dst-val ${act.daysInactive > 14 ? 'text-danger' : ''}">${act.daysInactive ?? 0} days</div>
             </div>
             <div class="drawer-stat-tile">
               <div class="dst-label">Days Since Test</div>
-              <div class="dst-val ${act.daysSinceLastTest > 7 ? 'text-danger' : ''}">${act.daysSinceLastTest} days</div>
+              <div class="dst-val ${act.daysSinceLastTest > 7 ? 'text-danger' : ''}">${act.daysSinceLastTest ?? 0} days</div>
             </div>
             <div class="drawer-stat-tile">
               <div class="dst-label">Last Login</div>
-              <div class="dst-val text-sm">${esc(act.lastLogin || 'Recent')}</div>
+              <div class="dst-val text-sm">${act.lastLoginAt ? formatRelativeTime(act.lastLoginAt) : 'Recent'}</div>
             </div>
             <div class="drawer-stat-tile">
-              <div class="dst-label">Last Activity</div>
-              <div class="dst-val text-sm">${esc(act.lastActivity || 'Practice Session')}</div>
+              <div class="dst-label">Total Calls</div>
+              <div class="dst-val text-sm">${cs.totalCalls || 0} attempt(s)</div>
             </div>
           </div>
         </div>
+
+        ${parents.length ? `
+          <div class="drawer-section">
+            <h4 class="drawer-section-heading">PARENT CONTACTS</h4>
+            ${parentsHtml}
+          </div>
+        ` : ''}
 
         <div class="drawer-section">
           <h4 class="drawer-section-heading">RECENT PRACTICE TESTS</h4>
@@ -7310,29 +7645,25 @@
 
         <div class="drawer-section">
           <h4 class="drawer-section-heading">CUSTOM PREP PLANS</h4>
-          ${customPrepHtml}
+          ${customPrepHtml || '<div style="font-size:12px;color:#64748B">No Custom Prep plan assigned</div>'}
         </div>
-
-        ${overdueHtml ? `<div class="drawer-section">${overdueHtml}</div>` : ''}
 
         <div class="drawer-section">
           <h4 class="drawer-section-heading">AI TALKING POINTS</h4>
-          <div class="drawer-tp-box">${esc(student.talkingPoints || 'Check in on SAT study plan, mention practice tests pending, encourage logging in today.')}</div>
+          <div class="drawer-tp-box" style="background:#EFF6FF;border:1px solid #BFDBFE;padding:12px;border-radius:8px;font-size:13px;color:#1E40AF;line-height:1.5">
+            ${esc(student.talkingPoints || 'Check in on SAT study plan, mention practice tests pending, encourage logging in today.')}
+          </div>
         </div>
 
         <div class="drawer-section">
-          <h4 class="drawer-section-heading">CALL OUTCOME</h4>
+          <h4 class="drawer-section-heading">LAST CALL OUTCOME</h4>
           <div class="drawer-section-card">
             <div style="display:flex;justify-content:space-between;align-items:center">
-              <span class="badge ${student.callStatus === 'completed' ? 'chip-green' : (student.callStatus === 'no_answer' ? 'chip-amber' : 'chip-slate')}">${esc(student.callStatus.toUpperCase())}</span>
-              <span style="font-size:12px;color:#64748B">${student.durationSeconds}s · Answered by: <strong>${esc(student.answeredBy)}</strong></span>
+              <span class="badge ${lastCall.status === 'completed' ? 'chip-green' : (lastCall.status === 'no_answer' ? 'chip-amber' : 'chip-slate')}">${esc((lastCall.status || 'NOT CALLED').toUpperCase())}</span>
+              <span style="font-size:12px;color:#64748B">${lastCall.durationSeconds || 0}s · ${lastCall.at ? formatRelativeTime(lastCall.at) : 'Not yet'}</span>
             </div>
             <div style="margin-top:10px;font-size:13px;line-height:1.5">
-              <strong>Summary:</strong> ${esc(student.summary || 'Prep365 check-in call completed.')}
-            </div>
-            <div style="margin-top:8px;display:flex;gap:12px;font-size:12px">
-              <span>Opt-out: <strong style="color:${student.optOut ? '#EF4444' : '#10B981'}">${student.optOut ? 'YES' : 'No'}</strong></span>
-              <span>Callback requested: <strong style="color:${student.followUpRequested ? '#F59E0B' : '#64748B'}">${student.followUpRequested ? 'YES' : 'No'}</strong></span>
+              <strong>Summary:</strong> ${esc(lastCall.summary || 'No calls recorded yet for this student.')}
             </div>
             ${audioPlayerHtml}
             ${transcriptHtml}

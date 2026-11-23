@@ -1304,11 +1304,19 @@ router.post('/call/status', async (req, res) => {
           providerCallId: CallSid,
           durationSeconds: finalDur,
           answeredBy,
+          transcript: attempt?.transcript || '',
           transcriptUrl: attempt?.transcriptUrl || null,
           recordingUrl: attempt?.recordingUrl || null,
           followUpRequested: Boolean(attempt?.followUpRequested || false),
           optOut: Boolean(lead.status === 'do-not-call' || attempt?.optOut),
-          callbackUrl: lead.qualification?.prep365CallbackUrl
+          callbackUrl: lead.qualification?.prep365CallbackUrl,
+          studentName: lead.qualification?.prep365StudentName || lead.fullName,
+          studentEmail: lead.email,
+          grade: lead.grade,
+          recipientType: lead.qualification?.prep365RecipientType || 'student',
+          recipientName: lead.fullName,
+          phone: lead.phone,
+          reasons: Array.isArray(lead.qualification?.prep365Reasons) ? lead.qualification.prep365Reasons.map(r => r.label || r.code).join('; ') : ''
         }).catch(err => logger.error('[Prep365] Failed to report call result', { msg: err.message }));
       }
       if (isPrep365) {
@@ -1643,11 +1651,19 @@ async function _finalisePrep365Call(lead, session, callSid, { summary = '', stat
         providerCallId: callSid,
         durationSeconds: durSec,
         answeredBy: 'human',
+        transcript: transcript || attempt?.transcript || '',
         transcriptUrl: attempt?.transcriptUrl || null,
         recordingUrl: attempt?.recordingUrl || null,
         followUpRequested,
         optOut,
-        callbackUrl: lead.qualification?.prep365CallbackUrl
+        callbackUrl: lead.qualification?.prep365CallbackUrl,
+        studentName: lead.qualification?.prep365StudentName || lead.fullName,
+        studentEmail: lead.email,
+        grade: lead.grade,
+        recipientType: lead.qualification?.prep365RecipientType || 'student',
+        recipientName: lead.fullName,
+        phone: lead.phone,
+        reasons: Array.isArray(lead.qualification?.prep365Reasons) ? lead.qualification.prep365Reasons.map(r => r.label || r.code).join('; ') : ''
       });
     }
   } catch (err) {

@@ -127,11 +127,31 @@ app.post(['/api/prep365/sync', '/prep365/sync'], async (req, res) => {
   try {
     const prep365Svc = require('./services/prep365Service');
     const dryRunParam = req.body?.dryRun !== undefined ? req.body.dryRun : req.query?.dryRun;
-    const result = await prep365Svc.sync({ dryRun: dryRunParam });
-    res.json(result);
+    const result = await prep365Svc.fetchCandidates();
+    res.json({ ok: true, ...result });
   } catch (err) {
     logger.error('Prep365 manual sync error', { msg: err.message });
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ── Call Log Download / Export Endpoint (CSV / JSON) ─────────────────────────
+// Accessible for browser Excel downloads & API queries
+app.get(['/call-log', '/api/prep365/call-log'], async (req, res) => {
+  try {
+    const prep365Svc = require('./services/prep365Service');
+    const { format, from, to, studentId } = req.query;
+    const result = await prep365Svc.getCallLog({ format, from, to, studentId });
+
+    if (format === 'csv' && result.csv) {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="prep365_call_log.csv"');
+      return res.send(result.csv);
+    }
+    res.json(result);
+  } catch (err) {
+    logger.error('call-log error', { msg: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 

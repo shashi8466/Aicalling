@@ -17,7 +17,7 @@ async function syncOnce({ dryRun } = {}) {
   }
   isSyncing = true;
   try {
-    const res = await prep365Svc.sync({ dryRun });
+    const res = await prep365Svc.fetchCandidates();
     return res;
   } catch (err) {
     logger.error('[Prep365] Sync failed', { msg: err.message, stack: err.stack });

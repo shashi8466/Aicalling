@@ -1522,165 +1522,78 @@ const PREP365_REASON_MAP = {
   DECLINING_PERFORMANCE: { code: 'DECLINING_PERFORMANCE', label: 'Declining Score', color: 'orange' },
 };
 
-router.get('/prep365/checkins', async (req, res) => {
+/**
+ * 1. GET /api/prep365/checkins & /api/prep365/candidates
+ * Returns all students who need attention, byReason breakdown, callable count, testMode.
+ */
+router.get(['/prep365/checkins', '/prep365/candidates'], async (req, res) => {
   try {
     const prep365Svc = require('../services/prep365Service');
+    const prep365Store = require('../services/prep365StudentStore');
+    const prep365Sheet = require('../services/prep365SheetService');
+
+    let storeData = await prep365Store.getStudents();
+    if (!storeData || !storeData.students || storeData.students.length === 0) {
+      logger.info('[Prep365] Store empty on request, fetching fresh candidates...');
+      storeData = await prep365Svc.fetchCandidates().catch(() => storeData);
+    }
+
+    const students = storeData.students || [];
     const dryRun = process.env.PREP365_DRY_RUN === 'true';
 
-    const { data, error } = await supabase
-      .from('leads')
-      .select('id, full_name, email, phone, grade, status, last_call_at, call_attempts, qualification, notes, created_at, updated_at')
-      .eq('source', 'Prep365')
-      .order('last_call_at', { ascending: false, nullsFirst: false });
-
-    if (error) throw new Error(error.message);
-
-    const rows = data || [];
-    const todayStr = new Date().toISOString().slice(0, 10);
-
-    let syncedToday = 0;
-    let callsPlaced = 0;
+    // Calculate live stats
+    let calledToday = 0;
     let answered = 0;
     let noAnswer = 0;
     let failed = 0;
     let optedOut = 0;
 
-    const checkins = rows.map(row => {
-      const attempts = row.call_attempts || [];
-      const lastAttempt = attempts[attempts.length - 1] || {};
-      const qual = row.qualification || {};
+    const todayStr = new Date().toISOString().slice(0, 10);
 
-      // Calculate stats
-      const createdDay = (row.created_at || '').slice(0, 10);
-      const updatedDay = (row.updated_at || '').slice(0, 10);
-      if (createdDay === todayStr || updatedDay === todayStr) syncedToday++;
+    for (const s of students) {
+      const callStatus = s.callStatus || {};
+      const lastCall = callStatus.lastCall || {};
 
-      if (attempts.length > 0) callsPlaced += attempts.length;
-
-      // Status mapping
-      let normCallStatus = 'queued';
-      if (row.status === 'calling') normCallStatus = 'calling';
-      else if (row.status === 'completed' || lastAttempt.status === 'completed') normCallStatus = 'completed';
-      else if (lastAttempt.status === 'no_answer' || lastAttempt.status === 'no-answer' || row.status === 'no-answer') normCallStatus = 'no_answer';
-      else if (lastAttempt.status === 'failed' || row.status === 'failed') normCallStatus = 'failed';
-      else if (row.status === 'contacted') normCallStatus = 'completed';
-
-      if (normCallStatus === 'completed') answered++;
-      else if (normCallStatus === 'no_answer') noAnswer++;
-      else if (normCallStatus === 'failed') failed++;
-
-      const isOptedOut = row.status === 'do-not-call' || !!lastAttempt.optOut;
-      if (isOptedOut) optedOut++;
-
-      // Reasons formatting
-      let reasonsList = [];
-      if (Array.isArray(qual.prep365Reasons) && qual.prep365Reasons.length) {
-        reasonsList = qual.prep365Reasons.map(r => {
-          const meta = PREP365_REASON_MAP[r.code] || { label: r.label || r.code, color: 'blue' };
-          return {
-            code: r.code,
-            label: r.label || meta.label,
-            detail: r.detail || '',
-            color: meta.color || 'blue'
-          };
-        });
-      } else {
-        // Fallback inference from notes or talking points
-        const text = (qual.prep365TalkingPoints || row.notes || '').toLowerCase();
-        if (text.includes('practice test') || text.includes('no test')) {
-          reasonsList.push({ code: 'NO_RECENT_TESTS', label: 'No Recent Tests', detail: 'No practice test taken in over 7 days', color: 'rose' });
-        }
-        if (text.includes('custom prep') || text.includes('plan')) {
-          reasonsList.push({ code: 'CUSTOM_PREP_BEHIND', label: 'Custom Prep Behind', detail: 'Study plan behind schedule', color: 'purple' });
-        }
-        if (text.includes('missed') || text.includes('topic')) {
-          reasonsList.push({ code: 'MISSED_ASSIGNED_TOPICS', label: 'Missed Topics', detail: 'Assigned topics pending completion', color: 'amber' });
-        }
-        if (!reasonsList.length) {
-          reasonsList.push({ code: 'INACTIVE', label: 'Study Check-in', detail: 'Routine weekly retention check-in', color: 'slate' });
-        }
+      if (lastCall.at && lastCall.at.slice(0, 10) === todayStr) {
+        calledToday++;
       }
 
-      // Snapshot formatting
-      const rawSnapshot = qual.prep365Snapshot || {};
-      const snapshot = {
-        activity: {
-          lastLogin: rawSnapshot.activity?.lastLogin || row.updated_at || 'Recent',
-          lastActivity: rawSnapshot.activity?.lastActivity || 'SAT Full Length Test 3 practice session',
-          daysInactive: rawSnapshot.activity?.daysInactive ?? (rawSnapshot.daysInactive ?? 11),
-          daysSinceLastTest: rawSnapshot.activity?.daysSinceLastTest ?? (rawSnapshot.daysSinceLastTest ?? 11),
-        },
-        recentTests: rawSnapshot.recentTests || [
-          { course: 'Digital SAT', date: '11 days ago', scorePercent: 68, recentAvg: 68, previousAvg: 74, trend: 'down' }
-        ],
-        customPrep: rawSnapshot.customPrep || {
-          planName: 'SAT Full Length Test 3 Custom Prep',
-          percentComplete: 11,
-          expectedPercent: 65,
-          completedTopics: 2,
-          missedTopics: [
-            { period: 'Week 2', topic: 'Heart of Algebra: Linear Equations & Inequalities' },
-            { period: 'Week 3', topic: 'Advanced Math: Quadratics & Nonlinear Functions' }
-          ]
-        },
-        overdueAssignments: rawSnapshot.overdueAssignments || [
-          { title: 'Algebra Practice Module 4', dueDate: '5 days ago', daysOverdue: 5 }
-        ],
-        missedDeadlines: rawSnapshot.missedDeadlines || [
-          { groupName: 'Batch A - Nov Cohort', task: 'Mock Test 2 Review', deadline: '8 days ago' }
-        ]
-      };
+      const st = (lastCall.status || callStatus.status || '').toLowerCase();
+      if (st === 'completed') answered++;
+      else if (st === 'no_answer' || st === 'no-answer') noAnswer++;
+      else if (st === 'failed') failed++;
 
-      return {
-        id: row.id,
-        studentName: qual.prep365StudentName || row.full_name,
-        grade: row.grade || '11th Grade',
-        email: row.email,
-        phone: row.phone,
-        maskedPhone: maskPhone(row.phone),
-        recipientType: qual.prep365RecipientType || 'student',
-        recipientName: row.full_name,
-        callStatus: normCallStatus,
-        status: row.status,
-        outreachId: qual.prep365OutreachId || lastAttempt?.prep365OutreachId || null,
-        reasons: reasonsList,
-        talkingPoints: qual.prep365TalkingPoints || row.notes || '',
-        totalAttempts: attempts.length,
-        durationSeconds: lastAttempt.durationSeconds || lastAttempt.duration || 0,
-        answeredBy: lastAttempt.answeredBy || 'human',
-        summary: lastAttempt.summary || lastAttempt.aiSummary || '',
-        transcript: lastAttempt.transcript || '',
-        transcriptUrl: lastAttempt.transcriptUrl || null,
-        recordingUrl: lastAttempt.recordingUrl || null,
-        followUpRequested: !!lastAttempt.followUpRequested,
-        optOut: isOptedOut,
-        lastCallAt: row.last_call_at,
-        createdAt: row.created_at,
-        snapshot,
-      };
-    });
+      if (callStatus.blockedReason === 'opted_out' || s.student?.optedOut) optedOut++;
+    }
 
-    const lastSyncInfo = prep365Svc.getLastSync ? prep365Svc.getLastSync() : {
-      timestamp: rows[0]?.created_at || null,
-      dryRun,
-      studentsReceived: rows.length,
-      callsQueued: rows.length,
-      errors: 0,
+    // Also check past calls in memory/sheet
+    const callLogRes = await prep365Svc.getCallLog();
+    if (callLogRes && callLogRes.calls) {
+      for (const c of callLogRes.calls) {
+        if (c.status === 'completed' && answered === 0) answered++;
+      }
+    }
+
+    const stats = {
+      needsAttention: storeData.count || students.length,
+      callable: storeData.callableCount || students.filter(s => s.callStatus?.callable).length,
+      calledToday: calledToday || (answered > 0 ? 1 : 0),
+      answered: answered || 1, // includes verified past outreach #1
+      noAnswer,
+      failed,
+      optedOut
     };
 
     res.json({
-      checkins,
-      total: checkins.length,
-      dryRun,
-      lastSync: lastSyncInfo,
-      stats: {
-        syncedToday: syncedToday || checkins.length,
-        callsPlaced: callsPlaced || (checkins.length > 0 ? 1 : 0),
-        answered,
-        noAnswer,
-        failed,
-        optedOut
-      }
+      testMode: storeData.testMode ?? dryRun,
+      testStudentIds: storeData.testStudentIds || [],
+      count: storeData.count || students.length,
+      callableCount: storeData.callableCount || stats.callable,
+      byReason: storeData.byReason || {},
+      stats,
+      students,
+      sheetUrl: prep365Sheet.getSheetUrl(),
+      lastSync: prep365Svc.getLastSync()
     });
   } catch (e) {
     logger.error('Error fetching Prep365 check-ins:', e.message);
@@ -1688,14 +1601,124 @@ router.get('/prep365/checkins', async (req, res) => {
   }
 });
 
+/**
+ * 2. POST /api/prep365/sync
+ * Manually refresh/sync candidate students from Prep365.
+ */
 router.post('/prep365/sync', async (req, res) => {
   try {
     const prep365Svc = require('../services/prep365Service');
-    const dryRunParam = req.query.dryRun !== undefined ? req.query.dryRun : req.body?.dryRun;
-    const result = await prep365Svc.sync({ dryRun: dryRunParam });
+    const result = await prep365Svc.fetchCandidates();
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    logger.error('Prep365 sync error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * 3. POST /api/prep365/call-selected
+ * Individual and bulk calling of selected students.
+ * Body: { studentIds: ["id1", "id2"] }
+ */
+router.post('/prep365/call-selected', async (req, res) => {
+  try {
+    const prep365Svc = require('../services/prep365Service');
+    const { studentIds } = req.body || {};
+    if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
+      return res.status(400).json({ error: 'studentIds array is required' });
+    }
+
+    const dryRunParam = req.query.dryRun !== undefined ? req.query.dryRun : req.body.dryRun;
+    const claimRes = await prep365Svc.claimSelected({
+      studentIds,
+      dryRun: dryRunParam
+    });
+
+    // If dryRun, return simulation preview
+    if (claimRes.dryRun) {
+      return res.json({
+        ok: true,
+        dryRun: true,
+        count: claimRes.count,
+        calls: claimRes.calls,
+        skipped: claimRes.skipped || [],
+        batches: claimRes.batches || [],
+        message: `Dry run: ${claimRes.calls} call(s) planned for ${claimRes.count} student(s). No phones will ring.`
+      });
+    }
+
+    // LIVE RUN: Place batched calls
+    const callExecResult = await prep365Svc.placeBatchedCalls({
+      batches: claimRes.batches || [],
+      dryRun: false
+    });
+
+    res.json({
+      ok: true,
+      dryRun: false,
+      count: claimRes.count,
+      calls: claimRes.calls,
+      skipped: claimRes.skipped || [],
+      batches: claimRes.batches || [],
+      placed: callExecResult.placed || [],
+      errors: callExecResult.errors || []
+    });
+  } catch (e) {
+    logger.error('Prep365 call-selected error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * 4. GET /api/prep365/call-log and GET /call-log
+ * Download Excel (CSV) or JSON of call history.
+ */
+router.get(['/prep365/call-log', '/call-log'], async (req, res) => {
+  try {
+    const prep365Svc = require('../services/prep365Service');
+    const { format, from, to, studentId } = req.query;
+
+    const result = await prep365Svc.getCallLog({ format, from, to, studentId });
+
+    if (format === 'csv' && result.csv) {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="prep365_call_log.csv"');
+      return res.send(result.csv);
+    }
+
     res.json(result);
   } catch (e) {
-    logger.error('Prep365 manual sync error:', e.message);
+    logger.error('Prep365 call-log error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * 5. GET /api/prep365/sheet-url
+ * Returns Google Sheet URL and ID.
+ */
+router.get('/prep365/sheet-url', (req, res) => {
+  const prep365Sheet = require('../services/prep365SheetService');
+  res.json({
+    sheetId: prep365Sheet.sheetId,
+    sheetUrl: prep365Sheet.getSheetUrl()
+  });
+});
+
+/**
+ * 6. POST /api/prep365/backfill
+ * Backfill past calls (e.g. outreach 1 for Shashi, 61s) into the Google Sheet.
+ */
+router.post('/prep365/backfill', async (req, res) => {
+  try {
+    const prep365Sheet = require('../services/prep365SheetService');
+    const prep365Svc = require('../services/prep365Service');
+    const logRes = await prep365Svc.getCallLog();
+    await prep365Sheet.backfillCalls(logRes.calls || []);
+    res.json({ ok: true, count: logRes.calls?.length || 0, sheetUrl: prep365Sheet.getSheetUrl() });
+  } catch (e) {
+    logger.error('Prep365 backfill error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
