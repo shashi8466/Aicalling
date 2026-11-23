@@ -196,6 +196,13 @@ class Prep365Service {
     const telnyxSvc = require('./telnyxService');
     const baseUrl = cfg.server.meetingBaseUrl || cfg.server.baseUrl || 'https://aicalling-xfyr.onrender.com';
 
+    let campaignUuid = '4b6bb650-e951-4607-9624-02485f9f9d1c';
+    try {
+      const supabase = require('../db/supabase');
+      const { data: camp } = await supabase.from('campaigns').select('id').eq('type', 'prep365-retention').single();
+      if (camp?.id) campaignUuid = camp.id;
+    } catch (_) {}
+
     const placedCalls = [];
 
     for (const item of plannedCalls) {
@@ -212,7 +219,7 @@ class Prep365Service {
             status: 'calling',
             courseInterest: 'SAT Prep',
             notes: item.talkingPoints || item.reasons || '',
-            campaignId: 'prep365-retention',
+            campaignId: campaignUuid,
             qualification: {
               prep365OutreachId: item.outreachId,
               prep365RecipientType: item.recipientType,
@@ -224,7 +231,7 @@ class Prep365Service {
           });
         } else {
           lead.status = 'calling';
-          lead.campaignId = 'prep365-retention';
+          lead.campaignId = campaignUuid;
           lead.notes = item.talkingPoints || lead.notes;
           lead.qualification = {
             ...(lead.qualification || {}),
@@ -245,13 +252,13 @@ class Prep365Service {
           attemptNumber: lead.totalCallAttempts,
           startTime: new Date().toISOString(),
           status: 'initiated',
-          campaignId: 'prep365-retention',
+          campaignId: campaignUuid,
           prep365OutreachId: item.outreachId,
         });
         await lead.save();
 
         logger.info(`[Prep365] Placing Telnyx call to ${item.recipientName} at ${item.phone} (outreachId: ${item.outreachId})…`);
-        const { callSid } = await telnyxSvc.call(lead, baseUrl, 'prep365-retention');
+        const { callSid } = await telnyxSvc.call(lead, baseUrl, campaignUuid);
         logger.info(`[Prep365] Telnyx call placed successfully: SID=${callSid}`);
 
         lead.callAttempts[lead.callAttempts.length - 1].callSid = callSid;
