@@ -480,15 +480,15 @@ router.get('/counselor-dashboard', async (req, res) => {
       return at >= since && at < rangeEnd;
     }).length;
 
-    // Hot leads
+    // Hot leads (exclude Prep365 paying students)
     const hotLeads = await Lead.find(
-      { leadCategory: 'hot', status: { $nin: ['enrolled','lost','do-not-call'] } },
+      { leadCategory: 'hot', status: { $nin: ['enrolled','lost','do-not-call'] }, source: { $ne: 'Prep365' } },
       { sort: { leadScore: -1 }, limit: 10 }
     );
 
-    // Enrollment pending
+    // Enrollment pending (exclude Prep365 paying students)
     const enrollmentPending = await Lead.find(
-      { status: { $in: ['enrollment-pending','payment-pending','proposal-sent'] } },
+      { status: { $in: ['enrollment-pending','payment-pending','proposal-sent'] }, source: { $ne: 'Prep365' } },
       { sort: { updatedAt: -1 }, limit: 10 }
     );
 
@@ -542,9 +542,9 @@ router.get('/pipeline', async (req, res) => {
     ];
 
     const [counts, leads] = await Promise.all([
-      Promise.all(allStatuses.map(s => Lead.countDocuments({ status: s }))),
+      Promise.all(allStatuses.map(s => Lead.countDocuments({ status: s, source: { $ne: 'Prep365' } }))),
       Lead.find(
-        { status: { $in: allStatuses } },
+        { status: { $in: allStatuses }, source: { $ne: 'Prep365' } },
         { sort: { leadScore: -1, updatedAt: -1 }, limit: 500 }
       ),
     ]);
@@ -562,6 +562,19 @@ router.get('/pipeline', async (req, res) => {
 //   HELPER: schedule follow-up sequence for a lead
 // ═══════════════════════════════════════════════════════════════════════
 async function scheduleFollowUps(leadId, { skip = [] } = {}) {
+  if (leadId) {
+    const lead = await Lead.findById(leadId);
+    if (
+      lead &&
+      (lead.source === 'Prep365' ||
+       lead.campaignId === '4b6bb650-e951-4607-9624-02485f9f9d1c' ||
+       lead.qualification?.prep365OutreachId)
+    ) {
+      logger.info(`Follow-up schedule rejected for Prep365 student ${lead.fullName || leadId}`);
+      return [];
+    }
+  }
+
   const now  = new Date();
   const days = d => new Date(now.getTime() + d * 86400000);
 

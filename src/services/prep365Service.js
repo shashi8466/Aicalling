@@ -76,7 +76,22 @@ class Prep365Service {
   /**
    * Report call outcome back to Prep365 to update ai_call_outreach.
    */
-  async reportCallResult({ outreachId, callId, status, outcome, providerCallId, duration, callbackUrl } = {}) {
+  async reportCallResult({
+    outreachId,
+    callId,
+    status = 'completed',
+    outcome = '',
+    summary = '',
+    providerCallId,
+    duration = 0,
+    durationSeconds,
+    answeredBy = 'human',
+    transcriptUrl = null,
+    recordingUrl = null,
+    followUpRequested = false,
+    optOut = false,
+    callbackUrl
+  } = {}) {
     const apiKey = this.getApiKey();
     if (!apiKey) {
       logger.warn('[Prep365] Cannot report call result: PREP365_API_KEY not configured');
@@ -84,16 +99,26 @@ class Prep365Service {
     }
 
     const targetUrl = callbackUrl || `${this.baseUrl}/call-results`;
+    const finalDuration = durationSeconds !== undefined ? parseInt(durationSeconds, 10) : (parseInt(duration, 10) || 0);
+    const finalSummary = summary || outcome || '';
+
     const payload = {
       outreachId: outreachId || undefined,
       callId: callId || undefined,
       status: status || 'completed',
-      outcome: outcome || '',
+      outcome: finalSummary,
+      summary: finalSummary,
       providerCallId: providerCallId || undefined,
-      duration: duration !== undefined ? parseInt(duration, 10) : 0,
+      duration: finalDuration,
+      durationSeconds: finalDuration,
+      answeredBy: answeredBy || 'human',
+      transcriptUrl: transcriptUrl || undefined,
+      recordingUrl: recordingUrl || undefined,
+      followUpRequested: Boolean(followUpRequested),
+      optOut: Boolean(optOut),
     };
 
-    logger.info(`[Prep365] Reporting result to ${targetUrl}: outreachId=${outreachId} status=${status} callId=${providerCallId}`);
+    logger.info(`[Prep365] Reporting result to ${targetUrl}: outreachId=${outreachId} status=${status} duration=${finalDuration}s callId=${providerCallId}`);
 
     try {
       const res = await axios.post(targetUrl, payload, {

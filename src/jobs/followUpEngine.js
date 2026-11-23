@@ -56,6 +56,10 @@ async function processFollowUp(fu) {
   const lead = await Lead.findById(fu.leadId);
 
   if (!lead) return _complete(fu, 'lead-not-found');
+  // Prep365 students are paying customers — never run admissions follow-ups
+  if (lead.source === 'Prep365' || lead.campaignId === '4b6bb650-e951-4607-9624-02485f9f9d1c' || lead.qualification?.prep365OutreachId) {
+    return _complete(fu, 'skipped-prep365-student');
+  }
   if (['enrolled','do-not-call','lost'].includes(lead.status)) {
     return _complete(fu, 'skipped-status:' + lead.status);
   }

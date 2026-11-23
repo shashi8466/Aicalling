@@ -71,7 +71,8 @@ function refreshStats(cacheKey, counselorId) {
 async function computeStats(counselorId) {
     let q = supabase
       .from('leads')
-      .select('status, lead_category, lead_score, call_attempts');
+      .select('status, lead_category, lead_score, call_attempts')
+      .neq('source', 'Prep365');
 
     if (counselorId) q = q.eq('counselor_id', counselorId);
 
@@ -131,7 +132,8 @@ router.get('/analytics', async (req, res) => {
 
     let q = supabase
       .from('leads')
-      .select('source, course_interest, call_attempts, created_at');
+      .select('source, course_interest, call_attempts, created_at')
+      .neq('source', 'Prep365');
 
     if (req.profile?.role !== 'admin') {
       q = q.eq('counselor_id', req.profile.id);
@@ -214,6 +216,12 @@ router.get('/leads', async (req, res) => {
       q = q.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
     }
 
+    if (req.query.source) {
+      q = q.eq('source', req.query.source);
+    } else {
+      q = q.neq('source', 'Prep365');
+    }
+
     const { data, count, error } = await q;
     if (error) throw new Error(error.message);
 
@@ -238,7 +246,7 @@ router.get('/leads', async (req, res) => {
 
 router.get('/leads/export', async (req, res) => {
   try {
-    const leads = await Lead.find({}, { sort: { createdAt: -1 }, limit: 5000 });
+    const leads = await Lead.find({ source: { $ne: 'Prep365' } }, { sort: { createdAt: -1 }, limit: 5000 });
     const headers = ['Full Name','Grade','Email','Phone','Parent Name','Parent Email',
       'Course','Status','Lead Score','Category','Call Attempts','Last Call',
       'Meeting Date','Meet Link','Created'];
@@ -1276,6 +1284,7 @@ router.get('/calls', async (req, res) => {
     let q = supabase
       .from('leads')
       .select('id, full_name, email, phone, call_attempts, lead_score, status, last_call_at')
+      .neq('source', 'Prep365')
       .not('call_attempts', 'eq', '[]')
       .order('last_call_at', { ascending: false, nullsFirst: false })
       .limit(500);
@@ -1489,6 +1498,61 @@ router.post('/meetings/fix-links', async (req, res) => {
     });
   } catch(e) {
     logger.error('fix-links error', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+//   PREP365 CHECK-INS & SYNC
+// ═══════════════════════════════════════════════════════════════════════
+router.get('/prep365/checkins', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('leads')
+      .select('id, full_name, email, phone, status, last_call_at, call_attempts, qualification, notes, created_at, updated_at')
+      .eq('source', 'Prep365')
+      .order('last_call_at', { ascending: false, nullsFirst: false });
+
+    if (error) throw new Error(error.message);
+
+    const checkins = (data || []).map(row => {
+      const attempts = row.call_attempts || [];
+      const lastAttempt = attempts[attempts.length - 1] || {};
+      return {
+        id: row.id,
+        studentName: row.full_name,
+        email: row.email,
+        phone: row.phone,
+        status: row.status,
+        outreachId: row.qualification?.prep365OutreachId || lastAttempt?.prep365OutreachId || null,
+        recipientType: row.qualification?.prep365RecipientType || 'student',
+        talkingPoints: row.qualification?.prep365TalkingPoints || row.notes || '',
+        totalAttempts: attempts.length,
+        durationSeconds: lastAttempt.durationSeconds || lastAttempt.duration || 0,
+        answeredBy: lastAttempt.answeredBy || 'human',
+        summary: lastAttempt.summary || lastAttempt.aiSummary || '',
+        followUpRequested: !!lastAttempt.followUpRequested,
+        optOut: !!lastAttempt.optOut,
+        lastCallAt: row.last_call_at,
+        createdAt: row.created_at,
+      };
+    });
+
+    res.json({ checkins, total: checkins.length });
+  } catch (e) {
+    logger.error('Error fetching Prep365 check-ins:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/prep365/sync', async (req, res) => {
+  try {
+    const prep365Svc = require('../services/prep365Service');
+    const dryRunParam = req.query.dryRun !== undefined ? req.query.dryRun : req.body?.dryRun;
+    const result = await prep365Svc.sync({ dryRun: dryRunParam });
+    res.json(result);
+  } catch (e) {
+    logger.error('Prep365 manual sync error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });

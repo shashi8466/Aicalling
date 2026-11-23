@@ -296,6 +296,9 @@ async function driveTwilioFlow(callControlId, state, urlPath, twilioBody = {}) {
           language: sayLanguage
         });
       }
+    } else if (redirectUrl) {
+      logger.info(`[CALL] No speak payload, immediately following redirect to: ${redirectUrl}`);
+      await driveTwilioFlow(callControlId, state, redirectUrl);
     } else if (hangup) {
       await hangupCall(callControlId);
     }

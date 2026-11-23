@@ -3412,6 +3412,8 @@
         <a data-view="enrollments"><span class="icon">📋</span> Enrollments <span class="nav-badge"
             id="navEnrollCount">0</span></a>
         <a data-view="campaigns"><span class="icon">📣</span> Campaigns</a>
+        <a data-view="prep365"><span class="icon">🎓</span> Prep365 Check-ins <span class="nav-badge"
+            id="navPrep365Count">0</span></a>
         <a data-view="classes"><span class="icon">🏫</span> Classes / Groups</a>
         <a data-view="counselors"><span class="icon">👤</span> Counselors</a>
         <a data-view="settings"><span class="icon">⚙️</span> Settings</a>
@@ -4298,7 +4300,47 @@
 
         </section>
 
-        
+        <!-- ─── PREP365 RETENTION CHECK-INS ─── -->
+        <section class="view" id="view-prep365">
+          <div class="an-page">
+            <div class="an-header"
+              style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+              <div>
+                <h2 class="an-title">🎓 Prep365 Retention Check-ins</h2>
+                <p class="an-sub">Active paying Prep365 students receiving AI study check-in calls (&lt; 60s)</p>
+              </div>
+              <div style="display:flex;gap:10px">
+                <button class="btn btn-secondary btn-sm" onclick="loadPrep365Checkins(); if(typeof toast==='function') toast('Refreshed', 'success');">↻ Refresh</button>
+                <button class="btn btn-primary btn-sm" onclick="triggerPrep365ManualSync()">⚡ Trigger Prep365 Sync</button>
+              </div>
+            </div>
+
+            <div class="ov-card">
+              <div class="ov-card-body" style="padding:0;overflow-x:auto">
+                <table class="counselor-table">
+                  <thead>
+                    <tr>
+                      <th>Student</th>
+                      <th>Phone</th>
+                      <th>Outreach ID</th>
+                      <th>Target</th>
+                      <th>Status</th>
+                      <th>Duration</th>
+                      <th>Answered By</th>
+                      <th>Study Progress / Blocker / Summary</th>
+                      <th>Follow-up / Opt-Out</th>
+                      <th>Last Contacted</th>
+                    </tr>
+                  </thead>
+                  <tbody id="prep365CheckinsTableBody">
+                    <tr><td colspan="10" style="text-align:center;color:var(--muted);padding:32px">Loading Prep365 check-ins…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- ─── CLASSES / GROUPS ─── -->
         <section class="view" id="view-classes">
           <div id="classesOverview">
@@ -6029,6 +6071,7 @@
         billing: 'Billing & Cost Analytics',
         counselor: 'Counselor Dashboard', pipeline: 'Enrollment Pipeline',
         enrollments: 'Enrollments', campaigns: 'Campaign Management',
+        prep365: 'Prep365 Check-ins',
         classes: 'Classes / Groups',
         counselors: 'Counselor Management', settings: 'Settings',
       };
@@ -6043,9 +6086,70 @@
       if (name === 'pipeline') loadPipeline();
       if (name === 'enrollments') loadEnrollments();
       if (name === 'campaigns') loadCampaigns();
+      if (name === 'prep365') loadPrep365Checkins();
       if (name === 'classes') loadClasses();
       if (name === 'counselors') loadCounselors();
       if (name === 'settings') showSettingsPanel('profile');
+    }
+
+    // ─── Prep365 Retention Check-ins View Logic ───
+    async function loadPrep365Checkins() {
+      const el = document.getElementById('prep365CheckinsTableBody');
+      if (!el) return;
+      el.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:32px">Loading Prep365 check-ins…</td></tr>';
+      try {
+        const res = await api('/prep365/checkins');
+        const list = res.checkins || [];
+        const badge = document.getElementById('navPrep365Count');
+        if (badge) badge.textContent = list.length;
+        if (!list.length) {
+          el.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:32px">No Prep365 check-in records found yet.</td></tr>';
+          return;
+        }
+        el.innerHTML = list.map(c => {
+          const badgeClass = c.status === 'completed' ? 'badge-completed' : (c.status === 'calling' ? 'badge-progress' : 'badge-neutral');
+          const dur = c.durationSeconds ? `${c.durationSeconds}s` : '—';
+          const lastDate = c.lastCallAt ? new Date(c.lastCallAt).toLocaleString() : (c.createdAt ? new Date(c.createdAt).toLocaleString() : '—');
+          const tags = [];
+          if (c.followUpRequested) tags.push('<span class="status-badge badge-warning" style="font-size:10px">Callback</span>');
+          if (c.optOut) tags.push('<span class="status-badge badge-danger" style="font-size:10px">Opt-Out</span>');
+          if (!tags.length) tags.push('<span style="color:var(--muted);font-size:11px">None</span>');
+
+          return `
+            <tr>
+              <td data-label="Student"><strong>${esc(c.studentName || 'Student')}</strong><br><small style="color:var(--muted)">${esc(c.email || '')}</small></td>
+              <td data-label="Phone"><code>${esc(c.phone || '')}</code></td>
+              <td data-label="Outreach ID"><code>#${esc(String(c.outreachId || '—'))}</code></td>
+              <td data-label="Target"><span class="status-badge badge-neutral" style="text-transform:capitalize">${esc(c.recipientType || 'student')}</span></td>
+              <td data-label="Status"><span class="status-badge ${badgeClass}">${esc(c.status || 'unknown')}</span></td>
+              <td data-label="Duration"><strong>${dur}</strong></td>
+              <td data-label="Answered By" style="text-transform:capitalize">${esc(c.answeredBy || 'human')}</td>
+              <td data-label="Summary" style="max-width:280px;font-size:12px;line-height:1.4">${esc(c.summary || c.talkingPoints || '—')}</td>
+              <td data-label="Follow-up / Opt-Out">${tags.join(' ')}</td>
+              <td data-label="Last Contacted" style="font-size:11px;color:var(--muted)">${lastDate}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch (e) {
+        el.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--danger);padding:32px">Error loading Prep365 check-ins: ${esc(e.message)}</td></tr>`;
+      }
+    }
+
+    async function triggerPrep365ManualSync() {
+      const live = confirm('Trigger live Prep365 sync now?\\n\\nClick OK for LIVE mode (calls placed via Telnyx if candidates exist).\\nClick CANCEL for DRY-RUN mode (tests candidate retrieval without dialing).');
+      try {
+        if (typeof toast === 'function') toast('Initiating Prep365 sync…', 'info');
+        const res = await api('/prep365/sync', {
+          method: 'POST',
+          body: JSON.stringify({ dryRun: !live })
+        });
+        if (typeof toast === 'function') {
+          toast(`Prep365 sync done: ${res.studentCount || 0} students, ${res.callsCount || 0} planned calls`, 'success');
+        }
+        loadPrep365Checkins();
+      } catch (e) {
+        if (typeof toast === 'function') toast(`Sync failed: ${e.message}`, 'error');
+      }
     }
 
     // ─── Callback Requests View Logic ───
@@ -6195,6 +6299,10 @@
         set('st_score', s.avgScore || 0);
         document.getElementById('navLeadCount').textContent = s.total;
         document.getElementById('navMeetCount').textContent = s.meetingsScheduled;
+        api('/prep365/checkins').then(r => {
+          const b = document.getElementById('navPrep365Count');
+          if (b && r.total !== undefined) b.textContent = r.total;
+        }).catch(() => {});
 
         // Trend labels
         function trendHtml(val, label) {

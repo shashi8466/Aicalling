@@ -132,6 +132,11 @@ async function _sendPostCallFollowUp(lead, callSid) {
   _postCallSent.add(key);
 
   const fresh = (await Lead.findById(lead._id)) || lead;
+  // Prep365 students are paying customers — never send admissions sales emails or follow-ups
+  if (fresh.source === 'Prep365' || fresh.campaignId === '4b6bb650-e951-4607-9624-02485f9f9d1c' || fresh.qualification?.prep365OutreachId) {
+    logger.info(`Post-call admissions follow-up skipped for Prep365 student ${fresh.fullName}`);
+    return;
+  }
   if (['meeting-scheduled', 'enrolled', 'do-not-call', 'lost'].includes(fresh.status)) return;
   if (!fresh.email) return;
 
@@ -386,11 +391,35 @@ router.post('/call/respond', async (req, res) => {
     if (!lead) return res.send(twilioSvc.twimlHangup());
 
     const session = sessions.get(leadId) || { history: [], turnCount: 0 };
+    const isPrep365 = session.campaignType === 'prep365-retention' ||
+                      session.campaign?.type === 'prep365-retention' ||
+                      session.campaign?.isPrep365 ||
+                      lead.source === 'Prep365' ||
+                      !!lead.qualification?.prep365OutreachId;
 
     // No speech detected — rephrase, then push to meeting slots. NEVER hang up on silence alone.
     if (!speech || noSpeech) {
       session.silenceCount = (session.silenceCount || 0) + 1;
       sessions.set(leadId, session);
+
+      // Prep365 check-in calls: repeat once on silence, then close politely and hang up (under 60s)
+      if (isPrep365) {
+        if (session.silenceCount === 1) {
+          return res.send(twilioSvc.twimlRespond(
+            "I'm checking in on your Prep365 study plan. Could you log in today, and is anything blocking your study right now?",
+            respondUrl(cfg.server.baseUrl, leadId)
+          ));
+        }
+        _finalisePrep365Call(lead, session, req.body.CallSid, {
+          summary: 'Prep365 check-in call completed. No response after repeated prompt.',
+          status: 'completed',
+          followUpRequested: false,
+          optOut: false
+        }).catch(() => {});
+        return res.send(twilioSvc.twimlHangup(
+          "Thank you for your time. Feel free to log in to Prep365 whenever you're ready. Have a wonderful day, goodbye!"
+        ));
+      }
 
       // Custom scripts never fall into the consultation pitch below — re-prompt
       // once, then the script is considered done and the call ends.
@@ -484,6 +513,67 @@ router.post('/call/respond', async (req, res) => {
           return res.send(twilioSvc.twimlRespond(followUp, respondUrl(cfg.server.baseUrl, leadId)));
         }
       }
+    }
+
+    // ── PREP365 RETENTION CAMPAIGN — dedicated handler ────────────────────────
+    // Existing paying students — strictly study plan check-in under 60 seconds.
+    // NEVER send empty speak payload, NEVER trigger admissions funnel/consultation logic.
+    if (isPrep365) {
+      session.history.push({ role: 'user', content: speech });
+      session.turnCount++;
+      sessions.set(leadId, session);
+
+      // 1. Decline / Opt-out
+      const optOutPhrases = /\b(don'?t call|stop calling|remove me|do not call|never call|take me off|opt out)\b/i;
+      if (optOutPhrases.test(lowSpeech)) {
+        lead.status = 'do-not-call';
+        await lead.save();
+        _finalisePrep365Call(lead, session, req.body.CallSid, {
+          summary: `Caller requested to opt out of check-in calls (${speech}).`,
+          status: 'completed',
+          followUpRequested: false,
+          optOut: true
+        }).catch(() => {});
+        return res.send(twilioSvc.twimlHangup(
+          "Understood. I will update your account preferences so you won't receive these check-in calls. Take care and goodbye!"
+        ));
+      }
+
+      // 2. Busy / Callback requested
+      const busyPhrases = /\b(busy|call (me )?(back|later)|not a good time|another time|later|can'?t talk|in class|driving)\b/i;
+      if (busyPhrases.test(lowSpeech)) {
+        _finalisePrep365Call(lead, session, req.body.CallSid, {
+          summary: `Student/parent was busy and requested a callback (${speech}).`,
+          status: 'completed',
+          followUpRequested: true,
+          optOut: false
+        }).catch(() => {});
+        return res.send(twilioSvc.twimlHangup(
+          "No problem at all! I'll make a note for our team to follow up with you at a better time. Have a great day, goodbye!"
+        ));
+      }
+
+      // 3. Blocker vs. Confirmation
+      const isBlocker = /\b(exam|test|school|sick|ill|busy|homework|hard|difficult|confused|stuck|cannot|can't|cant|problem|issue|time|no time)\b/i.test(lowSpeech);
+
+      let closingLine = "Awesome! Good luck with your study session today. Have a wonderful day, goodbye!";
+      let summaryText = `Student confirmed they will log in to Prep365 today (${speech}).`;
+
+      if (isBlocker) {
+        closingLine = "Thank you for letting me know. That makes complete sense. We will make a note of that. Try to log in whenever you get a break. Have a wonderful day, goodbye!";
+        summaryText = `Student reported a study blocker: "${speech}". Annie encouraged logging in when available.`;
+      } else if (/\b(no|nothing|none|nope|all good|no blocker|no blockers)\b/i.test(lowSpeech)) {
+        closingLine = "Glad to hear that! Please log in to Prep365 today to continue your prep. Have a wonderful day, goodbye!";
+        summaryText = `Student confirmed no study blockers and agreed to continue Prep365 study plan (${speech}).`;
+      }
+
+      _finalisePrep365Call(lead, session, req.body.CallSid, {
+        summary: summaryText,
+        status: 'completed',
+        followUpRequested: false,
+        optOut: false
+      }).catch(() => {});
+      return res.send(twilioSvc.twimlHangup(closingLine));
     }
 
     // ── PARENT NOTIFICATION CAMPAIGNS — dedicated handler (no meeting/slot logic) ──
@@ -1174,19 +1264,29 @@ router.post('/call/status', async (req, res) => {
       billingSvc.captureFromCall(CallSid, { lead, callStatus: CallStatus }).catch(() => {});
 
       // ── Prep365 outcome reporting ──────────────────────────────────────────
+      const isPrep365 = lead.source === 'Prep365' || lead.qualification?.prep365OutreachId || lead.campaignId === '4b6bb650-e951-4607-9624-02485f9f9d1c';
       const prep365OutreachId = lead.qualification?.prep365OutreachId || attempt?.prep365OutreachId;
       if (prep365OutreachId) {
         const prep365Svc = require('../services/prep365Service');
         const outcomeStatus = CallStatus === 'completed' ? 'completed' : 'no_answer';
-        const outcomeText = attempt?.aiSummary || `Call ${CallStatus}. Duration: ${CallDuration || 0}s`;
+        const finalDur = parseInt(CallDuration) || attempt?.duration || 0;
+        const outcomeText = attempt?.aiSummary || `Call ${CallStatus}. Duration: ${finalDur}s`;
         prep365Svc.reportCallResult({
           outreachId: prep365OutreachId,
           status: outcomeStatus,
           outcome: outcomeText,
+          summary: outcomeText,
           providerCallId: CallSid,
-          duration: parseInt(CallDuration) || 0,
+          durationSeconds: finalDur,
+          answeredBy: CallStatus === 'completed' ? 'human' : 'unknown',
+          followUpRequested: Boolean(attempt?.followUpRequested || false),
+          optOut: Boolean(lead.status === 'do-not-call' || attempt?.optOut),
           callbackUrl: lead.qualification?.prep365CallbackUrl
         }).catch(err => logger.error('[Prep365] Failed to report call result', { msg: err.message }));
+      }
+      if (isPrep365) {
+        sessions.delete(leadId);
+        return; // Prep365 students are paying students — skip admissions emails, callbacks, follow-ups
       }
     }
 
@@ -1480,8 +1580,59 @@ function _parseMeetingTime(scheduledTime, scheduledDate) {
   return base.toDate();
 }
 
+// ── Internal: finalise a Prep365 check-in call ────────────────────────────────
+async function _finalisePrep365Call(lead, session, callSid, { summary = '', status = 'completed', followUpRequested = false, optOut = false } = {}) {
+  if (session?._finalised) return;
+  if (session) { session._finalised = true; session._endReason = 'prep365-completed'; }
+  try {
+    const transcript = (session.history || [])
+      .map(m => `${m.role === 'user' ? 'Caller' : 'Annie'}: ${m.content}`)
+      .join('\n');
+
+    lead.status = optOut ? 'do-not-call' : 'contacted';
+    let attempt = callSid ? (lead.callAttempts || []).find(a => a.callSid === callSid) : null;
+    if (!attempt && lead.callAttempts && lead.callAttempts.length) {
+      attempt = lead.callAttempts[lead.callAttempts.length - 1];
+    }
+    if (attempt) {
+      attempt.transcript = transcript;
+      attempt.aiSummary = summary;
+      attempt.status = status;
+      attempt.followUpRequested = followUpRequested;
+      attempt.optOut = optOut;
+    }
+    await lead.save();
+
+    const outreachId = lead.qualification?.prep365OutreachId || attempt?.prep365OutreachId;
+    if (outreachId) {
+      const prep365Svc = require('../services/prep365Service');
+      const durSec = attempt?.duration || 45;
+      await prep365Svc.reportCallResult({
+        outreachId,
+        status: status || 'completed',
+        summary,
+        outcome: summary,
+        providerCallId: callSid,
+        durationSeconds: durSec,
+        answeredBy: 'human',
+        followUpRequested,
+        optOut,
+        callbackUrl: lead.qualification?.prep365CallbackUrl
+      });
+    }
+  } catch (err) {
+    logger.error('Error finalising Prep365 call:', err);
+  }
+}
+
 // ── Internal: finalise a completed call ───────────────────────────────────────
 async function _finaliseCall(lead, session, callSid, reason) {
+  // If this is a Prep365 student, strictly use Prep365 finalization
+  const isPrep365 = lead.source === 'Prep365' || lead.campaignId === '4b6bb650-e951-4607-9624-02485f9f9d1c' || lead.qualification?.prep365OutreachId;
+  if (isPrep365) {
+    return _finalisePrep365Call(lead, session, callSid, { summary: `Prep365 check-in ${reason}`, status: 'completed' });
+  }
+
   // Several paths end a call (AI [END_CALL] + Telnyx hangup status) — only the
   // first one summarises/saves, so the call isn't finalised twice.
   if (session?._finalised) return;

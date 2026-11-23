@@ -39,34 +39,73 @@ function customScriptExpectsReply(script) {
   return /\?["'”’)\s]*$/.test(speakableScript(script));
 }
 
+function getPrep365PendingPoints(lead, isParent = false) {
+  const points = lead.qualification?.prep365TalkingPoints || lead.notes || '';
+  const subj = isParent ? (lead.qualification?.prep365StudentName || lead.fullName || 'they') : 'you';
+  const has = isParent ? 'has' : 'have';
+
+  const items = [];
+  if (/not taken a practice test in (\d+) days/i.test(points)) {
+    const days = points.match(/not taken a practice test in (\d+) days/i)[1];
+    items.push(`${subj} ${has}n't taken a practice test in ${days} days`);
+  }
+  if (/Custom Prep plan for (.+?) is (\d+%) done/i.test(points)) {
+    const m = points.match(/Custom Prep plan for (.+?) is (\d+%) done/i);
+    items.push(`${isParent ? `${subj}'s` : 'your'} Custom Prep plan for ${m[1]} is ${m[2]} done`);
+  } else if (/Custom Prep plan is behind schedule/i.test(points)) {
+    items.push(`${isParent ? `${subj}'s` : 'your'} Custom Prep plan is currently behind schedule`);
+  }
+  if (items.length === 0 && /unfinished assigned work/i.test(points)) {
+    items.push(`${subj} ${has} unfinished study topics`);
+  }
+
+  if (items.length === 0) {
+    return isParent
+      ? `I noticed ${subj} ${has} pending study tasks and ${has}n't taken a practice test recently.`
+      : `I noticed you have pending study tasks and haven't taken a practice test recently.`;
+  }
+  return `I noticed ${items.join(', and ')}.`;
+}
+
 // ── Campaign definitions ────────────────────────────────────────────────────
 const CAMPAIGNS = {
   'prep365-retention': {
     type: 'prep365-retention',
     name: 'Prep365 Study Plan Check-in',
     program: 'Prep365',
-    turn0Line: (lead) => {
-      const recipientType = lead.qualification?.prep365RecipientType || 'student';
-      const studentName = lead.qualification?.prep365StudentName || lead.fullName;
-      if (recipientType === 'parent') {
-        return `Hello, I'm calling from Prep365 regarding ${studentName}'s test prep progress. We noticed they have some pending study tasks and haven't taken a practice test recently. Are you free for a quick minute to discuss their study plan?`;
+    isPrep365: true,
+    opener: (lead) => {
+      const isParent = lead.qualification?.prep365RecipientType === 'parent';
+      const studentFirst = (lead.qualification?.prep365StudentName || lead.fullName || 'there').split(' ')[0];
+      const parentName = lead.parentName || lead.fullName || 'there';
+      if (isParent) {
+        return `Hi, this is Annie from Prep365. Am I speaking with ${parentName}, parent of ${studentFirst}?`;
       }
-      return `Hi ${firstName(lead)}, I'm calling from Prep365 to check in on your test preparation progress. We noticed you have some unfinished study topics and haven't taken a practice test in a few days. Do you have a quick moment?`;
+      return `Hi, this is Annie from Prep365. Am I speaking with ${studentFirst}?`;
+    },
+    turn0Line: (lead) => {
+      const isParent = lead.qualification?.prep365RecipientType === 'parent';
+      const studentFirst = (lead.qualification?.prep365StudentName || lead.fullName || 'there').split(' ')[0];
+      const pendingText = getPrep365PendingPoints(lead, isParent);
+      if (isParent) {
+        return `Great! I'm calling for a quick check-in on ${studentFirst}'s SAT prep. ${pendingText} We want to help ${studentFirst} stay on track — could you encourage them to log in to Prep365 today to complete a topic or test? Also, is anything blocking their study right now?`;
+      }
+      return `Great! I'm calling for a quick check-in on your SAT prep. ${pendingText} We want to help you stay on track — could you log in to Prep365 today to complete a topic or test? Also, is anything blocking your study right now?`;
     },
     systemContext: (lead) => {
       const points = lead.qualification?.prep365TalkingPoints || lead.notes || '';
-      return `━━━ CAMPAIGN: PREP365 RETENTION & STUDY CHECK-IN ━━━
-You are an AI Academic Advisor calling from Prep365.
+      return `━━━ CAMPAIGN: PREP365 STUDY PLAN CHECK-IN ━━━
+You are Annie from Prep365.
+NEVER mention Test Prep Pundits. Prep365 is an independent learning platform.
 Student Name: ${lead.fullName}
 Context & Talking Points:
 ${points}
 
-GOAL:
-- Check in with the student or parent regarding their Prep365 study plan.
-- Mention their pending topics/tasks and encourage them to log in to Prep365 today and take their next practice test.
-- Be supportive, motivating, and helpful.
-- If they need academic counseling or help with their curriculum, offer to schedule a free 15-minute consultation [OFFER_MEETING].
-- Keep responses concise, warm, and professional.`;
+INSTRUCTIONS:
+- This is an existing student check-in, NOT an admissions sales pitch.
+- NEVER offer admissions consultations, demo tests, or sales packages.
+- Target under 60 seconds total. Keep answers under 2 sentences.
+- Be encouraging, polite, and warmly sign off with a goodbye.`;
     }
   },
 
