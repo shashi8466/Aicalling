@@ -1564,44 +1564,53 @@ router.get(['/prep365/checkins', '/prep365/candidates'], async (req, res) => {
     const prep365Store = require('../services/prep365StudentStore');
     const prep365Sheet = require('../services/prep365SheetService');
 
-    let storeData = await prep365Store.getStudents();
-    if (!storeData || !storeData.students || storeData.students.length === 0) {
-      logger.info('[Prep365] Store empty on request, fetching fresh candidates...');
-      storeData = await prep365Svc.fetchCandidates().catch(() => storeData);
+    // ?refresh=1 (Refresh button) or an empty store -> load the list from Prep365
+    // GET /candidates. This is read-only: it never claims students or places calls.
+    let storeData = null;
+    if (req.query.refresh === '1' || req.query.refresh === 'true') {
+      storeData = await prep365Svc.fetchCandidates();
+    } else {
+      storeData = await prep365Store.getStudents();
+      if (!storeData || !storeData.students || storeData.students.length === 0) {
+        logger.info('[Prep365] Store empty on request, fetching fresh candidates...');
+        storeData = await prep365Svc.fetchCandidates().catch(() => storeData);
+      }
     }
 
-    const students = storeData.students || [];
+    // This app decides who is callable (valid phone, not opted out, not
+    // Do-Not-Contact); Prep365's own callStatus is kept as prep365CallStatus.
+    // Callable students come first.
+    const prep365Calling = require('../services/prep365Calling');
+    const students = await prep365Calling.decorateStudents(storeData.students || []);
     const dryRun = process.env.PREP365_DRY_RUN === 'true';
 
-    // Calculate live stats
-    let calledToday = 0;
-    let answered = 0;
-    let noAnswer = 0;
-    let failed = 0;
-    let optedOut = 0;
-
+    // Live stats from real call data only.
+    let calledToday = 0, answered = 0, noAnswer = 0, failed = 0, optedOut = 0;
     const todayStr = new Date().toISOString().slice(0, 10);
+    const breakdown = { total: students.length, callable: 0, noPhone: 0, invalidPhone: 0, optedOut: 0, doNotContact: 0, contactedRecently: 0 };
+    const weekAgo = Date.now() - 7 * 86400000;
 
     for (const s of students) {
-      const callStatus = s.callStatus || {};
-      const lastCall = callStatus.lastCall || {};
-
-      if (lastCall.at && lastCall.at.slice(0, 10) === todayStr) {
-        calledToday++;
-      }
-
-      const st = (lastCall.status || callStatus.status || '').toLowerCase();
+      const cs = s.callStatus || {};
+      const lastCall = cs.lastCall || {};
+      if (lastCall.at && String(lastCall.at).slice(0, 10) === todayStr) calledToday++;
+      const st = String(lastCall.status || '').toLowerCase();
       if (st === 'completed') answered++;
       else if (st === 'no_answer' || st === 'no-answer') noAnswer++;
       else if (st === 'failed') failed++;
+      if (cs.blockedReason === 'opted_out') optedOut++;
 
-      if (callStatus.blockedReason === 'opted_out' || s.student?.optedOut) optedOut++;
+      if (cs.callable) breakdown.callable++;
+      else if (cs.blockedReason === 'no_phone') breakdown.noPhone++;
+      else if (cs.blockedReason === 'invalid_phone') breakdown.invalidPhone++;
+      else if (cs.blockedReason === 'opted_out') breakdown.optedOut++;
+      else if (cs.blockedReason === 'do_not_contact') breakdown.doNotContact++;
+      if (cs.prep365Cooldown || (lastCall.at && Date.parse(lastCall.at) > weekAgo)) breakdown.contactedRecently++;
     }
 
-    // Real counts only — no placeholder values.
     const stats = {
-      needsAttention: students.length,
-      callable: students.filter(s => s.callStatus?.callable).length,
+      needsAttention: typeof storeData.count === 'number' ? storeData.count : students.length,
+      callable: breakdown.callable,
       calledToday,
       answered,
       noAnswer,
@@ -1610,10 +1619,13 @@ router.get(['/prep365/checkins', '/prep365/candidates'], async (req, res) => {
     };
 
     res.json({
-      testMode: storeData.testMode ?? dryRun,
+      testMode: Boolean(storeData.testMode),   // Prep365's test mode (informational only now)
+      dryRun,                                   // our PREP365_DRY_RUN (phones never ring)
       testStudentIds: storeData.testStudentIds || [],
-      count: storeData.count || students.length,
-      callableCount: storeData.callableCount || stats.callable,
+      count: stats.needsAttention,
+      callableCount: stats.callable,
+      breakdown,
+      syncedAt: storeData.syncedAt || storeData.updatedAt || null,
       byReason: storeData.byReason || {},
       thresholds: storeData.thresholds || null,
       stats,
@@ -1626,6 +1638,39 @@ router.get(['/prep365/checkins', '/prep365/candidates'], async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+/**
+ * POST /api/prep365/call-students   { studentIds: [...], campaignId? }
+ * The ONLY way Prep365 students get called: an admin/counselor clicked "Call" or
+ * "Call selected" and confirmed. Eligibility is re-checked here (valid phone, not
+ * opted out, not Do-Not-Contact); calls go through the shared bulk-call queue.
+ * PREP365_DRY_RUN=true returns the plan without dialing.
+ */
+router.post('/prep365/call-students', handlePrep365CallStudents);
+async function handlePrep365CallStudents(req, res) {
+  try {
+    const { studentIds, campaignId } = req.body || {};
+    if (!Array.isArray(studentIds) || !studentIds.length) {
+      return res.status(400).json({ error: 'studentIds array is required' });
+    }
+    if (studentIds.length > 500) return res.status(400).json({ error: 'Too many students in one request (max 500)' });
+    if (campaignId) {
+      const { data: camp } = await supabase.from('campaigns').select('id').eq('id', campaignId).maybeSingle();
+      if (!camp) return res.status(400).json({ error: 'Unknown campaign' });
+    }
+    const prep365Calling = require('../services/prep365Calling');
+    const result = await prep365Calling.startCalls({
+      studentIds,
+      campaignId: campaignId || null,
+      user: req.user?.email || req.user?.id,
+      dryRun: process.env.PREP365_DRY_RUN === 'true',
+    });
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    logger.error('Prep365 call-students error: ' + e.message);
+    res.status(500).json({ error: e.message });
+  }
+}
 
 /**
  * 2. POST /api/prep365/sync
@@ -1643,58 +1688,10 @@ router.post('/prep365/sync', async (req, res) => {
 });
 
 /**
- * 3. POST /api/prep365/call-selected
- * Individual and bulk calling of selected students.
- * Body: { studentIds: ["id1", "id2"] }
+ * 3. POST /api/prep365/call-selected  (legacy name) -> same as /prep365/call-students.
+ * One calling path only: eligibility check + shared bulk-call queue.
  */
-router.post('/prep365/call-selected', async (req, res) => {
-  try {
-    const prep365Svc = require('../services/prep365Service');
-    const { studentIds } = req.body || {};
-    if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
-      return res.status(400).json({ error: 'studentIds array is required' });
-    }
-
-    const dryRunParam = req.query.dryRun !== undefined ? req.query.dryRun : req.body.dryRun;
-    const claimRes = await prep365Svc.claimSelected({
-      studentIds,
-      dryRun: dryRunParam
-    });
-
-    // If dryRun, return simulation preview
-    if (claimRes.dryRun) {
-      return res.json({
-        ok: true,
-        dryRun: true,
-        count: claimRes.count,
-        calls: claimRes.calls,
-        skipped: claimRes.skipped || [],
-        batches: claimRes.batches || [],
-        message: `Dry run: ${claimRes.calls} call(s) planned for ${claimRes.count} student(s). No phones will ring.`
-      });
-    }
-
-    // LIVE RUN: Place batched calls
-    const callExecResult = await prep365Svc.placeBatchedCalls({
-      batches: claimRes.batches || [],
-      dryRun: false
-    });
-
-    res.json({
-      ok: true,
-      dryRun: false,
-      count: claimRes.count,
-      calls: claimRes.calls,
-      skipped: claimRes.skipped || [],
-      batches: claimRes.batches || [],
-      placed: callExecResult.placed || [],
-      errors: callExecResult.errors || []
-    });
-  } catch (e) {
-    logger.error('Prep365 call-selected error:', e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
+router.post('/prep365/call-selected', handlePrep365CallStudents);
 
 /**
  * 4. GET /api/prep365/call-log and GET /call-log

@@ -140,15 +140,23 @@ class Prep365StudentStore {
    * Get students and metadata from Supabase (or local cache).
    */
   async getStudents() {
+    // The latest sync (exact Prep365 list + its count/byReason/callableCount) wins.
+    const local = this._readLocalCache();
+    if (local.students && local.students.length > 0) return local;
+
+    // Disk was wiped (e.g. redeploy): rebuild from Supabase, using only rows written
+    // by the most recent sync so students who no longer need attention don't linger.
     const sb = this._getSupabase();
     const tableExists = await this._checkTableExists();
 
     if (sb && tableExists) {
       try {
-        const { data, error } = await sb
+        const { data: allRows, error } = await sb
           .from('prep365_students')
           .select('*')
           .order('priority', { ascending: false });
+        const latest = (allRows || []).reduce((m, r) => Math.max(m, Date.parse(r.updated_at) || 0), 0);
+        const data = (allRows || []).filter(r => (Date.parse(r.updated_at) || 0) >= latest - 10 * 60 * 1000);
 
         if (!error && data && data.length > 0) {
           const mappedStudents = data.map(r => {
@@ -188,7 +196,6 @@ class Prep365StudentStore {
             }
           }
 
-          const local = this._readLocalCache();
           return {
             testMode: local.testMode ?? (process.env.PREP365_DRY_RUN === 'true'),
             testStudentIds: local.testStudentIds || [],

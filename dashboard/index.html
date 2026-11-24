@@ -4294,6 +4294,20 @@
     .prep365-kpi-card .kpi-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .prep365-kpi-card > div:last-child { min-width: 0; }
 
+    /* Reason filter buttons */
+    .p365-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .p365-chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 7px 12px; border-radius: 999px; cursor: pointer;
+      border: 1px solid #E2E8F0; background: #FFFFFF; color: #334155;
+      font-size: 13px; font-weight: 600; font-family: inherit; transition: all .15s;
+    }
+    .p365-chip:hover { border-color: #93C5FD; background: #F8FAFC; }
+    .p365-chip.active { background: #2563EB; border-color: #2563EB; color: #FFFFFF; }
+    .p365-chip-n { font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: #F1F5F9; color: #475569; }
+    .p365-chip.active .p365-chip-n { background: rgba(255,255,255,.22); color: #FFFFFF; }
+    .p365-breakdown { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 10px; font-size: 12.5px; color: #475569; }
+
     /* ─── Counselor row actions: readable on white (were dark-theme pastel text) ─── */
     .c-actions { flex-wrap: nowrap !important; }
     .c-btn { white-space: nowrap !important; padding: 6px 10px !important; font-size: 12px !important; border: 1px solid transparent !important; }
@@ -5376,7 +5390,7 @@
             <!-- Test Mode Yellow Alert Banner -->
             <div id="prep365TestModeBanner" style="display:none;background:#FEF3C7;border:1px solid #FCD34D;color:#92400E;padding:12px 18px;border-radius:10px;margin-bottom:16px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:10px">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#D97706"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-              <span>Test mode: only test students can be called. Everyone else is view-only.</span>
+              <span>Prep365 reports test mode, but this app manages its own calling: any student with a valid phone number who has not opted out can be called.</span>
             </div>
 
             <!-- Top bar -->
@@ -5389,11 +5403,12 @@
                 <p class="an-sub" id="prep365LastSyncInfo">Last sync: Checking…</p>
               </div>
               <div class="filter-controls" style="align-items:center;flex-wrap:wrap;gap:8px">
-                <button type="button" class="btn btn-secondary btn-sm" onclick="loadPrep365Checkins(); if(typeof toast==='function') toast('Refreshed', 'success');" class="btn btn-secondary btn-sm"><svg class="fi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg> Refresh</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="loadPrep365Checkins(true).then(() => { if(typeof toast==='function') toast('Refreshed from Prep365', 'success'); })" class="btn btn-secondary btn-sm"><svg class="fi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg> Refresh</button>
                 <button type="button" class="btn btn-primary btn-sm" onclick="triggerPrep365ManualSync()" class="btn btn-primary btn-sm"><svg class="fi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg> Sync from Prep365</button>
                 <button type="button" class="btn btn-secondary btn-sm" onclick="openPrep365GoogleSheet()" class="btn btn-secondary btn-sm"><svg class="fi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg> Open Google Sheet</button>
                 <button type="button" class="btn btn-secondary btn-sm" onclick="downloadPrep365Excel()" class="btn btn-secondary btn-sm"><svg class="fi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Download Excel</button>
                 <button type="button" id="btnPrep365BulkCall" class="btn btn-primary btn-sm" style="display:none;background:#10B981;border-color:#10B981" onclick="openPrep365BulkCallModal()" class="btn btn-primary btn-sm" style="display:none;background:#2563EB;border-color:#2563EB"><svg class="fi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg> Call selected (0)</button>
+                <button type="button" id="p365ClearSelBtn" class="btn btn-secondary btn-sm" style="display:none !important" onclick="togglePrep365SelectAll(false)">Clear selection</button>
               </div>
             </div>
 
@@ -5484,13 +5499,20 @@
 
             <!-- Table Card with Search & Filters -->
             <div class="card" style="padding:0;overflow:hidden">
+              <!-- Reason filters (one active at a time; "All Reasons" resets) -->
+              <div style="padding:14px 16px 10px;border-bottom:1px solid #E5E7EB">
+                <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#64748B;margin-bottom:8px">Filter by reason</div>
+                <div id="p365ReasonChips" class="p365-chips" role="group" aria-label="Filter by reason"></div>
+                <div id="p365Breakdown" class="p365-breakdown"></div>
+              </div>
               <div class="prep365-filter-bar" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #E5E7EB;flex-wrap:wrap;gap:12px">
-                <div class="search-input-wrap" style="flex:1;min-width:260px">
+                <div class="search-input-wrap" style="flex:1;min-width:260px;display:flex;align-items:center;gap:8px">
                   <span>🔍</span>
                   <input type="text" id="prep365SearchInput" placeholder="Search student by name, email or phone…" oninput="filterPrep365Table()">
                 </div>
                 <div class="filter-controls" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-                  <select id="prep365FilterReason" onchange="filterPrep365Table()" class="form-select form-select-sm" style="height:36px;padding:4px 10px;border-radius:6px;border:1px solid #CBD5E1;font-size:13px">
+                  <!-- Holds the active reason; the buttons above are the visible control -->
+                  <select id="prep365FilterReason" onchange="filterPrep365Table()" aria-hidden="true" tabindex="-1" style="display:none">
                     <option value="all">All Reasons</option>
                     <option value="MISSED_ASSIGNED_TOPICS">Missed Assigned Topics</option>
                     <option value="NO_RECENT_TESTS">No Recent Tests</option>
@@ -5537,6 +5559,17 @@
                     <tr><td colspan="10" style="text-align:center;color:var(--muted);padding:32px">Loading Prep365 students…</td></tr>
                   </tbody>
                 </table>
+              </div>
+              <!-- Pagination + select-all (selects callable students on ALL pages) -->
+              <div class="p365-pager" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;border-top:1px solid #E5E7EB">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                  <button type="button" class="btn btn-secondary btn-sm" id="p365SelectAllBtn" onclick="togglePrep365SelectAll()">Select all callable (0)</button>
+                  <span id="p365PageInfo" style="font-size:13px;color:#64748B"></span>
+                </div>
+                <div style="display:flex;gap:8px">
+                  <button type="button" class="btn btn-secondary btn-sm" id="p365PrevPage" onclick="changePrep365Page(-1)">‹ Previous</button>
+                  <button type="button" class="btn btn-secondary btn-sm" id="p365NextPage" onclick="changePrep365Page(1)">Next ›</button>
+                </div>
               </div>
             </div>
           </div>
@@ -7757,11 +7790,24 @@
     let _prep365SelectedStudentIds = new Set();
     let _prep365SheetUrl = 'https://docs.google.com/spreadsheets/d/1BXutZ1i9zn4Te2cc66Dlm-CXcURsCHRXdL67N4JFiyE/edit';
 
-    async function loadPrep365Checkins() {
+    // fromPrep365=true -> server re-fetches the list from Prep365 GET /candidates
+    // (read-only; never claims or calls anyone).
+    // Live status refresh while calls run (bulk-call progress events), keeping the page.
+    let _p365KeepPage = false, _p365LiveTimer = null;
+    function schedulePrep365LiveRefresh() {
+      if (document.querySelector('.view.active')?.id !== 'view-prep365') return;
+      clearTimeout(_p365LiveTimer);
+      _p365LiveTimer = setTimeout(async () => {
+        _p365KeepPage = true;
+        try { await loadPrep365Checkins(false, true); } finally { _p365KeepPage = false; }
+      }, 2500);
+    }
+
+    async function loadPrep365Checkins(fromPrep365 = false, quiet = false) {
       const tbody = document.getElementById('prep365CheckinsTableBody');
-      if (tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:32px">Loading Prep365 students…</td></tr>';
+      if (tbody && !quiet) tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:32px">${fromPrep365 ? 'Loading the latest list from Prep365… (this can take ~10s)' : 'Loading Prep365 students…'}</td></tr>`;
       try {
-        const res = await api('/prep365/checkins');
+        const res = await api('/prep365/checkins' + (fromPrep365 ? '?refresh=1' : ''));
         _prep365AllCheckins = res.students || res.checkins || [];
         if (res.sheetUrl) _prep365SheetUrl = res.sheetUrl;
 
@@ -7772,9 +7818,11 @@
         }
 
         // Mode badge
+        // DRY RUN = our PREP365_DRY_RUN flag (phones never ring). Prep365's own
+        // test mode is shown separately by the banner above.
         const modeBadge = document.getElementById('prep365ModeBadge');
         if (modeBadge) {
-          if (res.dryRun || res.testMode) {
+          if (res.dryRun) {
             modeBadge.className = 'badge chip-amber';
             modeBadge.textContent = 'DRY RUN (no calls)';
           } else {
@@ -7824,15 +7872,22 @@
         setVal('p365_reason_custom_prep_behind', br.CUSTOM_PREP_BEHIND || 0);
         setVal('p365_reason_declining_score', br.DECLINING_PERFORMANCE || 0);
 
-        // Sidebar count
+        // Sidebar count = students needing attention
         const badge = document.getElementById('navPrep365Count');
-        if (badge) badge.textContent = res.callableCount || _prep365AllCheckins.filter(s => s.callStatus?.callable).length || _prep365AllCheckins.length;
+        if (badge) badge.textContent = res.count ?? _prep365AllCheckins.length;
 
-        // Reset selection
-        _prep365SelectedStudentIds.clear();
+        // Keep selections that are still callable after a reload; drop the rest.
+        for (const id of [..._prep365SelectedStudentIds]) {
+          const s = _prep365AllCheckins.find(x => p365Id(x) === id);
+          if (!s || !s.callStatus?.callable) _prep365SelectedStudentIds.delete(id);
+        }
         updatePrep365BulkCallBtn();
 
-        renderPrep365Table(_prep365AllCheckins);
+        _p365Breakdown = res.breakdown || null;
+        renderPrep365Breakdown();
+        const keepPage = _p365KeepPage ? _p365Page : 1;
+        filterPrep365Table(); // applies current filters and renders page 1
+        if (keepPage > 1) { _p365Page = keepPage; renderPrep365Page(); }
       } catch (e) {
         if (tbody) tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--danger);padding:32px">Error loading Prep365 students: ${esc(e.message)}</td></tr>`;
       }
@@ -7864,13 +7919,80 @@
       filterPrep365Table();
     }
 
+    // The five Prep365 reasons. Codes are exactly the ones Prep365 sends in
+    // student.reasons[] (same codes the badges and byReason cards use) — the
+    // reason logic itself lives in Prep365; we only filter on it.
+    const P365_REASONS = [
+      { code: 'MISSED_ASSIGNED_TOPICS', label: 'Missed Assigned Daily/Weekly Topics' },
+      { code: 'NO_RECENT_TESTS',        label: 'No Tests Attempted Recently' },
+      { code: 'CUSTOM_PREP_BEHIND',     label: 'Custom Prep Plan Incomplete / Behind Schedule' },
+      { code: 'INACTIVE',               label: 'Inactive on Prep365' },
+      { code: 'DECLINING_PERFORMANCE',  label: 'Declining Test Performance' },
+    ];
+    function p365HasReason(s, code) {
+      return (s.reasons || []).some(r => (r.code || r) === code);
+    }
+
+    // Reason button row: highlight the active one; counts respect search + other filters.
+    function renderPrep365ReasonChips(baseList, activeCode) {
+      const el = document.getElementById('p365ReasonChips');
+      if (!el) return;
+      const chip = (code, label, n) => `
+        <button type="button" class="p365-chip${activeCode === code ? ' active' : ''}" onclick="setPrep365Reason('${code}')"
+          aria-pressed="${activeCode === code}">${esc(label)} <span class="p365-chip-n">${n}</span></button>`;
+      el.innerHTML = chip('all', 'All Reasons', baseList.length) +
+        P365_REASONS.map(r => chip(r.code, r.label, baseList.filter(s => p365HasReason(s, r.code)).length)).join('');
+    }
+
+    const P365_E164 = /^\+[1-9]\d{7,14}$/;
+    function p365Phones(s) {
+      const st = s.student || {};
+      return [st.phone, ...(s.parents || []).map(p => p.phone)]
+        .filter(p => p !== undefined && p !== null && String(p).trim() !== '')
+        .map(p => String(p).replace(/[\s()-]/g, ''));
+    }
+
+    // Why a student can't be called. Decided on the server (valid phone, not
+    // opted out, not Do-Not-Contact) — the page only displays it.
+    const P365_BLOCK_LABELS = { no_phone: 'No phone', invalid_phone: 'Invalid phone', opted_out: 'Opted out', do_not_contact: 'Do not contact' };
+    function p365BlockInfo(s) {
+      const cs = s.callStatus || {};
+      if (cs.callable) return null;
+      const key = cs.blockedReason || 'other';
+      return { key, label: P365_BLOCK_LABELS[key] || 'Not callable', detail: cs.blockedDetail || key };
+    }
+
+    let _p365Breakdown = null;
+    function renderPrep365Breakdown() {
+      const el = document.getElementById('p365Breakdown');
+      if (!el || !_p365Breakdown) return;
+      const c = _p365Breakdown;
+      const item = (label, n, color, title) => `<span title="${esc(title)}"><b style="color:${color}">${n}</b> ${label}</span>`;
+      el.innerHTML = [
+        item('total students', c.total, '#0F172A', 'All students synced from Prep365'),
+        item('callable', c.callable, '#059669', 'Valid phone, not opted out, not Do-Not-Contact'),
+        item('missing phone number', c.noPhone, '#B91C1C', 'No student or parent phone in Prep365'),
+        item('invalid phone number', c.invalidPhone, '#B45309', 'Number present but not a valid phone number'),
+        item('opted out', c.optedOut, '#475569', 'Student or all contacts opted out'),
+        item('do not contact', c.doNotContact, '#475569', 'Number is on the Do-Not-Contact list'),
+        item('contacted in last 7 days', c.contactedRecently, '#475569', 'Informational — they can still be called'),
+      ].join('<span style="color:#CBD5E1">·</span>');
+    }
+
+    function setPrep365Reason(code) {
+      const sel = document.getElementById('prep365FilterReason');
+      if (sel) sel.value = code;
+      filterPrep365Table();
+    }
+
     function filterPrep365Table() {
       const q = (document.getElementById('prep365SearchInput')?.value || '').toLowerCase().trim();
       const reasonFilter = document.getElementById('prep365FilterReason')?.value || 'all';
       const statusFilter = document.getElementById('prep365FilterStatus')?.value || 'all';
       const calledFilter = document.getElementById('prep365FilterCalled')?.value || 'all';
 
-      const filtered = _prep365AllCheckins.filter(s => {
+      // Search + call-status + student filters (everything except reason)
+      const base = _prep365AllCheckins.filter(s => {
         const student = s.student || s;
         const parents = s.parents || [];
         const cs = s.callStatus || {};
@@ -7884,11 +8006,6 @@
           const parentPhones = parents.map(p => (p.phone || '').toLowerCase()).join(' ');
           const matches = name.includes(q) || email.includes(q) || phone.includes(q) || parentNames.includes(q) || parentPhones.includes(q);
           if (!matches) return false;
-        }
-
-        if (reasonFilter !== 'all') {
-          const hasReason = (s.reasons || []).some(r => (r.code === reasonFilter || r === reasonFilter));
-          if (!hasReason) return false;
         }
 
         if (statusFilter !== 'all') {
@@ -7910,7 +8027,57 @@
         return true;
       });
 
-      renderPrep365Table(filtered);
+      const filtered = reasonFilter === 'all' ? base : base.filter(s => p365HasReason(s, reasonFilter));
+      renderPrep365ReasonChips(base, reasonFilter);
+
+      _p365Filtered = filtered;
+      _p365Page = 1;
+      renderPrep365Page();
+    }
+
+    // ─── Pagination (50 per page) ───
+    const P365_PAGE_SIZE = 50;
+    let _p365Filtered = [];
+    let _p365Page = 1;
+
+    function p365Id(s) { return (s.student && s.student.id) || s.id; }
+
+    function renderPrep365Page() {
+      const total = _p365Filtered.length;
+      const pages = Math.max(1, Math.ceil(total / P365_PAGE_SIZE));
+      if (_p365Page > pages) _p365Page = pages;
+      const start = (_p365Page - 1) * P365_PAGE_SIZE;
+      renderPrep365Table(_p365Filtered.slice(start, start + P365_PAGE_SIZE));
+
+      const info = document.getElementById('p365PageInfo');
+      if (info) info.textContent = total
+        ? `Showing ${start + 1}–${Math.min(start + P365_PAGE_SIZE, total)} of ${total} students · Page ${_p365Page} of ${pages}`
+        : 'No students';
+      const prev = document.getElementById('p365PrevPage');
+      const next = document.getElementById('p365NextPage');
+      if (prev) prev.disabled = _p365Page <= 1;
+      if (next) next.disabled = _p365Page >= pages;
+      syncPrep365SelectAllState();
+    }
+
+    function changePrep365Page(delta) {
+      _p365Page += delta;
+      renderPrep365Page();
+      document.getElementById('prep365CheckinsTableBody')?.closest('.card')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+
+    // Header checkbox / button state: checked when every callable student in the
+    // current filter (all pages) is selected.
+    function syncPrep365SelectAllState() {
+      const callable = _p365Filtered.filter(s => s.callStatus?.callable);
+      const all = callable.length > 0 && callable.every(s => _prep365SelectedStudentIds.has(p365Id(s)));
+      const cb = document.getElementById('prep365SelectAllCheckbox');
+      if (cb) { cb.checked = all; cb.disabled = callable.length === 0; }
+      const btn = document.getElementById('p365SelectAllBtn');
+      if (btn) {
+        btn.textContent = all ? `Clear selection` : `Select all callable (${callable.length})`;
+        btn.disabled = callable.length === 0;
+      }
     }
 
     function renderPrep365Table(list) {
@@ -7952,33 +8119,37 @@
         let actionHtml = '';
         let disabledAttr = '';
         if (isCallable) {
+          const who = cs.contact ? (cs.contact.type === 'parent' ? `Parent: ${cs.contact.name}` : 'Student') : '';
+          const busy = cs.liveStatus; // queued / calling right now
           actionHtml = `
-            <div style="display:flex;gap:6px;align-items:center">
-              <button type="button" class="btn btn-primary btn-xs" style="padding:4px 10px;font-size:12px;background:#2563EB" onclick="triggerPrep365IndividualCall('${studentId}')">📞 Call</button>
-              <button type="button" class="btn btn-secondary btn-xs" style="padding:4px 10px;font-size:12px" onclick="openPrep365Drawer('${studentId}')">View</button>
+            <div style="display:flex;flex-direction:column;gap:3px">
+              <div style="display:flex;gap:6px;align-items:center">
+                <button type="button" class="btn btn-primary btn-xs" style="padding:4px 10px;font-size:12px;background:#2563EB" ${busy ? 'disabled' : ''}
+                  onclick="event.stopPropagation();triggerPrep365IndividualCall('${studentId}')">${busy ? (busy === 'calling' ? 'Calling…' : 'Queued') : '📞 Call'}</button>
+                <button type="button" class="btn btn-secondary btn-xs" style="padding:4px 10px;font-size:12px" onclick="openPrep365Drawer('${studentId}')">View</button>
+              </div>
+              <span style="font-size:11px;color:#64748B" title="${esc(cs.contact?.phone || '')}">Calls ${esc(who)}</span>
             </div>
           `;
         } else {
           disabledAttr = 'disabled';
-          let blockedLabel = 'Blocked';
-          if (blockedReason === 'no_phone') blockedLabel = 'No phone';
-          else if (blockedReason === 'test_mode') blockedLabel = 'Test mode';
-          else if (blockedReason === 'cooldown') blockedLabel = 'Called recently';
-          else if (blockedReason === 'opted_out') blockedLabel = 'Opted out';
+          const bi = p365BlockInfo(s) || { label: 'Blocked', detail: blockedReason || '' };
+          const chipCls = (bi.key === 'no_phone' || bi.key === 'invalid_phone') ? 'chip-rose' : 'chip-slate';
 
           actionHtml = `
             <div style="display:flex;gap:6px;align-items:center">
-              <span class="badge chip-slate" style="font-size:11px" title="Cannot be called: ${blockedLabel}">${blockedLabel}</span>
+              <span class="badge ${chipCls}" style="font-size:11px" title="Cannot be called: ${esc(bi.detail)}">${esc(bi.label)}</span>
               <button type="button" class="btn btn-secondary btn-xs" style="padding:4px 10px;font-size:12px" onclick="openPrep365Drawer('${studentId}')">View</button>
             </div>
           `;
         }
 
         // Call status badge
-        const callSt = (lastCall.status || cs.status || 'not_called').toLowerCase();
+        const callSt = (cs.liveStatus || lastCall.status || 'not_called').toLowerCase();
         let statusBadge = '<span class="badge chip-slate">Not called</span>';
         if (callSt === 'completed') statusBadge = '<span class="badge chip-green">Completed</span>';
-        else if (callSt === 'calling') statusBadge = '<span class="badge chip-blue">Calling…</span>';
+        else if (callSt === 'calling' || callSt === 'initiated' || callSt === 'ringing' || callSt === 'in-progress') statusBadge = '<span class="badge chip-blue">Calling…</span>';
+        else if (callSt === 'queued') statusBadge = '<span class="badge chip-blue">Queued</span>';
         else if (callSt === 'no_answer' || callSt === 'no-answer') statusBadge = '<span class="badge chip-amber">No Answer</span>';
         else if (callSt === 'failed') statusBadge = '<span class="badge chip-rose">Failed</span>';
 
@@ -7990,7 +8161,9 @@
         return `
           <tr data-student-id="${studentId}">
             <td style="text-align:center">
-              <input type="checkbox" class="prep365-row-checkbox" value="${studentId}" ${disabledAttr} ${isChecked} onchange="togglePrep365StudentSelect('${studentId}', this.checked)">
+              <input type="checkbox" class="prep365-row-checkbox" value="${studentId}" ${disabledAttr} ${isChecked}
+                title="${isCallable ? 'Select for calling' : esc('Not callable: ' + (p365BlockInfo(s)?.detail || ''))}"
+                onclick="event.stopPropagation()" onchange="togglePrep365StudentSelect('${studentId}', this.checked)">
             </td>
             <td>
               <div style="font-weight:600;color:#0F172A">${esc(student.name || 'Unknown')}</div>
@@ -8026,125 +8199,137 @@
     }
 
     function togglePrep365StudentSelect(studentId, isChecked) {
-      if (isChecked) {
+      const s = _prep365AllCheckins.find(x => p365Id(x) === studentId);
+      if (isChecked && s?.callStatus?.callable) {
         _prep365SelectedStudentIds.add(studentId);
       } else {
         _prep365SelectedStudentIds.delete(studentId);
       }
       updatePrep365BulkCallBtn();
+      syncPrep365SelectAllState();
     }
 
+    // Selects ONLY callable students, across ALL pages of the current filter.
     function togglePrep365SelectAll(isChecked) {
+      if (isChecked === undefined) {
+        const callable = _p365Filtered.filter(s => s.callStatus?.callable);
+        isChecked = !(callable.length && callable.every(s => _prep365SelectedStudentIds.has(p365Id(s))));
+      }
       _prep365SelectedStudentIds.clear();
       if (isChecked) {
-        for (const s of _prep365AllCheckins) {
-          if (s.callStatus?.callable) {
-            const sid = s.student?.id || s.id;
-            _prep365SelectedStudentIds.add(sid);
-          }
+        for (const s of _p365Filtered) {
+          if (s.callStatus?.callable) _prep365SelectedStudentIds.add(p365Id(s));
         }
       }
       document.querySelectorAll('.prep365-row-checkbox:not(:disabled)').forEach(cb => {
-        cb.checked = isChecked;
+        cb.checked = _prep365SelectedStudentIds.has(cb.value);
       });
       updatePrep365BulkCallBtn();
+      syncPrep365SelectAllState();
     }
 
     function updatePrep365BulkCallBtn() {
       const btn = document.getElementById('btnPrep365BulkCall');
       if (!btn) return;
       const count = _prep365SelectedStudentIds.size;
-      if (count > 0) {
-        btn.style.display = 'inline-flex';
-        btn.textContent = `📞 Call selected (${count})`;
-      } else {
-        btn.style.display = 'none';
-      }
+      btn.style.display = 'inline-flex';
+      btn.disabled = count === 0;
+      btn.textContent = `📞 Call selected (${count})`;
+      const clr = document.getElementById('p365ClearSelBtn');
+      // 'important' priority: the theme's .btn rule forces display with !important
+      if (clr) clr.style.setProperty('display', count > 0 ? 'inline-flex' : 'none', 'important');
     }
 
-    function openPrep365BulkCallModal() {
-      const count = _prep365SelectedStudentIds.size;
-      if (count === 0) {
-        if (typeof toast === 'function') toast('Please select at least 1 student to call', 'warning');
+    // Students waiting for confirmation in the dialog (individual or bulk).
+    let _p365PendingIds = [];
+
+    async function openPrep365CallDialog(studentIds) {
+      _p365PendingIds = studentIds.filter(id => {
+        const cs = _prep365AllCheckins.find(x => p365Id(x) === id)?.callStatus;
+        return cs?.callable && !cs.liveStatus;
+      });
+      if (!_p365PendingIds.length) {
+        if (typeof toast === 'function') toast('Select at least 1 student with a valid phone number', 'warning');
         return;
       }
-
-      // Count potential phone numbers
-      let totalPhones = 0;
-      const selectedNames = [];
-      for (const s of _prep365AllCheckins) {
-        const sid = s.student?.id || s.id;
-        if (_prep365SelectedStudentIds.has(sid)) {
-          selectedNames.push(s.student?.name || 'Student');
-          const phones = (s.callStatus?.phonesToCall || []);
-          totalPhones += (phones.length > 0 ? phones.length : 1);
-        }
-      }
-
+      const chosen = _p365PendingIds.map(id => _prep365AllCheckins.find(x => p365Id(x) === id)).filter(Boolean);
+      const names = chosen.map(s => esc(s.student?.name || 'Student'));
+      const parents = chosen.filter(s => s.callStatus?.contact?.type === 'parent').length;
       const isDryRun = document.getElementById('prep365ModeBadge')?.textContent.includes('DRY RUN');
-      const body = document.getElementById('prep365BulkModalBody');
-      body.innerHTML = `
-        <p>You have selected <strong>${count} student(s)</strong> (${selectedNames.slice(0, 5).join(', ')}${selectedNames.length > 5 ? '…' : ''}).</p>
-        <p>Total outbound calls to be placed (student + parent): <strong>${totalPhones} call(s)</strong>.</p>
-        <div style="background:#F1F5F9;padding:12px;border-radius:8px;margin-top:12px;font-size:13px">
-          <div><strong>Mode:</strong> ${isDryRun ? '<span style="color:#D97706;font-weight:700">DRY RUN (no phones will ring)</span>' : '<span style="color:#059669;font-weight:700">LIVE OUTREACH (real phone calls via Telnyx)</span>'}</div>
-          <div style="margin-top:4px"><strong>Concurrency:</strong> Max 2 calls simultaneously</div>
-          <div style="margin-top:4px"><strong>Logging:</strong> All conversation summaries and transcripts will be automatically logged to Google Sheets.</div>
-        </div>
-        <div id="prep365BulkProgressArea" style="display:none;margin-top:16px">
-          <div style="font-weight:600;margin-bottom:6px">Initiating calls…</div>
-          <div style="height:6px;background:#E2E8F0;border-radius:3px;overflow:hidden">
-            <div id="prep365ProgressBar" style="width:30%;height:100%;background:#2563EB;animation:pulse 1s infinite"></div>
-          </div>
-        </div>
-      `;
 
+      // Campaign picker — Prep365 check-in campaign preselected.
+      if (!CAMPAIGNS.length) { try { const d = await api('/campaigns'); CAMPAIGNS = d.campaigns || []; } catch (_) {} }
+      const p365Camp = CAMPAIGNS.find(c => c.type === 'prep365-retention');
+      const opts = [...(p365Camp ? [p365Camp] : []), ...CAMPAIGNS.filter(c => c !== p365Camp && c.status === 'active')]
+        .map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+
+      document.getElementById('prep365BulkModalBody').innerHTML = `
+        <p>${chosen.length === 1 ? 'Call' : 'Call these'} <strong>${chosen.length} student(s)</strong>: ${names.slice(0, 6).join(', ')}${names.length > 6 ? ` and ${names.length - 6} more` : ''}.</p>
+        <p style="font-size:13px;color:#475569">One call per student: the student's own number${parents ? `, or a parent's number for ${parents} student(s) without one` : ''}.</p>
+        <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin:12px 0 4px">Campaign</label>
+        <select id="p365CallCampaign" style="width:100%">${opts || '<option value="">Prep365 Check-in (default)</option>'}</select>
+        <div style="background:#F1F5F9;padding:12px;border-radius:8px;margin-top:12px;font-size:13px">
+          <div><strong>Mode:</strong> ${isDryRun ? '<span style="color:#D97706;font-weight:700">DRY RUN — no phones will ring (shows who would be called)</span>' : '<span style="color:#059669;font-weight:700">LIVE — real phone calls via Telnyx</span>'}</div>
+          <div style="margin-top:4px">Calls go through the shared call queue: one after another, unanswered calls end after ~4 rings, and you can stop the run from the progress panel.</div>
+        </div>
+        <div id="prep365BulkProgressArea" style="display:none;margin-top:16px;font-weight:600">Starting calls…</div>`;
+      const btn = document.getElementById('btnConfirmBulkCall');
+      btn.style.display = ''; btn.disabled = false; btn.textContent = isDryRun ? 'Preview Calls' : 'Start Calls';
       document.getElementById('prep365BulkModal').style.display = 'flex';
     }
 
+    // "Call selected (N)" button
+    function openPrep365BulkCallModal() { openPrep365CallDialog(Array.from(_prep365SelectedStudentIds)); }
+
+    // Row "Call" button — same confirmation dialog, one student
+    function triggerPrep365IndividualCall(studentId) { openPrep365CallDialog([studentId]); }
+
     function closePrep365BulkModal() {
       document.getElementById('prep365BulkModal').style.display = 'none';
+      _p365PendingIds = [];
     }
 
     async function executePrep365BulkCall() {
-      const studentIds = Array.from(_prep365SelectedStudentIds);
+      const studentIds = _p365PendingIds.slice();
       if (!studentIds.length) return;
+      const campaignId = document.getElementById('p365CallCampaign')?.value || undefined;
 
       const btn = document.getElementById('btnConfirmBulkCall');
       btn.disabled = true;
-      btn.textContent = 'Calling…';
+      btn.textContent = 'Starting…';
       document.getElementById('prep365BulkProgressArea').style.display = 'block';
 
       try {
-        const res = await api('/prep365/call-selected', {
+        const res = await api('/prep365/call-students', {
           method: 'POST',
-          body: JSON.stringify({ studentIds })
+          body: JSON.stringify({ studentIds, campaignId })
         });
-
-        if (typeof toast === 'function') {
-          toast(res.message || `Started ${res.calls || 0} call(s) for ${res.count || 0} student(s)`, 'success');
+        const skipped = res.skipped || [];
+        const plan = res.plan || [];
+        const list = (items, fmt) => `<ul style="margin:6px 0 0 18px;max-height:160px;overflow:auto">${items.map(fmt).join('')}</ul>`;
+        const skippedHtml = skipped.length ? `
+          <div style="margin-top:12px"><strong>Not called (${skipped.length}):</strong>
+            ${list(skipped, s => `<li>${esc(s.name || 'Student')} — ${esc(s.reason || 'not callable')}</li>`)}</div>` : '';
+        const planHtml = res.dryRun && plan.length ? `
+          <div style="margin-top:12px"><strong>Would call (${plan.length}):</strong>
+            ${list(plan, p => `<li>${esc(p.name)} — ${p.contactType === 'parent' ? 'parent ' + esc(p.contactName) : 'student'}</li>`)}</div>` : '';
+        document.getElementById('prep365BulkModalBody').innerHTML = `
+          <p style="font-weight:600">${res.dryRun
+            ? `Dry run: ${plan.length} student(s) would be called. No phones rang. Set PREP365_DRY_RUN=false to call for real.`
+            : `${res.queued || 0} call(s) queued. Progress shows in the call panel and on each row.`}</p>
+          ${planHtml}${skippedHtml}`;
+        btn.style.display = 'none';
+        if (!res.dryRun) {
+          _prep365SelectedStudentIds.clear();
+          updatePrep365BulkCallBtn();
+          if (typeof bcpLoad === 'function') bcpLoad();
+          schedulePrep365LiveRefresh();
         }
-
-        closePrep365BulkModal();
-        setTimeout(loadPrep365Checkins, 1500);
       } catch (err) {
-        if (typeof toast === 'function') toast('Bulk call error: ' + err.message, 'error');
+        if (typeof toast === 'function') toast('Call error: ' + err.message, 'error');
         btn.disabled = false;
         btn.textContent = 'Start Calls';
-      }
-    }
-
-    async function triggerPrep365IndividualCall(studentId) {
-      if (!confirm('Start AI check-in call for this student?')) return;
-      try {
-        const res = await api('/prep365/call-selected', {
-          method: 'POST',
-          body: JSON.stringify({ studentIds: [studentId] })
-        });
-        if (typeof toast === 'function') toast(res.message || 'Call initiated', 'success');
-        setTimeout(loadPrep365Checkins, 1500);
-      } catch (e) {
-        if (typeof toast === 'function') toast('Call initiation error: ' + e.message, 'error');
+        document.getElementById('prep365BulkProgressArea').style.display = 'none';
       }
     }
 
@@ -8308,21 +8493,12 @@
       document.getElementById('prep365Drawer')?.classList.remove('open');
     }
 
+    // "Sync from Prep365": reloads the list from Prep365 GET /candidates.
+    // Read-only — it never claims students and never places calls.
     async function triggerPrep365ManualSync() {
-      const live = confirm('Trigger live Prep365 sync now?\\n\\nClick OK for LIVE mode (calls placed via Telnyx if candidates exist).\\nClick CANCEL for DRY-RUN mode (fetches candidates without calling).');
-      try {
-        if (typeof toast === 'function') toast('Initiating Prep365 sync…', 'info');
-        const res = await api('/prep365/sync', {
-          method: 'POST',
-          body: JSON.stringify({ dryRun: !live })
-        });
-        if (typeof toast === 'function') {
-          toast(`Prep365 sync done: ${res.studentCount || 0} students, ${res.callsCount || 0} planned calls`, 'success');
-        }
-        loadPrep365Checkins();
-      } catch (e) {
-        if (typeof toast === 'function') toast(`Sync failed: ${e.message}`, 'error');
-      }
+      if (typeof toast === 'function') toast('Syncing students from Prep365…', 'info');
+      await loadPrep365Checkins(true);
+      if (typeof toast === 'function') toast(`Prep365 sync done: ${_prep365AllCheckins.length} students loaded (no calls placed)`, 'success');
     }
 
     // ─── Callback Requests View Logic ───
@@ -8475,7 +8651,8 @@
         if (s.callsTotal !== undefined) document.getElementById('navCallCount').textContent = s.callsTotal;
         api('/prep365/checkins').then(r => {
           const b = document.getElementById('navPrep365Count');
-          if (b && r.total !== undefined) b.textContent = r.total;
+          const n = r.count ?? r.total;
+          if (b && n !== undefined) b.textContent = n;
           const pVal = document.getElementById('st_prep365_val');
           if (pVal) pVal.textContent = r.stats?.callsPlaced || r.total || 0;
           const pSub = document.getElementById('st_prep365_sub');
@@ -12638,6 +12815,7 @@
             if (msg.type === 'bulk-call-progress') {
               bcpUpdate(msg.run);
               if (msg.leadId) scheduleLiveRefresh(msg.leadId);
+              schedulePrep365LiveRefresh(); // Calling… / final status on Student Check-ins
               return;
             }
             // Default: lead/meeting update — refresh once per burst of events.

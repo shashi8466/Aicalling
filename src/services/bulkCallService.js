@@ -22,6 +22,7 @@ const crypto   = require('crypto');
 const supabase = require('../db/supabase');
 const callSvc  = require('./twilioService'); // shim → telnyxService
 const logger   = require('../logger');
+const { isPrep365Lead } = require('../utils/prep365');
 
 const CONCURRENCY       = Math.max(1, parseInt(process.env.BULK_CALL_CONCURRENCY) || 1);
 const RING_TIMEOUT_SECS = Math.max(5, parseInt(process.env.BULK_CALL_RING_TIMEOUT_SECS) || 24);
@@ -143,7 +144,7 @@ function emitProgress(run, leadId) {
  * Queue a bulk run and start dialing immediately.
  * @returns {object} run summary plus skipped details
  */
-async function enqueue({ leadIds, campaignId = null, campaignVars = null, classId = null, counselor = 'system', label = '' }) {
+async function enqueue({ leadIds, campaignId = null, campaignVars = null, classId = null, counselor = 'system', label = '', source = '' }) {
   const unique = [...new Set((leadIds || []).map(String))];
   if (!unique.length) throw new Error('No students to call');
 
@@ -158,7 +159,7 @@ async function enqueue({ leadIds, campaignId = null, campaignVars = null, classI
 
   const run = {
     id: crypto.randomUUID(),
-    meta: { campaignId, campaignVars, classId, counselor, label },
+    meta: { campaignId, campaignVars, classId, counselor, label, source },
     createdAt: Date.now(),
     finishedAt: null,
     stopped: false,
@@ -251,6 +252,9 @@ async function dial(job) {
 
   const { data: lead, error } = await supabase.from('leads').select('*').eq('id', job.leadId).single();
   if (error || !lead) return finish(job, 'skipped', 'lead-not-found');
+  // Prep365 students may only be dialed by a run an admin started from the
+  // Student Check-ins page — never via Leads/Classes bulk runs.
+  if (isPrep365Lead(lead) && run.meta.source !== 'prep365-checkins') return finish(job, 'skipped', 'prep365-checkins-only');
   const phone = normalisePhone(lead.phone);
   if (!phone) {
     job.error = `invalid-phone:${lead.phone || 'missing'}`;
@@ -555,4 +559,4 @@ function getRun(runId) {
   };
 }
 
-module.exports = { enqueue, onCallEnded, stopRun, cancelLead, start, list, getRun, RING_TIMEOUT_SECS, CONCURRENCY };
+module.exports = { enqueue, onCallEnded, stopRun, cancelLead, start, list, getRun, normalisePhone, RING_TIMEOUT_SECS, CONCURRENCY };

@@ -83,6 +83,7 @@ class Prep365Service {
     }
 
     const normalizedStudents = [];
+    const seenIds = new Set(); // one row per student.id
     const byReason = {
       INACTIVE: 0,
       NO_RECENT_TESTS: 0,
@@ -96,6 +97,8 @@ class Prep365Service {
     for (const item of rawStudents) {
       const student = item.student || item;
       const studentId = student.id || student.studentId;
+      if (!studentId || seenIds.has(studentId)) continue;
+      seenIds.add(studentId);
       const parents = item.parents || [];
       const activity = item.activity || {};
       const tests = item.tests || {};
@@ -121,38 +124,37 @@ class Prep365Service {
         if (p.phone) phonesToCall.push({ recipientType: 'parent', name: p.name, phone: p.phone });
       }
 
-      // Existing call history
-      const existingStatus = historyMap.get(studentId) || item.callStatus || {};
-      const lastCall = existingStatus.lastCall || null;
-      const totalCalls = existingStatus.totalCalls || 0;
-
-      // Determine cooldown (called within last 24 hours)
-      let inCooldown = false;
-      if (lastCall && lastCall.at) {
-        const lastCallTime = new Date(lastCall.at).getTime();
-        const hrsSince = (Date.now() - lastCallTime) / (1000 * 60 * 60);
-        if (hrsSince < 24) inCooldown = true;
+      // Call status: Prep365's callStatus is authoritative (callable / blockedReason /
+      // cooldown / phonesToCall). Local history only fills in a missing lastCall.
+      const localStatus = historyMap.get(studentId) || {};
+      let callStatus;
+      if (item.callStatus && typeof item.callStatus === 'object') {
+        const cs = item.callStatus;
+        callStatus = {
+          callable: Boolean(cs.callable),
+          blockedReason: cs.callable ? null : (cs.blockedReason || 'blocked'),
+          inCooldown: Boolean(cs.inCooldown),
+          phonesToCall: Array.isArray(cs.phonesToCall) ? cs.phonesToCall : phonesToCall,
+          totalCalls: cs.totalCalls ?? localStatus.totalCalls ?? 0,
+          lastCall: cs.lastCall || localStatus.lastCall || null,
+        };
+      } else {
+        // Legacy response without callStatus: derive conservatively.
+        let blockedReason = null;
+        if (student.optedOut || item.optedOut) blockedReason = 'opted_out';
+        else if (phonesToCall.length === 0) blockedReason = 'no_phone';
+        else if (testMode && testStudentIds.length > 0 && !testStudentIds.includes(studentId)) blockedReason = 'test_mode';
+        callStatus = {
+          callable: !blockedReason,
+          blockedReason,
+          inCooldown: false,
+          phonesToCall,
+          totalCalls: localStatus.totalCalls || 0,
+          lastCall: localStatus.lastCall || null,
+        };
       }
 
-      // Determine callable and blockedReason
-      let callable = true;
-      let blockedReason = null;
-
-      if (student.optedOut || item.optedOut) {
-        callable = false;
-        blockedReason = 'opted_out';
-      } else if (phonesToCall.length === 0) {
-        callable = false;
-        blockedReason = 'no_phone';
-      } else if (inCooldown) {
-        callable = false;
-        blockedReason = 'cooldown';
-      } else if (testMode && testStudentIds.length > 0 && !testStudentIds.includes(studentId)) {
-        callable = false;
-        blockedReason = 'test_mode';
-      }
-
-      if (callable) callableCount++;
+      if (callStatus.callable) callableCount++;
 
       normalizedStudents.push({
         student: {
@@ -160,7 +162,7 @@ class Prep365Service {
           name: student.name || 'Unknown',
           email: student.email || '',
           phone: student.phone || '',
-          grade: student.grade || item.grade || '11th Grade',
+          grade: student.grade || item.grade || '',
           optedOut: Boolean(student.optedOut)
         },
         parents,
@@ -174,25 +176,19 @@ class Prep365Service {
         reasons,
         talkingPoints,
         priority,
-        callStatus: {
-          callable,
-          blockedReason,
-          inCooldown,
-          phonesToCall,
-          totalCalls,
-          lastCall
-        }
+        callStatus
       });
     }
 
     // Sort students by priority descending
     normalizedStudents.sort((a, b) => (b.priority || 0) - (a.priority || 0));
 
+    // Counts come straight from Prep365's response (fall back to our tallies).
     const finalResult = {
       testMode,
       testStudentIds,
-      count: normalizedStudents.length,
-      callableCount,
+      count: typeof data.count === 'number' ? data.count : normalizedStudents.length,
+      callableCount: typeof data.callableCount === 'number' ? data.callableCount : callableCount,
       byReason: data.byReason || byReason,
       students: normalizedStudents,
       thresholds: data.thresholds || null, // Prep365's own selection rules (cooldown, daily limit, …)
@@ -213,7 +209,7 @@ class Prep365Service {
       timestamp: finalResult.syncedAt,
       dryRun: isDryRun,
       studentsReceived: finalResult.count,
-      callsQueued: callableCount,
+      callsQueued: finalResult.callableCount,
       callsPlaced: 0,
       errors: 0
     };
@@ -245,6 +241,7 @@ class Prep365Service {
 
     logger.info(`[Prep365] Claiming ${studentIds.length} selected student(s) (dryRun=${isDryRun})`);
 
+    // Only /claim-selected, never /claim: /claim may hand back students nobody selected.
     let res;
     try {
       res = await axios.post(`${this.baseUrl}/claim-selected`, body, {
@@ -256,20 +253,8 @@ class Prep365Service {
         timeout: 30000,
       });
     } catch (err) {
-      if (err.response?.status === 404) {
-        // Fallback to /claim if endpoint is named /claim
-        logger.info('[Prep365] /claim-selected returned 404, falling back to /claim with studentIds...');
-        res = await axios.post(`${this.baseUrl}/claim`, body, {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          timeout: 30000,
-        });
-      } else {
-        throw err;
-      }
+      const detail = err.response?.data?.error || err.response?.data?.message || err.message;
+      throw new Error(`Prep365 claim-selected failed (${err.response?.status || 'network'}): ${detail}`);
     }
 
     const data = res.data || {};

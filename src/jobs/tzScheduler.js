@@ -8,6 +8,7 @@ const Lead = require('../models/Lead');
 const twilioSvc = require('../services/twilioService');
 const cfg = require('../config');
 const logger = require('../logger');
+const { isPrep365Lead } = require('../utils/prep365');
 
 let isRunning = false;
 
@@ -36,6 +37,14 @@ async function checkAndPlaceCalls() {
     for (const cb of dueCallbacks) {
       try {
         const lead = await Lead.findById(cb.leadId);
+        // Prep365 students are only ever called manually from the Check-ins page.
+        if (lead && isPrep365Lead(lead)) {
+          cb.status = 'Cancelled';
+          cb.notes = 'Prep365 student: automatic calls are disabled. Call manually from Student Check-ins.';
+          await cb.save();
+          if (lead.nextScheduledCall) { lead.nextScheduledCall = null; await lead.save(); }
+          continue;
+        }
         if (!lead || ['enrolled', 'lost', 'do-not-call', 'do-not-contact'].includes(lead.status)) {
           cb.status = 'Cancelled';
           cb.notes = lead ? `Skipped because lead status is ${lead.status}` : 'Lead not found';
@@ -97,6 +106,12 @@ async function checkAndPlaceCalls() {
 
     for (const lead of leads) {
       try {
+        // Prep365 students are never auto-dialed (manual calls only).
+        if (isPrep365Lead(lead)) {
+          if (lead.nextScheduledCall) { lead.nextScheduledCall = null; await lead.save(); }
+          continue;
+        }
+
         // Check for specific requested call time
         if (lead.nextScheduledCall) {
           const scheduledMoment = moment(lead.nextScheduledCall);

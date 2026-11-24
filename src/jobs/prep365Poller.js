@@ -1,6 +1,8 @@
 /**
- * Prep365 Candidate Poller / Sync Job
- * Runs on a schedule to claim candidates and queue outreach calls.
+ * Prep365 Candidate Sync Job
+ * Runs on a schedule and ONLY refreshes the student list (GET /candidates).
+ * It never claims students and never places calls — Prep365 calls are manual only
+ * (see src/utils/prep365.js).
  */
 const cron = require('node-cron');
 const cfg = require('../config');
