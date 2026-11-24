@@ -8274,7 +8274,7 @@
         </div>
         <div id="prep365BulkProgressArea" style="display:none;margin-top:16px;font-weight:600">Starting calls…</div>`;
       const btn = document.getElementById('btnConfirmBulkCall');
-      btn.style.display = ''; btn.disabled = false; btn.textContent = isDryRun ? 'Preview Calls' : 'Start Calls';
+      btn.style.removeProperty('display'); btn.disabled = false; btn.textContent = isDryRun ? 'Preview Calls' : 'Start Calls';
       document.getElementById('prep365BulkModal').style.display = 'flex';
     }
 
@@ -8318,7 +8318,7 @@
             ? `Dry run: ${plan.length} student(s) would be called. No phones rang. Set PREP365_DRY_RUN=false to call for real.`
             : `${res.queued || 0} call(s) queued. Progress shows in the call panel and on each row.`}</p>
           ${planHtml}${skippedHtml}`;
-        btn.style.display = 'none';
+        btn.style.setProperty('display', 'none', 'important'); // theme .btn forces display with !important
         if (!res.dryRun) {
           _prep365SelectedStudentIds.clear();
           updatePrep365BulkCallBtn();

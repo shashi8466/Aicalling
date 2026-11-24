@@ -92,4 +92,4 @@ services:
       - key: PREP365_API_KEY
         sync: false
       - key: PREP365_DRY_RUN
-        value: "true"
+        value: "false"                # true = preview only, no phones ring

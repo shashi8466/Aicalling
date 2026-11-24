@@ -391,11 +391,13 @@ router.post('/call/respond', async (req, res) => {
     if (!lead) return res.send(twilioSvc.twimlHangup());
 
     const session = sessions.get(leadId) || { history: [], turnCount: 0 };
-    const isPrep365 = session.campaignType === 'prep365-retention' ||
-                      session.campaign?.type === 'prep365-retention' ||
-                      session.campaign?.isPrep365 ||
-                      lead.source === 'Prep365' ||
-                      !!lead.qualification?.prep365OutreachId;
+    // The campaign chosen when the call was placed decides the script. Only when
+    // no specific campaign was resolved do Prep365 students fall back to the
+    // Prep365 check-in conversation.
+    const explicitCampaign = session.campaignType && session.campaignType !== campaignReg.DEFAULT_TYPE;
+    const isPrep365 = explicitCampaign
+      ? (session.campaignType === 'prep365-retention' || session.campaign?.type === 'prep365-retention' || !!session.campaign?.isPrep365)
+      : (lead.source === 'Prep365' || !!lead.qualification?.prep365OutreachId);
 
     // No speech detected — rephrase, then push to meeting slots. NEVER hang up on silence alone.
     if (!speech || noSpeech) {
