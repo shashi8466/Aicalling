@@ -1162,11 +1162,14 @@ router.get('/meetings', async (req, res) => {
       .order('scheduled_at', { ascending: false })
       .limit(1000);
 
-    if (req.profile?.role !== 'admin') {
-      const uid = req.profile.id;
-      q = q.or(`leads.counselor_id.eq.${uid},leads.assigned_counselor_id.eq.${uid},leads.created_by.eq.${uid}`);
-    } else if (counselorId && counselorId !== 'all') {
-      q = q.or(`leads.counselor_id.eq.${counselorId},leads.assigned_counselor_id.eq.${counselorId},leads.created_by.eq.${counselorId}`);
+    // OR across the joined lead's columns must be passed with referencedTable
+    // (a "leads." prefix inside or() is a parse error). leads!inner then keeps
+    // only meetings whose lead matches.
+    const scopeId = req.profile?.role !== 'admin'
+      ? req.profile.id
+      : (counselorId && counselorId !== 'all' ? counselorId : null);
+    if (scopeId) {
+      q = q.or(`counselor_id.eq.${scopeId},assigned_counselor_id.eq.${scopeId},created_by.eq.${scopeId}`, { referencedTable: 'leads' });
     }
 
     const { data: meetingsRows, error } = await q;

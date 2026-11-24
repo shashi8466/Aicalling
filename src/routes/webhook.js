@@ -259,7 +259,8 @@ router.post('/call/start', async (req, res) => {
       // These are NOT DB UUIDs — resolve directly from the registry.
       if (campaignReg.CAMPAIGNS[qCampaignId]) {
         campaignType = qCampaignId;
-        campaignRow = null;
+        // Load the built-in campaign's row so an admin-edited script applies.
+        campaignRow = await campaignSvc.getDefaultByType(qCampaignId);
       } else {
         // Treat as a DB UUID — look up in campaigns table
         campaignRow = await campaignSvc.getById(qCampaignId);

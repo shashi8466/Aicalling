@@ -5,7 +5,9 @@
 const express = require('express');
 const router  = express.Router();
 const svc     = require('../services/campaignService');
+const registry = require('../campaigns/registry');
 const logger  = require('../logger');
+const { requireAdmin } = require('../middleware/auth');
 
 // Detect the "migration not applied yet" case so we can return a helpful hint
 // instead of a generic 500 — existing features keep working regardless.
@@ -54,6 +56,42 @@ router.patch('/:id', async (req, res) => {
     res.json(updated);
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Campaign script (view / edit) ─────────────────────────────────────────────
+// GET /api/campaigns/:id/script → { script (saved edits, {} = built-in), defaults, placeholders }
+router.get('/:id/script', async (req, res) => {
+  try {
+    const row = await svc.getById(req.params.id);
+    if (!row) return res.status(404).json({ error: 'Campaign not found' });
+    const defaults = svc.previewDefaults(row);
+    const isPrep365 = row.type === 'prep365-retention';
+    res.json({
+      id: row.id, name: row.name, type: row.type, isDefault: row.is_default,
+      script: row.script || {},
+      defaults,
+      templates: require('../campaigns/scriptTemplates').templatesFor(row, defaults),
+      // Prep365 campaigns get the per-student study placeholders first.
+      placeholders: isPrep365 ? [...registry.PREP365_PLACEHOLDERS, 'firstName', 'studentName', 'fullName'] : registry.PLACEHOLDERS.filter(p => !['talkingPoints', 'pendingSummary'].includes(p)),
+      callTypes: registry.CALL_TYPES,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /api/campaigns/:id/script  body: { callType, opener, message, instructions }
+// Admin only. Sending all-empty fields restores the built-in script.
+router.put('/:id/script', requireAdmin, async (req, res) => {
+  try {
+    const row = await svc.getById(req.params.id);
+    if (!row) return res.status(404).json({ error: 'Campaign not found' });
+    const saved = await svc.saveScript(req.params.id, req.body || {});
+    logger.info(`Campaign script ${Object.keys(saved.script || {}).length ? 'updated' : 'reset to default'}: ${saved.name} by ${req.user?.email || req.user?.id}`);
+    res.json({ ok: true, script: saved.script || {} });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
   }
 });
 

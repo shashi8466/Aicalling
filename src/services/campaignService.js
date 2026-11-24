@@ -106,6 +106,55 @@ async function getById(id) {
   return data;
 }
 
+/** The built-in (is_default) campaign row for a registry type, or null. */
+async function getDefaultByType(type) {
+  try {
+    const { data } = await supabase.from(TABLE).select('*').eq('type', type).eq('is_default', true).limit(1);
+    return (data && data[0]) || null;
+  } catch (_) { return null; }
+}
+
+/**
+ * Validate and save an admin-edited script for a campaign.
+ * Empty fields are allowed; an all-empty script means "use the built-in script".
+ */
+async function saveScript(id, input) {
+  const s = input || {};
+  const clean = {};
+  if (s.callType !== undefined && s.callType !== '') {
+    if (!registry.CALL_TYPES.includes(s.callType)) throw new Error('callType must be announcement, information or booking');
+    clean.callType = s.callType;
+  }
+  for (const k of ['opener', 'message', 'instructions']) {
+    const v = String(s[k] || '').trim();
+    if (v.length > 4000) throw new Error(`${k} is too long (max 4000 characters)`);
+    if (v) clean[k] = v;
+  }
+  if (clean.callType === 'announcement' && !clean.message && !clean.opener) {
+    throw new Error('An announcement needs a message to speak');
+  }
+  const { data, error } = await supabase.from(TABLE).update({ script: clean }).eq('id', id).select().single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/** Built-in script text rendered for a sample person, so admins can start from it. */
+function previewDefaults(row) {
+  const sample = { fullName: 'Alex Johnson', notes: '', qualification: {} };
+  const vars = { className: '{className}', testName: '{testName}', homeworkTopic: '{homeworkTopic}' };
+  const base = registry.getCampaign(row.type, { ...row, script: {} });
+  const first = 'Alex';
+  const opener = base.opener ? base.opener(sample, false, vars)
+    : `Hi, this is Annie, your AI Assistant from Test Prep Pundits. Am I speaking with ${first}?`;
+  const message = base.turn0Line ? base.turn0Line(sample, vars) : '';
+  const hang = typeof base.hangupAfterOpener === 'function' ? base.hangupAfterOpener(vars) : base.hangupAfterOpener;
+  const context = base.systemContext ? base.systemContext(sample, vars) : '';
+  const callType = hang ? 'announcement' : /\[OFFER_MEETING\]|consultation/i.test(context + message) && !/DO NOT offer \[OFFER_MEETING\]|NEVER offer/i.test(context) ? 'booking' : 'information';
+  // Show {firstName} instead of the sample name so it can be reused as a template.
+  const tpl = t => String(t || '').replace(/Alex Johnson/g, '{fullName}').replace(/\bAlex\b/g, '{firstName}');
+  return { callType, opener: tpl(opener), message: tpl(message), instructions: '' };
+}
+
 async function create({ name, type, program, goal, description, script, status }) {
   const row = {
     name:        (name || '').trim(),
@@ -203,6 +252,7 @@ async function listWithStats() {
       description: c.description,
       status: c.status,
       isDefault: c.is_default,
+      customScript: registry.hasScriptOverride(c.script),
       createdAt: c.created_at,
       stats: { totalLeads, callsCompleted, meetingsBooked, interested, enrollments, conversionRate },
     };
@@ -218,6 +268,9 @@ module.exports = {
   resolveForLead,
   list,
   getById,
+  getDefaultByType,
+  saveScript,
+  previewDefaults,
   create,
   update,
   assignLeads,

@@ -4294,6 +4294,29 @@
     .prep365-kpi-card .kpi-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .prep365-kpi-card > div:last-child { min-width: 0; }
 
+    /* Campaign script editor */
+    .se-label { font-size: 12px; font-weight: 700; color: #334155; margin: 14px 0 6px; }
+    .se-hint { font-weight: 500; color: #64748B; }
+    .se-text { width: 100% !important; font-family: inherit !important; line-height: 1.5 !important; resize: vertical; }
+    .se-types { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    @media (max-width: 640px) { .se-types { grid-template-columns: 1fr; } }
+    .se-type { display: flex; flex-direction: column; gap: 4px; border: 1px solid #E2E8F0; border-radius: 10px; padding: 10px 12px; cursor: pointer; font-size: 13px; }
+    .se-type input { display: none; }
+    .se-type span { font-size: 12px; color: #64748B; line-height: 1.35; }
+    .se-type:has(input:checked) { border-color: #2563EB; background: #EFF6FF; box-shadow: 0 0 0 1px #2563EB; }
+    .se-tpls { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    @media (max-width: 640px) { .se-tpls { grid-template-columns: 1fr; } }
+    .se-tpl { text-align: left; border: 1px solid #E2E8F0; border-radius: 10px; padding: 9px 12px; background: #FFFFFF; cursor: pointer; font-family: inherit; display: flex; flex-direction: column; gap: 3px; }
+    .se-tpl:hover { border-color: #93C5FD; background: #F8FAFC; }
+    .se-tpl.active { border-color: #2563EB; background: #EFF6FF; box-shadow: 0 0 0 1px #2563EB; }
+    .se-tpl b { font-size: 13px; color: #0F172A; }
+    .se-tpl small { font-size: 11.5px; color: #64748B; line-height: 1.35; }
+    .se-preview { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.55; color: #334155; }
+    .se-preview .who { font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; letter-spacing: .04em; }
+    .se-ph { display: flex; flex-wrap: wrap; gap: 6px; }
+    .se-ph button { font-family: ui-monospace, Consolas, monospace; font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 1px solid #E2E8F0; background: #F8FAFC; color: #334155; cursor: pointer; }
+    .se-ph button:hover { border-color: #93C5FD; background: #EFF6FF; }
+
     /* Reason filter buttons */
     .p365-chips { display: flex; flex-wrap: wrap; gap: 8px; }
     .p365-chip {
@@ -6068,6 +6091,60 @@
         </section>
       </div>
     </main>
+
+    <!-- Campaign Script Editor (admin) -->
+    <div class="modal-bg" id="scriptEditorModal" onclick="if(event.target===this)closeScriptEditor()">
+      <div class="modal" style="max-width:760px;max-height:92vh;display:flex;flex-direction:column">
+        <div class="modal-header">
+          <div>
+            <h2 id="seTitle">Edit Script</h2>
+            <div id="seStatus" style="font-size:12px;color:var(--muted);margin-top:4px"></div>
+          </div>
+          <button class="modal-close" onclick="closeScriptEditor()">✕</button>
+        </div>
+        <div style="overflow-y:auto;flex:1;padding-right:4px">
+          <div class="se-label">Call type</div>
+          <div class="se-types" id="seTypes">
+            <label class="se-type"><input type="radio" name="seType" value="announcement" onchange="seTypeChanged()">
+              <b>📢 Announcement</b><span>Speaks your message, then hangs up. No conversation.</span></label>
+            <label class="se-type"><input type="radio" name="seType" value="information" onchange="seTypeChanged()">
+              <b>ℹ️ Information</b><span>Delivers your message and answers questions. Never books a meeting.</span></label>
+            <label class="se-type"><input type="radio" name="seType" value="booking" onchange="seTypeChanged()">
+              <b>📅 Meeting booking</b><span>Delivers your message and offers to book a free consultation.</span></label>
+          </div>
+
+          <div class="se-label">Choose a ready-made script <span class="se-hint">(click one to use it — no typing needed; you can still change any word)</span></div>
+          <div id="seTemplates" class="se-tpls"></div>
+
+          <div class="se-label">Opening line <span class="se-hint" id="seOpenerHint"></span></div>
+          <textarea id="seOpener" rows="2" class="se-text" onfocus="_seLastField=this" oninput="seEdited()"></textarea>
+
+          <div class="se-label">Main message <span class="se-hint" id="seMessageHint"></span></div>
+          <textarea id="seMessage" rows="5" class="se-text" onfocus="_seLastField=this" oninput="seEdited()"></textarea>
+
+          <div id="seInstructionsWrap">
+            <div class="se-label">Extra instructions for the AI <span class="se-hint">(optional — tone, facts to mention, what not to say)</span></div>
+            <textarea id="seInstructions" rows="3" class="se-text" onfocus="_seLastField=this" oninput="seEdited()"></textarea>
+          </div>
+
+          <div class="se-label">Example — what one student would hear</div>
+          <div id="sePreview" class="se-preview"></div>
+
+          <div class="se-label">Insert placeholder <span class="se-hint">(filled in for each person called)</span></div>
+          <div id="sePlaceholders" class="se-ph"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding-top:14px;border-top:1px solid #E5E7EB;margin-top:12px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-secondary btn-sm" onclick="seLoadDefaults()" title="Fill the fields with the built-in script so you can edit it">Start from built-in text</button>
+            <button class="btn btn-secondary btn-sm" id="seResetBtn" onclick="seReset()" style="color:#B91C1C">Reset to built-in</button>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary" onclick="closeScriptEditor()">Cancel</button>
+            <button class="btn btn-primary" id="seSaveBtn" onclick="seSave()">💾 Save Script</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Create / Edit Class Modal -->
     <div class="modal-bg" id="classModal" onclick="if(event.target===this)closeClassModal()">
@@ -9266,7 +9343,7 @@
             <div style="display:flex;align-items:center;gap:10px">
               <span style="font-size:22px">${icon}</span>
               <div>
-                <strong>${esc(c.name)}</strong>${c.isDefault ? ' <span style="font-size:10px;color:var(--muted)">(built-in)</span>' : ''}<br>
+                <strong>${esc(c.name)}</strong>${c.isDefault ? ' <span style="font-size:10px;color:var(--muted)">(built-in)</span>' : ''}${c.customScript ? ' <span style="font-size:10px;font-weight:700;color:#7C3AED;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:999px;padding:1px 7px">Edited script</span>' : ''}<br>
                 <span style="color:var(--muted);font-size:12px">${esc(c.goal || c.description || '')}</span>
               </div>
             </div>
@@ -9288,6 +9365,7 @@
             <button class="btn-manage-leads" onclick="openCampaignLeads('${c.id}','${esc(c.name)}','${c.type}')">
               📋 Manage Leads
             </button>
+            ${window._currentUser?.role === 'admin' ? `<button class="btn-manage-leads" style="margin-left:6px" onclick="openScriptEditor('${c.id}')">✏️ Edit Script</button>` : ''}
           </td>
         </tr>`;
       }).join('')}</tbody>
@@ -9367,7 +9445,7 @@
             <div style="display:flex;align-items:center;gap:10px">
               <span style="font-size:22px">${icon}</span>
               <div>
-                <strong>${esc(c.name)}</strong>${c.isDefault ? ' <span style="font-size:10px;color:var(--muted)">(built-in)</span>' : ''}<br>
+                <strong>${esc(c.name)}</strong>${c.isDefault ? ' <span style="font-size:10px;color:var(--muted)">(built-in)</span>' : ''}${c.customScript ? ' <span style="font-size:10px;font-weight:700;color:#7C3AED;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:999px;padding:1px 7px">Edited script</span>' : ''}<br>
                 <span style="color:var(--muted);font-size:12px">${esc(c.goal || c.description || 'Parent outreach campaign')}</span>
               </div>
             </div>
@@ -9386,6 +9464,7 @@
             <button class="btn-manage-leads" onclick="openParentCampaignLeads('${c.id}','${esc(c.name)}','${c.type}')">
               📋 Manage Parents
             </button>
+            ${window._currentUser?.role === 'admin' ? `<button class="btn-manage-leads" style="margin-left:6px" onclick="openScriptEditor('${c.id}')">✏️ Edit Script</button>` : ''}
           </td>
         </tr>`;
       }).join('')}</tbody>
@@ -9786,6 +9865,186 @@
       } catch (e) { toast('❌ ' + e.message, 'error'); }
     }
 
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //   CAMPAIGN SCRIPT EDITOR (admin)
+    // ═══════════════════════════════════════════════════════════════════════
+    let _seCampaign = null;   // GET /campaigns/:id/script response
+    let _seLastField = null;  // textarea that receives placeholder inserts
+
+    const SE_HINTS = {
+      announcement: { opener: '(optional — spoken first, e.g. "Hi {firstName}, this is Annie from Test Prep Pundits.")', message: '(required — read out in full, then the call ends)' },
+      information:  { opener: '(asks who is speaking; leave empty for "Am I speaking with {firstName}?")', message: '(said after the person confirms; they can then ask questions)' },
+      booking:      { opener: '(asks who is speaking; leave empty for "Am I speaking with {firstName}?")', message: '(said after the person confirms; end with a question like "Would you like to book a free consultation?")' },
+    };
+
+    function seType() { return document.querySelector('input[name="seType"]:checked')?.value || 'booking'; }
+
+    let _seDirty = false;      // true once the admin types their own text
+    let _seTemplateId = null;  // currently applied ready-made script
+
+    function seEdited() { _seDirty = true; _seTemplateId = null; seRenderTemplates(); seUpdatePreview(); }
+
+    // Switching call type loads that type's recommended script, unless the
+    // admin has typed their own text (then they pick a template explicitly).
+    function seTypeChanged(autoApply = true) {
+      const t = seType();
+      document.getElementById('seOpenerHint').textContent = SE_HINTS[t].opener;
+      document.getElementById('seMessageHint').textContent = SE_HINTS[t].message;
+      // An announcement has no conversation, so AI instructions don't apply.
+      document.getElementById('seInstructionsWrap').style.display = t === 'announcement' ? 'none' : '';
+      const first = (_seCampaign?.templates || []).find(x => x.callType === t);
+      if (autoApply && !_seDirty && first) seApplyTemplate(first.id, true);
+      else { seRenderTemplates(); seUpdatePreview(); }
+    }
+
+    function seRenderTemplates() {
+      const t = seType();
+      const list = (_seCampaign?.templates || []).filter(x => x.callType === t);
+      document.getElementById('seTemplates').innerHTML = list.length ? list.map(x => `
+        <button type="button" class="se-tpl${x.id === _seTemplateId ? ' active' : ''}" onclick="seApplyTemplate('${x.id}')">
+          <b>${x.id === _seTemplateId ? '✓ ' : ''}${esc(x.title)}</b><small>${esc(x.description || '')}</small>
+        </button>`).join('') : '<div style="font-size:12px;color:#64748B">No ready-made scripts for this type — write your own below.</div>';
+    }
+
+    function seApplyTemplate(id, silent = false) {
+      const tpl = (_seCampaign?.templates || []).find(x => x.id === id);
+      if (!tpl) return;
+      if (!silent && _seDirty && !confirm('Replace the text you typed with this ready-made script?')) return;
+      document.getElementById('seOpener').value = tpl.opener || '';
+      document.getElementById('seMessage').value = tpl.message || '';
+      document.getElementById('seInstructions').value = tpl.instructions || '';
+      _seDirty = false;
+      _seTemplateId = id;
+      seRenderTemplates();
+      seUpdatePreview();
+    }
+
+    // Sample values, so the preview reads like a real call.
+    const SE_SAMPLE = {
+      firstName: 'Priya', fullName: 'Priya Sharma', studentName: 'Priya', className: 'SAT Math', testName: 'Full Length Test 3',
+      homeworkTopic: 'Linear equations', daysInactive: '15', daysSinceTest: '16', customPrepPercent: '20%', customPrepExpected: '70%',
+      planName: 'Custom Prep plan', missedTopics: '12', scoreChange: 'from 82% to 71%',
+      reasons: "you haven't taken a practice test in 16 days, and your Custom Prep plan is 20% done when it should be about 70% by now",
+      pendingSummary: "I noticed you haven't taken a practice test in 16 days.", talkingPoints: '(student talking points)',
+    };
+    function seSample(text) { return esc(String(text || '').replace(/\{(\w+)\}/g, (m, k) => SE_SAMPLE[k] ?? m)); }
+
+    function seUpdatePreview() {
+      const el = document.getElementById('sePreview');
+      if (!el) return;
+      const t = seType();
+      const opener = document.getElementById('seOpener').value.trim();
+      const message = document.getElementById('seMessage').value.trim();
+      if (t === 'announcement') {
+        el.innerHTML = `<div class="who">AI says, then hangs up</div>${seSample([opener, message].filter(Boolean).join(' ')) || '<i>Write a message above</i>'}`;
+      } else {
+        el.innerHTML = `<div class="who">AI</div>${seSample(opener || 'Hi, this is Annie, your AI Assistant from Test Prep Pundits. Am I speaking with {firstName}?')}
+          <div class="who" style="margin-top:6px">Person</div><i>Yes, speaking.</i>
+          <div class="who" style="margin-top:6px">AI</div>${seSample(message) || '<i>Write a main message above</i>'}
+          <div style="margin-top:6px;font-size:12px;color:#64748B">${t === 'booking' ? '…then offers to book a free consultation.' : '…then answers their questions (never books a meeting).'}</div>`;
+      }
+    }
+
+    function seFill(s) {
+      const set = (id, v) => { document.getElementById(id).value = v || ''; };
+      const radio = document.querySelector(`input[name="seType"][value="${s.callType || 'booking'}"]`);
+      if (radio) radio.checked = true;
+      set('seOpener', s.opener); set('seMessage', s.message); set('seInstructions', s.instructions);
+      seTypeChanged(false);
+    }
+
+    async function openScriptEditor(id) {
+      if (window._currentUser?.role !== 'admin') { toast('Only administrators can edit campaign scripts', 'warning'); return; }
+      try {
+        _seCampaign = await api(`/campaigns/${id}/script`);
+      } catch (e) { toast('Could not load script: ' + e.message, 'error'); return; }
+      const c = _seCampaign;
+      const edited = Object.keys(c.script || {}).length > 0;
+      document.getElementById('seTitle').textContent = `Edit Script — ${c.name}`;
+      document.getElementById('seStatus').innerHTML = edited
+        ? '<b style="color:#7C3AED">Using your edited script.</b> Reset to go back to the built-in script.'
+        : 'Using the built-in script. Your saved text will replace it for every call in this campaign.';
+      document.getElementById('seResetBtn').style.setProperty('display', edited ? 'inline-flex' : 'none', 'important');
+      document.getElementById('seOpener').placeholder = 'Type an opening line, or pick a ready-made script above';
+      document.getElementById('seMessage').placeholder = 'Type your message, or pick a ready-made script above';
+      _seTemplateId = null;
+      if (edited) {
+        // Saved text is protected: switching type won't overwrite it.
+        _seDirty = true;
+        seFill(c.script);
+      } else {
+        // Not edited yet: preselect the campaign's natural type and its recommended script.
+        _seDirty = false;
+        const radio = document.querySelector(`input[name="seType"][value="${c.defaults.callType || 'booking'}"]`);
+        if (radio) radio.checked = true;
+        seTypeChanged(true);
+      }
+      document.getElementById('seInstructions').placeholder = 'e.g. Mention the 40% discount ends Friday. Keep it under 60 seconds.';
+      document.getElementById('sePlaceholders').innerHTML = (c.placeholders || [])
+        .map(p => `<button type="button" onclick="seInsert('{${p}}')">{${p}}</button>`).join('');
+      _seLastField = document.getElementById('seMessage');
+      document.getElementById('scriptEditorModal').classList.add('active');
+    }
+
+    function closeScriptEditor() {
+      document.getElementById('scriptEditorModal').classList.remove('active');
+      _seCampaign = null;
+    }
+
+    function seInsert(token) {
+      const el = _seLastField || document.getElementById('seMessage');
+      const s = el.selectionStart ?? el.value.length, e = el.selectionEnd ?? el.value.length;
+      el.value = el.value.slice(0, s) + token + el.value.slice(e);
+      el.focus(); el.selectionStart = el.selectionEnd = s + token.length;
+    }
+
+    function seLoadDefaults() {
+      if (!_seCampaign) return;
+      const d = _seCampaign.defaults;
+      const t = seType();
+      // Announcements have no "Am I speaking with…?" step — drop that question.
+      const opener = t === 'announcement' ? String(d.opener || '').replace(/\s*[^.!?]*\?\s*$/, '').trim() : d.opener;
+      seFill({ callType: t, opener, message: d.message, instructions: document.getElementById('seInstructions').value });
+      _seDirty = false; _seTemplateId = null; seRenderTemplates(); seUpdatePreview();
+      toast('Built-in text loaded — edit it and Save', 'info');
+    }
+
+    async function seSave() {
+      if (!_seCampaign) return;
+      const body = {
+        callType: seType(),
+        opener: document.getElementById('seOpener').value,
+        message: document.getElementById('seMessage').value,
+        instructions: document.getElementById('seInstructions').value,
+      };
+      if (body.callType === 'announcement' && !body.message.trim() && !body.opener.trim()) {
+        toast('An announcement needs a message to speak', 'error'); return;
+      }
+      if (body.callType !== 'announcement' && !body.message.trim() && !body.opener.trim() && !body.instructions.trim()) {
+        toast('Write a main message (or use Reset to keep the built-in script)', 'error'); return;
+      }
+      const btn = document.getElementById('seSaveBtn');
+      btn.disabled = true; btn.textContent = 'Saving…';
+      try {
+        await api(`/campaigns/${_seCampaign.id}/script`, { method: 'PUT', body: JSON.stringify(body) });
+        toast(`Script saved for "${_seCampaign.name}" — used from the next call`, 'success');
+        closeScriptEditor();
+        loadCampaigns();
+      } catch (e) { toast('Save failed: ' + e.message, 'error'); }
+      finally { btn.disabled = false; btn.textContent = '💾 Save Script'; }
+    }
+
+    async function seReset() {
+      if (!_seCampaign) return;
+      if (!confirm(`Reset "${_seCampaign.name}" to its built-in script? Your edited text will be removed.`)) return;
+      try {
+        await api(`/campaigns/${_seCampaign.id}/script`, { method: 'PUT', body: JSON.stringify({}) });
+        toast('Reset to the built-in script', 'success');
+        closeScriptEditor();
+        loadCampaigns();
+      } catch (e) { toast('Reset failed: ' + e.message, 'error'); }
+    }
 
     function campaignName(id) {
       const c = CAMPAIGNS.find(x => x.id === id);

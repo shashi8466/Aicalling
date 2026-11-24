@@ -575,16 +575,154 @@ NEVER transition into consultation booking. DO NOT offer [OFFER_MEETING]. DO NOT
   },
 };
 
+// ── Admin-edited scripts ────────────────────────────────────────────────────
+// Stored per campaign in campaigns.script (JSONB):
+//   { callType: 'announcement'|'information'|'booking',
+//     opener, message, instructions }   (all strings, all optional)
+// An empty object means "use the built-in script" — behaviour is unchanged.
+const CALL_TYPES = ['announcement', 'information', 'booking'];
+const PLACEHOLDERS = ['firstName', 'fullName', 'studentName', 'className', 'testName', 'homeworkTopic', 'talkingPoints', 'pendingSummary'];
+// Prep365-only placeholders, filled from each student's synced data.
+const PREP365_PLACEHOLDERS = ['reasons', 'daysInactive', 'daysSinceTest', 'customPrepPercent', 'customPrepExpected', 'planName', 'missedTopics', 'scoreChange'];
+
+/** Per-student Prep365 facts (second person for the student, third person for a parent). */
+function prep365Facts(lead) {
+  const q = lead.qualification || {};
+  const isParent = q.prep365RecipientType === 'parent';
+  const snap = q.prep365Snapshot || {};
+  const act = snap.activity || {};
+  const plan = (snap.customPrep || [])[0] || {};
+  const reasons = Array.isArray(q.prep365Reasons) ? q.prep365Reasons : [];
+  const byCode = Object.fromEntries(reasons.map(r => [r.code || r, r]));
+  const who = speakName((q.prep365StudentName || lead.fullName || 'your child').split(' ')[0]);
+
+  const missedMatch = /(\d+)\s+Custom Prep topic/i.exec(byCode.MISSED_ASSIGNED_TOPICS?.detail || '');
+  const scoreMatch = /is\s+([\d.]+%)[^\d]+([\d.]+%)/i.exec(byCode.DECLINING_PERFORMANCE?.detail || '');
+  const facts = {
+    daysInactive: act.daysInactive ?? '',
+    daysSinceTest: act.daysSinceLastTest ?? '',
+    customPrepPercent: plan.percentComplete !== undefined ? `${Math.round(plan.percentComplete)}%` : '',
+    customPrepExpected: plan.expectedPercentByNow !== undefined ? `${Math.round(plan.expectedPercentByNow)}%` : '',
+    planName: plan.planName || 'Custom Prep plan',
+    missedTopics: missedMatch ? missedMatch[1] : (Array.isArray(plan.missedTopics) ? plan.missedTopics.length : ''),
+    scoreChange: scoreMatch ? `from ${scoreMatch[2]} to ${scoreMatch[1]}` : '',
+  };
+
+  // One short spoken phrase per reason Prep365 flagged for this student.
+  const S = isParent
+    ? { havent: `${who} hasn't`, have: `${who} has`, your: `${who}'s` }
+    : { havent: "you haven't", have: 'you have', your: 'your' };
+  const phrases = [];
+  if (byCode.INACTIVE) phrases.push(facts.daysInactive ? `${S.havent} logged in to Prep365 for ${facts.daysInactive} days` : `${S.havent} logged in to Prep365 recently`);
+  if (byCode.NO_RECENT_TESTS) phrases.push(facts.daysSinceTest ? `${S.havent} taken a practice test in ${facts.daysSinceTest} days` : `${S.havent} taken a practice test recently`);
+  if (byCode.CUSTOM_PREP_BEHIND) phrases.push(facts.customPrepPercent && facts.customPrepExpected
+    ? `${S.your} Custom Prep plan is ${facts.customPrepPercent} done when it should be about ${facts.customPrepExpected} by now`
+    : `${S.your} Custom Prep plan is behind schedule`);
+  if (byCode.MISSED_ASSIGNED_TOPICS) phrases.push(facts.missedTopics ? `${S.have} ${facts.missedTopics} assigned topics still unfinished` : `${S.have} missed some assigned daily or weekly topics`);
+  if (byCode.DECLINING_PERFORMANCE) phrases.push(facts.scoreChange ? `${S.your} recent test average dropped ${facts.scoreChange}` : `${S.your} recent test scores have dropped`);
+  facts.reasons = phrases.length <= 1 ? (phrases[0] || `${S.have} some pending study tasks`)
+    : `${phrases.slice(0, -1).join(', ')}, and ${phrases[phrases.length - 1]}`;
+  return facts;
+}
+
+function hasScriptOverride(script) {
+  return !!script && typeof script === 'object' &&
+    ['opener', 'message', 'instructions'].some(k => String(script[k] || '').trim()) ||
+    (!!script && CALL_TYPES.includes(script.callType));
+}
+
+// "ANBAZHAGAN" → "Anbazhagan" so text-to-speech says the name instead of spelling it.
+function speakName(n) {
+  const s = String(n || '').trim();
+  return s && s === s.toUpperCase() ? s.toLowerCase().replace(/\b\p{L}/gu, c => c.toUpperCase()) : s;
+}
+
+/** Fill {placeholders} for one call. Unknown placeholders are left as-is. */
+function fillPlaceholders(text, lead = {}, vars = {}) {
+  const isParent = lead.qualification?.prep365RecipientType === 'parent';
+  const studentName = speakName(lead.qualification?.prep365StudentName || lead.fullName || '');
+  const values = {
+    firstName: speakName((lead.fullName || 'there').split(' ')[0]),
+    fullName: speakName(lead.fullName || ''),
+    studentName,
+    className: vars?.className || 'class',
+    testName: vars?.testName || 'the Full-Length Test',
+    homeworkTopic: vars?.homeworkTopic || "today's assigned topic",
+    talkingPoints: lead.qualification?.prep365TalkingPoints || lead.notes || '',
+    pendingSummary: lead.qualification ? getPrep365PendingPoints(lead, isParent) : '',
+    ...prep365Facts(lead),
+  };
+  return String(text || '').replace(/\{(\w+)\}/g, (m, k) => (k in values ? values[k] : m));
+}
+
+const CALL_TYPE_RULES = {
+  announcement: 'This is a ONE-WAY announcement. The message has been fully delivered and the call ends. Do not offer meetings.',
+  information: `This is an INFORMATION call. Answer questions briefly (max 2 sentences), then ask "Do you have any other questions today?".
+If they say no or sign off, say "Thank you for your time. Have a wonderful day. Goodbye." then [END_CALL].
+NEVER offer or book a meeting/consultation and NEVER use [OFFER_MEETING]. No sales pitch.`,
+  booking: `GOAL: book a FREE consultation. If they show interest, offer to schedule it, then use [OFFER_MEETING].
+If they decline, do not push more than once: say "I completely understand. Thank you so much for your time. Have a great day!" then [END_CALL].`,
+};
+
+/** Layer an admin-edited script over a campaign definition. */
+function applyScriptOverride(base, script, name) {
+  if (!hasScriptOverride(script)) return base;
+  const callType = CALL_TYPES.includes(script.callType) ? script.callType : 'booking';
+  const opener = String(script.opener || '').trim();
+  const message = String(script.message || '').trim();
+  const instructions = String(script.instructions || '').trim();
+  const out = { ...base, scriptOverride: { callType, opener, message, instructions } };
+
+  if (callType === 'announcement') {
+    // Speak opener + message immediately, then hang up. No identity check.
+    out.skipIdentityCheck = true;
+    out.hangupAfterOpener = true;
+    out.opener = (lead, isFollowUp, vars) => fillPlaceholders([opener, message].filter(Boolean).join(' '), lead, vars)
+      || (base.opener ? base.opener(lead, isFollowUp, vars) : 'Hello.');
+    out.voicemail = (lead, vars) => fillPlaceholders([opener, message].filter(Boolean).join(' '), lead, vars);
+    out.turn0Line = () => '';
+  } else {
+    // Information / booking: opening line → caller replies → main message.
+    out.hangupAfterOpener = false;
+    if (message) {
+      out.skipIdentityCheck = false;
+      out.turn0Line = (lead, vars) => fillPlaceholders(message, lead, vars);
+      out.opener = opener
+        ? (lead, isFollowUp, vars) => fillPlaceholders(opener, lead, vars)
+        : (base.isPrep365 && base.opener)
+          ? base.opener
+          : (lead) => `Hi, this is Annie, your AI Assistant from Test Prep Pundits. Am I speaking with ${firstName(lead)}?`;
+    } else if (opener) {
+      out.opener = (lead, isFollowUp, vars) => fillPlaceholders(opener, lead, vars);
+    }
+  }
+
+  out.systemContext = (lead, vars) => {
+    const parts = [`━━━ CAMPAIGN: ${(name || base.name || 'CAMPAIGN').toUpperCase()} (ADMIN SCRIPT) ━━━`];
+    if (opener) parts.push(`Opening line (already spoken): "${fillPlaceholders(opener, lead, vars)}"`);
+    if (message) parts.push(`Main message (deliver/delivered after the caller confirms): "${fillPlaceholders(message, lead, vars)}"`);
+    parts.push(CALL_TYPE_RULES[callType]);
+    if (instructions) parts.push('ADDITIONAL INSTRUCTIONS FROM ADMIN:\n' + fillPlaceholders(instructions, lead, vars));
+    if (base.isPrep365) parts.push('NEVER mention Test Prep Pundits. You are calling from Prep365.');
+    return parts.join('\n\n');
+  };
+  return out;
+}
+
 /**
  * Look up a campaign script by type. Unknown/empty types fall back to the
  * default Demo Test Follow-up campaign, preserving the original behaviour.
+ * An admin-edited script (campaign row `script`) is layered on top when present.
  * @param {string} [type]
- * @param {object} [overrides]  Optional campaign row fields (name/program/script)
- *                              used by user-created "custom" campaigns.
+ * @param {object} [overrides]  Optional campaign row (name/program/script)
  */
 function getCampaign(type, overrides = null) {
   const base = CAMPAIGNS[type];
-  if (base) return base;
+  if (base) return applyScriptOverride(base, overrides?.script, overrides?.name);
+  if (overrides && hasScriptOverride(overrides.script) && (overrides.script.callType || overrides.script.message || overrides.script.opener)) {
+    const generic = { type: type || 'custom', name: overrides.name || 'Campaign', program: overrides.program || '' };
+    return applyScriptOverride(generic, overrides.script, overrides.name);
+  }
 
   // Custom / unknown campaign — build a generic invitation from the DB row.
   if (overrides && (type === 'custom' || !base)) {
@@ -615,4 +753,4 @@ function defaultTypes() {
   return Object.keys(CAMPAIGNS);
 }
 
-module.exports = { getCampaign, defaultTypes, DEFAULT_TYPE, CAMPAIGNS };
+module.exports = { getCampaign, defaultTypes, fillPlaceholders, hasScriptOverride, prep365Facts, DEFAULT_TYPE, CAMPAIGNS, CALL_TYPES, PLACEHOLDERS, PREP365_PLACEHOLDERS };
