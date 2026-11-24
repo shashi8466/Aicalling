@@ -36,6 +36,7 @@ const meetingReminderPoller = require('./jobs/meetingReminderPoller');
 const billingPoller    = require('./jobs/billingPoller');
 const transcriptionProcessor = require('./jobs/transcriptionProcessor');
 const prep365Poller    = require('./jobs/prep365Poller');
+const brandingRouter   = require('./routes/branding');
 
 const app = express();
 
@@ -50,8 +51,9 @@ try {
 // ── Middleware ──────────────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
-app.use(express.urlencoded({ extended: false }));   // Twilio posts form-encoded
+app.use(express.urlencoded({ extended: false, limit: '20mb' }));   // Twilio posts form-encoded
 app.use(express.json({
+  limit: '20mb',
   type: ['application/json', 'application/webhook+json'], // LiveKit webhooks use the latter
   verify: (req, _res, buf) => { req.rawBody = buf.toString('utf8'); }, // needed to verify LiveKit's webhook signature
 }));
@@ -154,6 +156,12 @@ app.get(['/call-log', '/api/prep365/call-log'], async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Global dynamic branding (public GET, admin-protected POST/DELETE)
+app.use('/api/branding', brandingRouter);
+
+// Static custom branding assets
+app.use('/assets/branding', express.static(path.join(__dirname, '../dashboard/assets/branding')));
 
 // Protected dashboard API — all /api/* (except public routes above) require a valid Supabase JWT
 app.use('/api', requireAuth);

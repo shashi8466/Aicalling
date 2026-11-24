@@ -259,7 +259,11 @@ router.post('/:id/assign', async (req, res) => {
 
     const { error } = await supabase
       .from('leads')
-      .update({ assigned_counselor_id: req.params.id, updated_at: new Date().toISOString() })
+      .update({
+        assigned_counselor_id: req.params.id,
+        counselor_id: req.params.id,
+        updated_at: new Date().toISOString()
+      })
       .in('id', leadIds);
 
     if (error) return res.status(500).json({ error: error.message });

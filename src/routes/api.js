@@ -27,6 +27,25 @@ function groupBy(arr, key) {
   return Object.entries(m).map(([_id, count]) => ({ _id, count }));
 }
 
+// ── Role-based Lead Filter Helper ──────────────────────────────────────────
+function applyCounselorLeadFilter(q, profile, requestedCounselorId = null, tablePrefix = '') {
+  const colC = tablePrefix ? `${tablePrefix}.counselor_id` : 'counselor_id';
+  const colA = tablePrefix ? `${tablePrefix}.assigned_counselor_id` : 'assigned_counselor_id';
+  const colB = tablePrefix ? `${tablePrefix}.created_by` : 'created_by';
+
+  if (profile?.role !== 'admin') {
+    const uid = profile?.id;
+    if (!uid) return q;
+    return q.or(`${colC}.eq.${uid},${colA}.eq.${uid},${colB}.eq.${uid}`);
+  }
+
+  if (requestedCounselorId && requestedCounselorId !== 'all') {
+    return q.or(`${colC}.eq.${requestedCounselorId},${colA}.eq.${requestedCounselorId},${colB}.eq.${requestedCounselorId}`);
+  }
+
+  return q;
+}
+
 // Stats cache — per counselor key. Stale-while-revalidate: a cached result is
 // returned immediately and recomputed in the background once it's older than
 // STATS_TTL_MS, so the dashboard never waits on the full-table scan unless the
@@ -48,33 +67,33 @@ router.get('/stats', async (req, res) => {
     if (cacheEntry) {
       const age = Date.now() - cacheEntry.timestamp;
       if (age < STATS_MAX_STALE_MS) {
-        if (age >= STATS_TTL_MS) refreshStats(cacheKey, scopeId).catch(() => {});
+        if (age >= STATS_TTL_MS) refreshStats(cacheKey, scopeId, req.profile).catch(() => {});
         return res.json(cacheEntry.data);
       }
     }
-    res.json(await refreshStats(cacheKey, scopeId));
+    res.json(await refreshStats(cacheKey, scopeId, req.profile));
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
 });
 
 // One computation per cache key at a time; concurrent requests share it.
-function refreshStats(cacheKey, counselorId) {
+function refreshStats(cacheKey, counselorId, profile) {
   if (!_statsInflight[cacheKey]) {
-    _statsInflight[cacheKey] = computeStats(counselorId)
+    _statsInflight[cacheKey] = computeStats(counselorId, profile)
       .then(data => { _statsCache[cacheKey] = { data, timestamp: Date.now() }; return data; })
       .finally(() => { delete _statsInflight[cacheKey]; });
   }
   return _statsInflight[cacheKey];
 }
 
-async function computeStats(counselorId) {
+async function computeStats(counselorId, profile) {
     let q = supabase
       .from('leads')
-      .select('status, lead_category, lead_score, call_attempts')
+      .select('status, lead_category, lead_score, call_attempts, counselor_id, assigned_counselor_id, created_by')
       .neq('source', 'Prep365');
 
-    if (counselorId) q = q.eq('counselor_id', counselorId);
+    q = applyCounselorLeadFilter(q, profile, counselorId);
 
     const { data: rows, error } = await q;
 
@@ -132,14 +151,10 @@ router.get('/analytics', async (req, res) => {
 
     let q = supabase
       .from('leads')
-      .select('source, course_interest, call_attempts, created_at')
+      .select('source, course_interest, call_attempts, created_at, counselor_id, assigned_counselor_id, created_by')
       .neq('source', 'Prep365');
 
-    if (req.profile?.role !== 'admin') {
-      q = q.eq('counselor_id', req.profile.id);
-    } else if (req.query.counselorId && req.query.counselorId !== 'all') {
-      q = q.eq('counselor_id', req.query.counselorId);
-    }
+    q = applyCounselorLeadFilter(q, req.profile, req.query.counselorId);
 
     const { data: allLeads } = await q;
 
@@ -197,16 +212,12 @@ router.get('/leads', async (req, res) => {
     // Only fetch columns needed for the table. Omit call_attempts.transcript (huge).
     let q = supabase
       .from('leads')
-      .select('id, full_name, email, phone, parent_name, parent_email, grade, course_interest, status, lead_score, lead_category, total_call_attempts, last_call_at, next_retry_at, campaign_id, meeting, meeting_status, created_at, call_attempts, qualification, is_qualified, sheet_row_index, notes, country_code, country, time_zone, counselor_id', { count: 'exact' })
+      .select('id, full_name, email, phone, parent_name, parent_email, grade, course_interest, status, lead_score, lead_category, total_call_attempts, last_call_at, next_retry_at, campaign_id, meeting, meeting_status, created_at, call_attempts, qualification, is_qualified, sheet_row_index, notes, country_code, country, time_zone, counselor_id, assigned_counselor_id, created_by', { count: 'exact' })
       .order('lead_score', { ascending: false })
       .order('created_at', { ascending: false })
       .range(offset, offset + limitNum - 1);
 
-    if (req.profile?.role !== 'admin') {
-      q = q.eq('counselor_id', req.profile.id);
-    } else if (counselorId && counselorId !== 'all') {
-      q = q.eq('counselor_id', counselorId);
-    }
+    q = applyCounselorLeadFilter(q, req.profile, counselorId);
 
     if (status)   q = q.eq('status', status);
     if (category) q = q.eq('lead_category', category);
@@ -246,7 +257,12 @@ router.get('/leads', async (req, res) => {
 
 router.get('/leads/export', async (req, res) => {
   try {
-    const leads = await Lead.find({ source: { $ne: 'Prep365' } }, { sort: { createdAt: -1 }, limit: 5000 });
+    let q = supabase.from('leads').select('*').neq('source', 'Prep365').order('created_at', { ascending: false }).limit(5000);
+    q = applyCounselorLeadFilter(q, req.profile);
+    const { data: leadsRows, error: expErr } = await q;
+    if (expErr) throw expErr;
+    const { rowToAPI } = require('../db/document');
+    const leads = (leadsRows || []).map(rowToAPI);
     const headers = ['Full Name','Grade','Email','Phone','Parent Name','Parent Email',
       'Course','Status','Lead Score','Category','Call Attempts','Last Call',
       'Meeting Date','Meet Link','Created'];
@@ -281,9 +297,7 @@ router.get('/leads/:id', async (req, res) => {
 
     // Fetch directly from Supabase with full diagnostics
     let q = supabase.from('leads').select('*').eq('id', id);
-    if (req.profile?.role !== 'admin') {
-      q = q.eq('counselor_id', req.profile.id);
-    }
+    q = applyCounselorLeadFilter(q, req.profile);
     const { data: row, error: dbErr } = await q.single();
 
     if (dbErr) {
@@ -858,6 +872,8 @@ router.post('/leads', async (req, res) => {
 
     const lead = await Lead.create({
       counselorId: req.profile.id,
+      assignedCounselorId: req.profile.id,
+      createdBy: req.profile.id,
       fullName: fullName.trim(),
       email:    email.trim().toLowerCase(),
       phone:    phone.trim(),
@@ -942,6 +958,8 @@ router.post('/leads/bulk', async (req, res) => {
 
         const newLead = await Lead.create({
           counselorId: req.profile.id,
+          assignedCounselorId: req.profile.id,
+          createdBy: req.profile.id,
           fullName: data.fullName?.trim() || '',
           email:    email,
           phone:    data.phone?.trim() || '',
@@ -998,6 +1016,18 @@ router.post('/leads/bulk', async (req, res) => {
 // Update lead
 router.patch('/leads/:id', async (req, res) => {
   try {
+    const existing = await Lead.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Lead not found' });
+
+    // Enforce counselor isolation on updates
+    if (req.profile?.role !== 'admin') {
+      const uid = req.profile.id;
+      const isOwner = existing.counselorId === uid || existing.assignedCounselorId === uid || existing.createdBy === uid;
+      if (!isOwner) {
+        return res.status(403).json({ error: 'You are not authorized to update this lead.' });
+      }
+    }
+
     const allowed = ['status','leadCategory','notes','fullName','email','phone',
                      'grade','courseInterest','parentName','parentEmail','meeting.status','campaignId',
                      'countryCode','country','state','timeZone','meetingStatus','lastMorningCall','lastEveningCall','nextScheduledCall'];
@@ -1121,16 +1151,17 @@ router.get('/meetings', async (req, res) => {
       .select(`
         *,
         leads!inner (
-          id, full_name, email, phone, parent_name, parent_email, lead_score, course_interest, grade, status, counselor_id
+          id, full_name, email, phone, parent_name, parent_email, lead_score, course_interest, grade, status, counselor_id, assigned_counselor_id, created_by
         )
       `)
       .order('scheduled_at', { ascending: false })
       .limit(1000);
 
     if (req.profile?.role !== 'admin') {
-      q = q.eq('leads.counselor_id', req.profile.id);
+      const uid = req.profile.id;
+      q = q.or(`leads.counselor_id.eq.${uid},leads.assigned_counselor_id.eq.${uid},leads.created_by.eq.${uid}`);
     } else if (counselorId && counselorId !== 'all') {
-      q = q.eq('leads.counselor_id', counselorId);
+      q = q.or(`leads.counselor_id.eq.${counselorId},leads.assigned_counselor_id.eq.${counselorId},leads.created_by.eq.${counselorId}`);
     }
 
     const { data: meetingsRows, error } = await q;
@@ -1283,17 +1314,13 @@ router.get('/calls', async (req, res) => {
     
     let q = supabase
       .from('leads')
-      .select('id, full_name, email, phone, call_attempts, lead_score, status, last_call_at')
+      .select('id, full_name, email, phone, call_attempts, lead_score, status, last_call_at, counselor_id, assigned_counselor_id, created_by')
       .neq('source', 'Prep365')
       .not('call_attempts', 'eq', '[]')
       .order('last_call_at', { ascending: false, nullsFirst: false })
       .limit(500);
 
-    if (req.profile?.role !== 'admin') {
-      q = q.eq('counselor_id', req.profile.id);
-    } else if (counselorId && counselorId !== 'all') {
-      q = q.eq('counselor_id', counselorId);
-    }
+    q = applyCounselorLeadFilter(q, req.profile, counselorId);
 
     const { data: rows } = await q;
 
