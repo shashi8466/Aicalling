@@ -103,7 +103,7 @@ async function computeStats(counselorId, profile) {
     // Compute all counts in JS — zero extra round-trips
     let newLeads=0, queued=0, calling=0, contacted=0, qualified=0,
         meetingsScheduled=0, meetingsCompleted=0, enrolled=0, lost=0,
-        hot=0, warm=0, cold=0, callsCompleted=0, totalScore=0;
+        hot=0, warm=0, cold=0, callsCompleted=0, callsTotal=0, totalScore=0;
 
     for (const r of all) {
       switch (r.status) {
@@ -123,7 +123,9 @@ async function computeStats(counselorId, profile) {
         case 'cold': cold++; break;
       }
       totalScore += r.lead_score || 0;
-      callsCompleted += (r.call_attempts || []).filter(a => a.status === 'completed').length;
+      const attempts = r.call_attempts || [];
+      callsTotal += attempts.length;
+      callsCompleted += attempts.filter(a => a.status === 'completed').length;
     }
 
     const total = all.length;
@@ -136,7 +138,7 @@ async function computeStats(counselorId, profile) {
     const statsData = {
       total, new: newLeads, queued, calling, contacted, qualified,
       meetingsScheduled, meetingsCompleted, enrolled, lost,
-      hot, warm, cold, callsCompleted, avgScore,
+      hot, warm, cold, callsCompleted, callsTotal, avgScore,
       conversionRate, meetingRate,
     };
     return statsData;
@@ -223,8 +225,11 @@ router.get('/leads', async (req, res) => {
     if (category) q = q.eq('lead_category', category);
     if (campaignId === '__none__') q = q.is('campaign_id', null);
     else if (campaignId) q = q.eq('campaign_id', campaignId);
-    if (search) {
-      q = q.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
+    // Strip PostgREST filter syntax chars — a phone like "(555) 123-4567" would
+    // otherwise break the or() expression and 500 the whole request.
+    const term = String(search || '').replace(/[,()*%\\]/g, ' ').trim();
+    if (term) {
+      q = q.or(`full_name.ilike.%${term}%,email.ilike.%${term}%,phone.ilike.%${term}%`);
     }
 
     if (req.query.source) {
@@ -1593,19 +1598,12 @@ router.get(['/prep365/checkins', '/prep365/candidates'], async (req, res) => {
       if (callStatus.blockedReason === 'opted_out' || s.student?.optedOut) optedOut++;
     }
 
-    // Also check past calls in memory/sheet
-    const callLogRes = await prep365Svc.getCallLog();
-    if (callLogRes && callLogRes.calls) {
-      for (const c of callLogRes.calls) {
-        if (c.status === 'completed' && answered === 0) answered++;
-      }
-    }
-
+    // Real counts only — no placeholder values.
     const stats = {
-      needsAttention: storeData.count || students.length,
-      callable: storeData.callableCount || students.filter(s => s.callStatus?.callable).length,
-      calledToday: calledToday || (answered > 0 ? 1 : 0),
-      answered: answered || 1, // includes verified past outreach #1
+      needsAttention: students.length,
+      callable: students.filter(s => s.callStatus?.callable).length,
+      calledToday,
+      answered,
       noAnswer,
       failed,
       optedOut
@@ -1617,6 +1615,7 @@ router.get(['/prep365/checkins', '/prep365/candidates'], async (req, res) => {
       count: storeData.count || students.length,
       callableCount: storeData.callableCount || stats.callable,
       byReason: storeData.byReason || {},
+      thresholds: storeData.thresholds || null,
       stats,
       students,
       sheetUrl: prep365Sheet.getSheetUrl(),

@@ -195,6 +195,7 @@ class Prep365Service {
       callableCount,
       byReason: data.byReason || byReason,
       students: normalizedStudents,
+      thresholds: data.thresholds || null, // Prep365's own selection rules (cooldown, daily limit, …)
       syncedAt: new Date().toISOString()
     };
 
@@ -558,31 +559,8 @@ class Prep365Service {
    * 5. GET CALL LOG (JSON or CSV)
    */
   async getCallLog({ format, from, to, studentId } = {}) {
+    // Only real calls placed by this server (no hard-coded sample rows).
     let calls = [...this._recentCallsMem];
-
-    // Seed with outreach 1 (Shashi, 61s) if list is empty
-    if (calls.length === 0) {
-      calls.push({
-        timestamp: '2026-11-23T13:30:00.000Z',
-        outreachId: 1,
-        studentName: 'Shashi',
-        studentEmail: 'ssky57771@gmail.com',
-        grade: '11th Grade',
-        recipientType: 'student',
-        recipientName: 'Shashi',
-        phone: '+918466924574',
-        reasons: 'No recent tests in 11 days; Custom Prep behind schedule',
-        status: 'completed',
-        answeredBy: 'human',
-        durationSeconds: 61,
-        summary: 'Student check-in completed. Shashi acknowledged being behind on Custom Prep due to exams and agreed to log in today.',
-        nextSteps: 'Log in to Prep365 and take SAT practice quiz.',
-        followUpRequested: false,
-        optOut: false,
-        transcript: 'Annie: Hi Shashi, this is Prep365 checking in. Do you have a quick moment?\nShashi: Yes, I do.\nAnnie: We noticed your Custom Prep plan for SAT Full Length Test 3 is 11% complete and you haven\'t taken a test in 11 days. Would you be able to log in today to complete one topic?\nShashi: Yes, I was busy with school exams, I will log in tonight.\nAnnie: Perfect! Best of luck, Shashi. Have a great day.',
-        recordingUrl: ''
-      });
-    }
 
     if (studentId) {
       calls = calls.filter(c => c.studentId === studentId || c.studentName?.toLowerCase() === studentId.toLowerCase());

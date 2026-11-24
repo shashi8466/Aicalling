@@ -12,11 +12,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <!-- Libraries served locally to avoid browser tracking-prevention blocks -->
   <script src="/assets/libs/supabase.min.js"></script>
-  <script src="/assets/libs/xlsx.full.min.js"></script>
-  <!-- Billing analytics: interactive charts + PDF export -->
-  <script src="/assets/libs/chart.umd.min.js"></script>
-  <script src="/assets/libs/jspdf.umd.min.js"></script>
-  <script src="/assets/libs/jspdf.plugin.autotable.min.js"></script>
+  <!-- Billing charts: deferred so they never block first paint.
+       XLSX + jsPDF (~1.2 MB) are lazy-loaded on demand via loadLib(). -->
+  <script src="/assets/libs/chart.umd.min.js" defer></script>
   <script src="/assets/branding.js"></script>
   <style>
     * {
@@ -172,7 +170,7 @@
 
     .nav-badge {
       margin-left: auto;
-      background: #0f172a;
+      background: #F3F4F6;
       color: var(--brand);
       padding: 2px 8px;
       border-radius: 10px;
@@ -2042,7 +2040,9 @@
     }
 
     .transcript {
-      background: #0f172a;
+      background: #F8FAFC;
+      border: 1px solid var(--border);
+      color: var(--text);
       padding: 12px 14px;
       border-radius: 6px;
       margin-top: 8px;
@@ -2077,12 +2077,13 @@
       align-items: center;
       gap: 12px;
       flex-wrap: wrap;
-      background: linear-gradient(135deg, #1e293b, #273449);
-      border: 1px solid var(--brand);
+      background: #FFFFFF;
+      color: var(--text);
+      border: 1px solid #BFDBFE;
       border-radius: 12px;
       padding: 12px 20px;
       margin: 8px 0 0;
-      box-shadow: 0 8px 32px rgba(59, 130, 246, .25);
+      box-shadow: 0 8px 24px rgba(37, 99, 235, .12);
       animation: slideUp .2s ease;
     }
 
@@ -2836,7 +2837,7 @@
 
     .settings-sidenav a.logout-link:hover {
       background: rgba(239, 68, 68, .1);
-      color: #fca5a5;
+      color: #B91C1C;
     }
 
     .settings-panel {
@@ -3456,33 +3457,48 @@
 
     /* Logo Area (h-20 = 80px) */
     .brand {
-      height: 80px !important;
+      height: auto !important;
       min-height: 80px !important;
       display: flex !important;
+      flex-direction: column !important;
       align-items: center !important;
-      justify-content: flex-start !important;
-      padding: 0 20px !important;
+      justify-content: center !important;
+      text-align: center !important;
+      padding: 14px 16px !important;
       border-bottom: 1px solid #E5E7EB !important;
       gap: 12px !important;
       background: #FFFFFF !important;
     }
     .app.collapsed .brand {
       justify-content: center !important;
-      padding: 0 !important;
+      padding: 12px 0 !important;
     }
+    .brand-text { align-items: center !important; }
+    /* Logo shown as-is (no coloured tile), sized to the logo's own shape */
     .prep365-logo-sq {
-      width: 44px !important;
-      height: 44px !important;
-      border-radius: 12px !important;
-      background: linear-gradient(135deg, #2563EB 0%, #4338CA 100%) !important;
+      width: auto !important;
+      height: auto !important;
+      background: none !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding: 0 !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
-      color: #FFFFFF !important;
-      font-weight: 800 !important;
-      font-size: 18px !important;
-      box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2) !important;
       flex-shrink: 0 !important;
+    }
+    .prep365-logo-sq img {
+      display: block !important;
+      max-width: 200px !important;
+      max-height: 64px !important;
+      width: auto !important;
+      height: auto !important;
+      object-fit: contain !important;
+      border-radius: 8px !important;
+    }
+    .app.collapsed .prep365-logo-sq img {
+      max-width: 52px !important;
+      max-height: 40px !important;
     }
     .brand-text {
       display: flex !important;
@@ -3742,21 +3758,72 @@
     }
 
     /* ─── Stat Cards & Panels ─── */
-    .card, .ov-stat, .ov-card, .metric-card, .an-card, .prep365-kpi-card {
+    /* Small stat tiles: icon + number side by side */
+    .ov-stat, .metric-card, .prep365-kpi-card {
       background: #FFFFFF !important;
       border: 1px solid #E5E7EB !important;
       border-radius: 12px !important;
-      padding: 20px !important;
+      padding: 14px 16px !important;
       box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
       color: #0F172A !important;
       display: flex !important;
-      align-items: flex-start !important;
-      gap: 16px !important;
+      align-items: center !important;
+      gap: 12px !important;
       transition: all 0.15s ease !important;
+      min-width: 0 !important;
     }
+    .ov-stat.score-card {
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 4px !important;
+    }
+    /* Large panels: header stacked ABOVE body (never side by side) */
+    .card, .ov-card, .an-card {
+      background: #FFFFFF !important;
+      border: 1px solid #E5E7EB !important;
+      border-radius: 12px !important;
+      padding: 0 !important;
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+      color: #0F172A !important;
+      display: block !important;
+      overflow: hidden !important;
+      min-width: 0 !important;
+    }
+    .card { margin-bottom: 16px !important; }
+    .card-header {
+      padding: 14px 20px !important;
+      border-bottom: 1px solid #E5E7EB !important;
+      display: flex !important;
+      flex-direction: row !important;
+      flex-wrap: wrap !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      gap: 10px 16px !important;
+    }
+    .card-header h3 { font-size: 15px !important; font-weight: 700 !important; margin: 0 !important; }
+    .card-header .filters {
+      display: flex !important;
+      flex-direction: row !important;
+      flex-wrap: wrap !important;
+      align-items: center !important;
+      gap: 8px !important;
+      width: auto !important;
+    }
+    /* Filter controls size to content instead of stretching full width */
+    .card-header .filters input,
+    .card-header .filters select,
+    .bulk-bar select,
+    .toolbar select,
+    .toolbar input {
+      width: auto !important;
+      min-width: 0 !important;
+    }
+    .card-header .filters input[type="text"],
+    .card-header .filters input[type="search"] { min-width: 220px !important; }
+    .card-header .filters select { max-width: 200px !important; }
     .card-icon-tile, .ov-stat-icon {
-      width: 48px !important;
-      height: 48px !important;
+      width: 40px !important;
+      height: 40px !important;
       border-radius: 10px !important;
       display: flex !important;
       align-items: center !important;
@@ -3970,7 +4037,7 @@
       background: #F9FAFB !important;
     }
     thead th {
-      padding: 12px 24px !important;
+      padding: 10px 16px !important;
       text-align: left !important;
       font-size: 12px !important;
       font-weight: 500 !important;
@@ -3981,8 +4048,8 @@
       white-space: nowrap !important;
     }
     tbody td {
-      padding: 16px 24px !important;
-      font-size: 14px !important;
+      padding: 11px 16px !important;
+      font-size: 13.5px !important;
       color: #111827 !important;
       border-bottom: 1px solid #E5E7EB !important;
       vertical-align: middle !important;
@@ -4027,14 +4094,16 @@
       inset: 0 !important;
       background: rgba(15, 23, 42, 0.5) !important;
       z-index: 9999 !important;
-      display: none !important;
+      /* NOT !important: several dialogs (bulk call, import leads, classes,
+         launch campaign) open by setting style.display = 'flex' inline. */
+      display: none;
       align-items: center !important;
       justify-content: center !important;
       padding: 24px !important;
       backdrop-filter: blur(2px) !important;
       overflow-y: auto !important;
     }
-    .modal-bg.active {
+    .modal-bg.active, .modal-backdrop.active {
       display: flex !important;
     }
     .modal, .modal-backdrop > div {
@@ -4165,6 +4234,144 @@
       }
     }
 
+    /* ─── Compact KPI strips (fit 6 across at 100% zoom on a 1366px screen) ─── */
+    .kpi-strip {
+      display: flex !important;
+      flex-wrap: wrap !important;
+      gap: 12px !important;
+      margin-bottom: 16px !important;
+    }
+    .kpi-strip > * { flex: 1 1 128px !important; }
+    .kpi-chip {
+      padding: 12px 14px !important;
+      gap: 10px !important;
+      border-radius: 12px !important;
+      min-width: 0 !important;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+    }
+    .kpi-chip-icon { width: 36px !important; height: 36px !important; font-size: 16px !important; border-radius: 10px !important; }
+    .kpi-chip-val { font-size: 20px !important; }
+    .kpi-chip-label { line-height: 1.25 !important; }
+    .kpi-chip > div:last-child { min-width: 0 !important; }
+    .ov-stats { gap: 12px !important; }
+    .ov-stat-val { font-size: 22px !important; }
+
+    /* ─── Top header: title on the left, toolbar on one line on the right ─── */
+    .header { flex-wrap: nowrap !important; }
+    .header .header-logo { flex: 1 1 auto !important; min-width: 0 !important; display: flex !important; justify-content: flex-start !important; }
+    .header .head-text { display: flex !important; flex-direction: column !important; align-items: flex-start !important; gap: 4px !important; min-width: 0 !important; }
+    .header #pageTitle { font-size: 22px !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; max-width: 100% !important; }
+    .header .status-pill { margin-left: 0 !important; }
+    .header .toolbar { flex-wrap: nowrap !important; flex-shrink: 0 !important; }
+    .header .toolbar .btn { white-space: nowrap !important; }
+
+    /* ─── Toolbars & section headers: fields size to content ─── */
+    :is(.counselor-toolbar, .an-header-right, .filter-controls, .ov-card-hdr, .an-card-hdr, .pipe-header, .cd-tabs) :is(input, select) {
+      width: auto !important;
+      max-width: 260px !important;
+    }
+    .counselor-toolbar { display: flex !important; flex-wrap: wrap !important; align-items: center !important; gap: 8px !important; }
+    .counselor-toolbar input[type="text"] { flex: 1 1 260px !important; max-width: 360px !important; }
+    .an-header { flex-wrap: wrap !important; }
+    .an-header-right { justify-content: flex-end !important; }
+
+    /* ─── Prep365 Student Check-ins layout (had no CSS) ─── */
+    .prep365-topbar {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 12px 16px; flex-wrap: wrap; margin-bottom: 16px;
+    }
+    .prep365-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .prep365-title-row .an-title { margin: 0; }
+    .filter-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .prep365-kpi-grid {
+      display: grid !important;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important;
+      gap: 12px !important;
+      margin-bottom: 16px !important;
+    }
+    .prep365-kpi-card .card-icon-tile { width: 36px !important; height: 36px !important; }
+    .prep365-kpi-card .kpi-val { font-size: 20px !important; }
+    .prep365-kpi-card .kpi-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .prep365-kpi-card > div:last-child { min-width: 0; }
+
+    /* ─── Counselor row actions: readable on white (were dark-theme pastel text) ─── */
+    .c-actions { flex-wrap: nowrap !important; }
+    .c-btn { white-space: nowrap !important; padding: 6px 10px !important; font-size: 12px !important; border: 1px solid transparent !important; }
+    .c-btn-edit   { background: #EFF6FF !important; color: #1D4ED8 !important; border-color: #BFDBFE !important; }
+    .c-btn-stats  { background: #F5F3FF !important; color: #6D28D9 !important; border-color: #DDD6FE !important; }
+    .c-btn-assign { background: #ECFDF5 !important; color: #047857 !important; border-color: #A7F3D0 !important; }
+    .c-btn-toggle { background: #FFFBEB !important; color: #B45309 !important; border-color: #FDE68A !important; }
+    .c-btn-del    { background: #FEF2F2 !important; color: #B91C1C !important; border-color: #FECACA !important; }
+    .c-btn:hover  { filter: brightness(0.96); }
+    td:has(> .c-avatar) { white-space: nowrap !important; }
+
+    /* Toast: fully hidden until shown (an empty toast used to peek in the corner) */
+    .toast { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important;
+             transition: transform .25s, opacity .2s, visibility 0s linear .25s !important; }
+    .toast.show { opacity: 1 !important; visibility: visible !important; pointer-events: auto !important;
+                  transition: transform .25s, opacity .2s !important; }
+
+    /* Wide tables scroll inside their card instead of being clipped */
+    .card > div:has(> table), .ov-card > div:has(> table), .ov-card-body:has(> table) {
+      overflow-x: auto !important;
+    }
+    thead th, tbody td { padding-left: 12px !important; padding-right: 12px !important; }
+    thead th:first-child, tbody td:first-child { padding-left: 20px !important; }
+
+    /* Call Activity: compact context column (one line each, ellipsis) */
+    td[data-label="Context"] { max-width: 220px !important; }
+    td[data-label="Context"] > div { white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; max-width: 220px !important; }
+    td[data-label="Date"] { min-width: 150px !important; }
+
+    /* Table cells: keep short values on one line, let action buttons sit in a row */
+    td[data-label="Actions"] > div { flex-wrap: nowrap !important; }
+    td[data-label="Status"], td[data-label="Score"], td[data-label="Calls"],
+    td[data-label="Grade"], td[data-label="Phone"] { white-space: nowrap !important; }
+
+    /* ─── Slide-out drawer (Prep365 student snapshot) ─── */
+    .drawer-overlay {
+      position: fixed; inset: 0; z-index: 1190;
+      background: rgba(15, 23, 42, 0.35);
+      opacity: 0; pointer-events: none; transition: opacity .2s ease;
+    }
+    .drawer-overlay.open { opacity: 1; pointer-events: auto; }
+    .drawer {
+      position: fixed; top: 0; right: 0; bottom: 0; z-index: 1200;
+      width: min(480px, 100vw);
+      background: #FFFFFF; border-left: 1px solid #E5E7EB;
+      box-shadow: -12px 0 32px rgba(15, 23, 42, 0.12);
+      display: flex; flex-direction: column;
+      transform: translateX(100%); visibility: hidden;
+      transition: transform .25s ease, visibility 0s linear .25s;
+    }
+    .drawer.open { transform: translateX(0); visibility: visible; transition: transform .25s ease; }
+    .drawer-header {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+      padding: 18px 20px; border-bottom: 1px solid #E5E7EB; flex-shrink: 0;
+    }
+    .drawer-title { font-size: 18px; font-weight: 700; color: #0F172A; margin: 8px 0 2px; }
+    .drawer-sub { font-size: 13px; color: #64748B; margin: 0; }
+    .drawer-close-btn {
+      width: 32px; height: 32px; flex-shrink: 0; border-radius: 8px;
+      border: 1px solid #E5E7EB; background: #FFFFFF; color: #64748B; cursor: pointer; font-size: 14px;
+    }
+    .drawer-close-btn:hover { background: #F3F4F6; color: #0F172A; }
+    .drawer-body { flex: 1; overflow-y: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 16px; }
+    .drawer-section, .drawer-section-card {
+      border: 1px solid #E5E7EB; border-radius: 12px; padding: 14px 16px; background: #FFFFFF;
+    }
+    .drawer-section-heading {
+      font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+      color: #64748B; margin-bottom: 10px;
+    }
+    .drawer-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .drawer-stat-tile { background: #F8FAFC; border: 1px solid #EEF2F7; border-radius: 10px; padding: 10px 12px; min-width: 0; }
+    .dst-label { font-size: 11px; color: #64748B; font-weight: 500; }
+    .dst-val { font-size: 14px; color: #0F172A; font-weight: 600; margin-top: 2px; overflow-wrap: anywhere; }
+    .drawer-progress-track { height: 6px; background: #EEF2F7; border-radius: 999px; overflow: hidden; }
+    .drawer-progress-fill { height: 100%; background: #2563EB; border-radius: 999px; }
+    .drawer-tp-box { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 10px 12px; font-size: 13px; line-height: 1.6; }
+
   </style>
 </head>
 
@@ -4179,8 +4386,8 @@
     <aside class="sidebar" id="appSidebar">
       <!-- Logo Area (h-20, border-b border-gray-200) -->
       <div class="brand">
-        <div id="brandLogoContainer" class="prep365-logo-sq" style="background:#FFFFFF;border:1px solid #E2E8F0;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:2px;">
-          <img id="appSidebarLogo" class="app-logo-img" src="/favicon.png?v=2" alt="Logo" style="max-width:28px;max-height:28px;object-fit:contain;" />
+        <div id="brandLogoContainer" class="prep365-logo-sq">
+          <img id="appSidebarLogo" class="app-logo-img" src="/assets/hg_logo1.png" alt="Logo" />
         </div>
         <div class="brand-text">
           <div class="title app-brand-title">Prep365 AI Calling</div>
@@ -5717,6 +5924,7 @@
                       </div>
                     </div>
                   </div>
+                </div><!-- /sp-account -->
 
                   <!-- Notifications -->
                   <div class="settings-panel" id="sp-notifications">
@@ -5821,9 +6029,9 @@
                       </div>
                     </div>
                   </div>
-                </div><!-- /panels -->
-              </div><!-- /settings-layout -->
-            </div>
+              </div><!-- /panels -->
+            </div><!-- /settings-layout -->
+          </div><!-- /an-page -->
         </section>
       </div>
     </main>
@@ -6560,6 +6768,34 @@
       return res.json();
     }
 
+    // GET /api/leads returns a paginated { leads, total } object. Callers that
+    // need a plain array (campaign panels, assign modal, duplicate checks) go
+    // through this helper so they never mistake the envelope for the list.
+    async function apiLeadList(params = {}) {
+      const q = new URLSearchParams({ limit: 1000, ...params });
+      const res = await api('/leads?' + q.toString());
+      return Array.isArray(res) ? res : (res.leads || []);
+    }
+
+    // Lazy-load heavy libraries only when a feature actually needs them.
+    const _libPromises = {};
+    const LIBS = {
+      xlsx:  ['/assets/libs/xlsx.full.min.js'],
+      jspdf: ['/assets/libs/jspdf.umd.min.js', '/assets/libs/jspdf.plugin.autotable.min.js'],
+    };
+    function loadLib(name) {
+      if (!_libPromises[name]) {
+        _libPromises[name] = LIBS[name].reduce((p, src) => p.then(() => new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = src;
+          s.onload = resolve;
+          s.onerror = () => { delete _libPromises[name]; reject(new Error('Failed to load ' + src)); };
+          document.head.appendChild(s);
+        })), Promise.resolve());
+      }
+      return _libPromises[name];
+    }
+
     // ═══════════════════════════════════════════════════════════════════════
     //   AUTH BOOTSTRAP
     // ═══════════════════════════════════════════════════════════════════════
@@ -7243,7 +7479,7 @@
       modal.classList.add('active');
 
       try {
-        _allLeads = await fetch('/api/leads?limit=500').then(r => r.json());
+        _allLeads = await apiLeadList();
         renderAssignLeadList(_allLeads);
       } catch (e) {
         document.getElementById('assignLeadList').innerHTML = `<div style="color:var(--danger)">${e.message}</div>`;
@@ -7268,7 +7504,7 @@
     function filterAssignLeads() {
       const q = document.getElementById('assignLeadSearch').value.toLowerCase();
       renderAssignLeadList(_allLeads.filter(l =>
-        !q || l.fullName.toLowerCase().includes(q) || l.email.toLowerCase().includes(q)
+        !q || (l.fullName || '').toLowerCase().includes(q) || (l.email || '').toLowerCase().includes(q)
       ));
     }
 
@@ -7518,7 +7754,6 @@
       return `${Math.floor(diffSec / 86400)}d ago`;
     }
 
-    let _prep365AllCheckins = [];
     let _prep365SelectedStudentIds = new Set();
     let _prep365SheetUrl = 'https://docs.google.com/spreadsheets/d/1BXutZ1i9zn4Te2cc66Dlm-CXcURsCHRXdL67N4JFiyE/edit';
 
@@ -7557,6 +7792,17 @@
             syncInfo.textContent = `Last sync: ${timeAgo} (${ls.studentsReceived || _prep365AllCheckins.length} students received, ${ls.callsQueued || res.callableCount || 0} callable)`;
           } else {
             syncInfo.textContent = `Synced: ${_prep365AllCheckins.length} students (${res.callableCount || 0} callable)`;
+          }
+          // Make clear the list comes from Prep365 and which rules Prep365 applies to it.
+          const th = res.thresholds;
+          if (th) {
+            const rules = [
+              th.inactiveDays && `inactive ${th.inactiveDays}+ days`,
+              th.noTestDays && `no test in ${th.noTestDays}+ days`,
+              th.cooldownDays && `skips students contacted in the last ${th.cooldownDays} days`,
+              th.dailyStudentLimit && `max ${th.dailyStudentLimit}/day`,
+            ].filter(Boolean).join(' · ');
+            syncInfo.textContent += ` — list provided by Prep365 (rules: ${rules})`;
           }
         }
 
@@ -8225,7 +8471,8 @@
         set('st_calls', s.callsCompleted);
         set('st_score', s.avgScore || 0);
         document.getElementById('navLeadCount').textContent = s.total;
-        document.getElementById('navMeetCount').textContent = s.meetingsScheduled;
+        // navMeetCount is owned by loadMeetings() (runs at boot) so it never flips between two numbers.
+        if (s.callsTotal !== undefined) document.getElementById('navCallCount').textContent = s.callsTotal;
         api('/prep365/checkins').then(r => {
           const b = document.getElementById('navPrep365Count');
           if (b && r.total !== undefined) b.textContent = r.total;
@@ -9012,7 +9259,7 @@
     async function refreshParentCampaignLeads() {
       if (!PCLP_CAMPAIGN_ID) return;
       try {
-        const leads = await api('/leads?campaignId=' + PCLP_CAMPAIGN_ID);
+        const leads = await apiLeadList({ campaignId: PCLP_CAMPAIGN_ID });
         PCLP_ALL_LEADS = leads;
         document.getElementById('pclpBadge').textContent = leads.length + ' parent' + (leads.length !== 1 ? 's' : '');
         renderParentCampaignLeadsKpis(leads);
@@ -9157,7 +9404,7 @@
         toast('✅ ' + leadIds.length + ' parent(s) ' + label, 'success');
         clearPclpBulkSelect();
         await refreshParentCampaignLeads();
-        LEADS = await api('/leads').catch(() => LEADS);
+        filterLeads(true); // refresh the main leads table in place
       } catch (e) { toast('❌ ' + e.message, 'error'); }
     }
 
@@ -9206,7 +9453,7 @@
     async function refreshCampaignLeads() {
       if (!CLP_CAMPAIGN_ID) return;
       try {
-        const leads = await api('/leads?campaignId=' + CLP_CAMPAIGN_ID);
+        const leads = await apiLeadList({ campaignId: CLP_CAMPAIGN_ID });
         CLP_ALL_LEADS = leads;
         document.getElementById('clpBadge').textContent = leads.length + ' lead' + (leads.length !== 1 ? 's' : '');
         renderCampaignLeadsKpis(leads);
@@ -9357,8 +9604,8 @@
         toast('✅ ' + leadIds.length + ' lead(s) ' + label, 'success');
         clearClpBulkSelect();
         await refreshCampaignLeads();
-        // Also refresh global leads cache
-        LEADS = await api('/leads').catch(() => LEADS);
+        // Also refresh the main leads table in place
+        filterLeads(true);
       } catch (e) { toast('❌ ' + e.message, 'error'); }
     }
 
@@ -11083,7 +11330,7 @@
 
       try {
         // Duplicate check
-        const searchRes = await api('/leads?search=' + encodeURIComponent(email));
+        const searchRes = await apiLeadList({ search: email, limit: 50 });
         const dupEmail = searchRes.find(l => l.email.toLowerCase() === email.toLowerCase() && l._id !== id);
         if (dupEmail) {
             toast('A lead with this email already exists', 'error');
@@ -11092,7 +11339,7 @@
             return;
         }
 
-        const phoneRes = await api('/leads?search=' + encodeURIComponent(phone));
+        const phoneRes = await apiLeadList({ search: phone, limit: 50 });
         const dupPhone = phoneRes.find(l => (l.phone || '').replace(/\D/g, '') === phone.replace(/\D/g, '') && l._id !== id);
         if (dupPhone) {
             toast('A lead with this phone number already exists', 'error');
@@ -11506,7 +11753,9 @@
           console.error(err);
         }
       };
-      reader.readAsBinaryString(file);
+      loadLib('xlsx')
+        .then(() => reader.readAsBinaryString(file))
+        .catch(err => toast('Could not load spreadsheet parser: ' + err.message, 'error'));
     }
 
     function processImportRows(rows) {
@@ -12322,6 +12571,8 @@
           URL.revokeObjectURL(a.href);
           return;
         }
+        await loadLib('xlsx');
+        if (format === 'pdf') await loadLib('jspdf');
         const wb = XLSX.read(csvText, { type: 'string' });
         if (format === 'xlsx') {
           XLSX.writeFile(wb, `billing-${stamp}.xlsx`);

@@ -1,57 +1,58 @@
-(function() {
+/**
+ * Global branding: applies the admin-configured logo + app title on every page.
+ *
+ * Logo targets:
+ *   .app-logo-img, img.logo, #appSidebarLogo, [data-brand-logo]  -> always use the current logo
+ *   [data-brand-logo="custom"]  -> only replaced when an admin has uploaded a custom logo
+ *                                  (keeps a page's own default art, e.g. the meeting room)
+ * Title targets: .app-brand-title, .brand-text .title
+ */
+(function () {
   const CACHE_KEY = 'app_branding';
   const DEFAULT_LOGO = '/assets/hg_logo1.png';
   const DEFAULT_TITLE = 'Prep365 AI Calling';
+
+  function readCache() {
+    try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || null; } catch (_) { return null; }
+  }
+  function writeCache(b) {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(b)); } catch (_) {}
+  }
+
+  function setSrc(img, url) {
+    if (!img || !url) return;
+    const current = img.getAttribute('src') || '';
+    if (current !== url && !img.src.endsWith(url)) img.src = url;
+  }
 
   function applyBranding(b) {
     if (!b) return;
     const logoUrl = b.logoUrl || DEFAULT_LOGO;
     const title = b.appTitle || DEFAULT_TITLE;
 
-    // Update all logo images
-    const logoImgs = document.querySelectorAll('.app-logo-img, img.logo, [data-brand-logo], #appSidebarLogo');
-    logoImgs.forEach(img => {
-      if (img.src !== logoUrl && !img.src.endsWith(logoUrl)) {
-        img.src = logoUrl;
-      }
+    document.querySelectorAll('.app-logo-img, img.logo, #appSidebarLogo, [data-brand-logo]').forEach(img => {
+      if (img.getAttribute('data-brand-logo') === 'custom' && !b.isCustom) return;
+      setSrc(img, logoUrl);
     });
 
-    // Update brand titles
-    const titleEls = document.querySelectorAll('.app-brand-title, .brand-text .title');
-    titleEls.forEach(el => {
-      el.textContent = title;
-    });
+    document.querySelectorAll('.app-brand-title, .brand-text .title').forEach(el => { el.textContent = title; });
 
-    // Update favicon
-    try {
-      const favicons = document.querySelectorAll("link[rel*='icon']");
-      favicons.forEach(fav => {
-        if (fav && logoUrl) fav.href = logoUrl;
-      });
-    } catch (_) {}
+    // Favicon follows a custom logo only (the default favicon is purpose-made).
+    if (b.isCustom) {
+      document.querySelectorAll("link[rel*='icon']").forEach(fav => { fav.href = logoUrl; });
+    }
 
-    // Update page titles if requested
-    if (document.body.hasAttribute('data-brand-dynamic-title')) {
-      const baseTitle = document.body.getAttribute('data-brand-dynamic-title');
-      document.title = `${baseTitle} — ${title}`;
+    if (document.body && document.body.hasAttribute('data-brand-dynamic-title')) {
+      document.title = `${document.body.getAttribute('data-brand-dynamic-title')} — ${title}`;
     }
   }
 
-  // 1. Instant apply from local cache (zero flicker)
-  try {
-    const cached = localStorage.getItem(CACHE_KEY);
-    if (cached) {
-      applyBranding(JSON.parse(cached));
-    }
-  } catch (_) {}
-
-  // 2. Fetch latest from backend
   async function syncBranding() {
     try {
-      const res = await fetch('/api/branding');
+      const res = await fetch('/api/branding', { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
-        localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+        writeCache(data);
         applyBranding(data);
         return data;
       }
@@ -59,20 +60,20 @@
     return null;
   }
 
-  // Run on DOMContentLoaded or immediately
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', syncBranding);
-  } else {
-    syncBranding();
+  function init() {
+    applyBranding(readCache()); // instant, from the last known branding
+    syncBranding();             // then confirm with the server
   }
 
-  window.getAppBranding = function() {
-    try {
-      return JSON.parse(localStorage.getItem(CACHE_KEY)) || { logoUrl: DEFAULT_LOGO, appTitle: DEFAULT_TITLE };
-    } catch (_) {
-      return { logoUrl: DEFAULT_LOGO, appTitle: DEFAULT_TITLE };
-    }
-  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
 
+  // Another tab (e.g. admin Settings) changed the logo -> update this tab too.
+  window.addEventListener('storage', e => { if (e.key === CACHE_KEY) applyBranding(readCache()); });
+
+  window.getAppBranding = function () {
+    return readCache() || { logoUrl: DEFAULT_LOGO, appTitle: DEFAULT_TITLE };
+  };
+  window.applyAppBranding = applyBranding;
   window.refreshAppBranding = syncBranding;
 })();

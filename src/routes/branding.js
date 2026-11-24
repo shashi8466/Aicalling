@@ -9,14 +9,35 @@ const logger = require('../logger');
  * Public endpoint to fetch current global branding (logoUrl, appTitle, isCustom).
  * Used by all pages (Dashboard, Login, Signup, Reset Password, Header).
  */
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const branding = brandingService.getBranding();
+    let branding = brandingService.getBranding();
+    if (!branding.updatedAt) branding = (await brandingService.loadFromDb()) || branding;
+    res.set('Cache-Control', 'no-cache');
     res.json(branding);
   } catch (err) {
     logger.error('Error getting branding:', err.message);
     res.status(500).json({ error: 'Failed to retrieve branding' });
   }
+});
+
+/**
+ * GET /api/branding/logo-file?v=<version>
+ * Public: the custom logo's bytes (stored in Supabase, cached in memory).
+ * The URL is versioned, so it can be cached for a long time.
+ */
+router.get('/logo-file', async (req, res) => {
+  let logo = brandingService.getLogoFile();
+  if (!logo) { await brandingService.loadFromDb(); logo = brandingService.getLogoFile(); }
+  if (!logo) return res.redirect(302, brandingService.DEFAULT_BRANDING.logoUrl);
+  res.set({
+    'Content-Type': logo.mime,
+    'Cache-Control': 'public, max-age=31536000, immutable',
+    'X-Content-Type-Options': 'nosniff',
+    // An uploaded SVG must never run script if opened directly.
+    'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+  });
+  res.send(logo.buffer);
 });
 
 /**

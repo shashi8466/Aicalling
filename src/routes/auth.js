@@ -7,7 +7,7 @@ const express  = require('express');
 const { createClient } = require('@supabase/supabase-js');
 const router   = express.Router();
 const supabase = require('../db/supabase');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, invalidateAuthCache } = require('../middleware/auth');
 const logger   = require('../logger');
 
 // Friendly, reusable message for the duplicate-email case
@@ -196,6 +196,7 @@ router.put('/profile', requireAuth, async (req, res) => {
     .single();
 
   if (error) return res.status(500).json({ error: error.message });
+  invalidateAuthCache(req.user.id);
   logger.info(`Profile updated: ${req.user.email}`);
   res.json({ ok: true, fullName: data.full_name, phone: data.phone });
 });
@@ -210,8 +211,16 @@ router.post('/change-password', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'New password must be at least 8 characters' });
   }
 
-  // Re-authenticate to verify current password
-  const { error: signInErr } = await supabase.auth.signInWithPassword({
+  // Re-authenticate to verify current password. MUST use a throwaway client:
+  // signing in on the shared service-role client would store this user's
+  // session on it, and every later server query would then run as this user
+  // under RLS (admin views would stop seeing other counselors' data).
+  const verifyClient = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  );
+  const { error: signInErr } = await verifyClient.auth.signInWithPassword({
     email:    req.user.email,
     password: currentPassword,
   });

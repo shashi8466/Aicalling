@@ -80,13 +80,14 @@ class Prep365StudentStore {
    * Upsert a list of normalized students into Supabase and local cache.
    */
   async upsertStudents(metaAndStudents) {
-    const { testMode = false, testStudentIds = [], count = 0, callableCount = 0, byReason = {}, students = [] } = metaAndStudents;
+    const { testMode = false, testStudentIds = [], count = 0, callableCount = 0, byReason = {}, students = [], thresholds = null } = metaAndStudents;
     const cachePayload = {
       testMode,
       testStudentIds,
       count: count || students.length,
       callableCount,
       byReason,
+      thresholds,
       students,
       updatedAt: new Date().toISOString()
     };

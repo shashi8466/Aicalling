@@ -12,27 +12,28 @@
 
 /* ============ TOKENS ============ */
 :root{
-  --bg-0:#080c16;
-  --bg-1:#0c1220;
-  --bg-2:#111a2c;
-  --surface:#131c30;
-  --surface-2:#182238;
-  --border:rgba(148,168,204,0.12);
-  --border-strong:rgba(148,168,204,0.22);
-  --text-0:#eef1fa;
-  --text-1:#aeb9d4;
-  --text-2:#7885a3;
+  /* White theme — matches the dashboard palette */
+  --bg-0:#F8FAFC;
+  --bg-1:#FFFFFF;
+  --bg-2:#F1F5F9;
+  --surface:#FFFFFF;
+  --surface-2:#F8FAFC;
+  --border:rgba(15,23,42,0.08);
+  --border-strong:rgba(15,23,42,0.16);
+  --text-0:#0F172A;
+  --text-1:#475569;
+  --text-2:#64748B;
 
-  --blue:#3b82f6;
-  --blue-soft:#8fb4ff;
-  --violet:#8b6cf6;
-  --amber:#f5a524;
-  --green:#22c581;
-  --rose:#ef5a7a;
-  --gold:#e8c27a;
+  --blue:#2563EB;
+  --blue-soft:#2563EB;
+  --violet:#7C3AED;
+  --amber:#D97706;
+  --green:#059669;
+  --rose:#E11D48;
+  --gold:#B7791F;
 
-  --grad-signal: linear-gradient(120deg,#3b82f6 0%,#8b6cf6 55%,#ef5a7a 100%);
-  --grad-border: linear-gradient(140deg, rgba(255,255,255,0.16), rgba(255,255,255,0) 30%, rgba(139,108,246,0.14) 75%);
+  --grad-signal: linear-gradient(120deg,#2563EB 0%,#7C3AED 55%,#E11D48 100%);
+  --grad-border: linear-gradient(140deg, rgba(15,23,42,0.08), rgba(15,23,42,0) 30%, rgba(124,58,237,0.14) 75%);
 
   --radius-sm:10px;
   --radius-md:16px;
@@ -128,7 +129,7 @@ h1,h2,h3,h4{font-family:var(--font-display); letter-spacing:-0.01em; color:var(-
 }
 .btn-primary{
   background:var(--grad-signal); color:#fff;
-  box-shadow:0 10px 28px -10px rgba(59,130,246,0.6), 0 0 0 1px rgba(255,255,255,0.08) inset;
+  box-shadow:0 10px 28px -10px rgba(59,130,246,0.6), 0 0 0 1px rgba(15,23,42,0.08) inset;
 }
 .btn-primary::after{
   content:""; position:absolute; inset:0;
@@ -140,7 +141,7 @@ h1,h2,h3,h4{font-family:var(--font-display); letter-spacing:-0.01em; color:var(-
 .btn-primary:hover{ transform:translateY(-2px); box-shadow:0 16px 34px -10px rgba(139,108,246,0.65), 0 0 0 1px rgba(255,255,255,0.1) inset; }
 .btn-ghost{
   border:1px solid var(--border-strong); color:var(--text-0);
-  background:rgba(255,255,255,0.02);
+  background:rgba(15,23,42,0.02);
 }
 .btn-ghost:hover{ border-color:var(--blue-soft); background:rgba(59,130,246,0.08); transform:translateY(-2px); }
 .btn-sm{padding:9px 16px; font-size:13px; border-radius:9px;}
@@ -148,7 +149,7 @@ h1,h2,h3,h4{font-family:var(--font-display); letter-spacing:-0.01em; color:var(-
 /* ============ HEADER ============ */
 header{
   position:sticky; top:0; z-index:50;
-  background:rgba(8,12,22,0.72);
+  background:rgba(255,255,255,0.85);
   backdrop-filter:blur(14px);
   border-bottom:1px solid var(--border);
 }
@@ -213,7 +214,7 @@ header::after{
 .waveform{
   display:flex; align-items:center; gap:16px;
   padding:14px 18px; border:1px solid var(--border); border-radius:14px;
-  background:rgba(255,255,255,0.02); max-width:440px;
+  background:rgba(15,23,42,0.02); max-width:440px;
 }
 .wave-bars{ display:flex; align-items:center; gap:3px; height:30px; flex:1; }
 .wave-bars span{ flex:1; background:linear-gradient(180deg,var(--blue),var(--violet)); border-radius:3px; animation:wv 1.4s infinite ease-in-out; }
@@ -226,7 +227,7 @@ header::after{
 .call-card{
   background:linear-gradient(180deg, var(--surface), var(--surface-2));
   border:1px solid var(--border); border-radius:var(--radius-lg);
-  box-shadow:0 40px 90px -30px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.02) inset;
+  box-shadow:0 40px 90px -30px rgba(15,23,42,0.18), 0 0 0 1px rgba(15,23,42,0.02) inset;
   padding:24px; position:relative; overflow:hidden; z-index:1;
 }
 .call-card::before{
@@ -276,7 +277,7 @@ header::after{
 }
 .tr-line.in{ opacity:1; transform:translateY(0);}
 .tr-line.ai{ align-self:flex-start; background:rgba(59,130,246,0.1); color:var(--text-0); border-color:rgba(59,130,246,0.25); border-bottom-left-radius:3px;}
-.tr-line.student{ align-self:flex-end; background:rgba(255,255,255,0.04); color:var(--text-1); border-bottom-right-radius:3px;}
+.tr-line.student{ align-self:flex-end; background:rgba(15,23,42,0.04); color:var(--text-1); border-bottom-right-radius:3px;}
 .tr-tag{ display:block; font-family:var(--font-mono); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; opacity:.55; margin-bottom:3px;}
 
 .float-card{
@@ -352,12 +353,12 @@ header::after{
   padding:26px 22px 24px;
   border:1px solid var(--border);
   border-radius:var(--radius-md);
-  background:linear-gradient(160deg, rgba(255,255,255,0.025), rgba(255,255,255,0.005));
+  background:linear-gradient(160deg, rgba(15,23,42,0.025), rgba(15,23,42,0.005));
   opacity:0; transform:translateY(16px);
   transition:opacity .5s ease, transform .5s ease, border-color .25s ease, background .25s ease;
 }
 .wf-card.in{ opacity:1; transform:translateY(0); }
-.wf-card:hover{ border-color:var(--border-strong); background:linear-gradient(160deg, rgba(255,255,255,0.045), rgba(255,255,255,0.01)); }
+.wf-card:hover{ border-color:var(--border-strong); background:linear-gradient(160deg, rgba(15,23,42,0.045), rgba(15,23,42,0.01)); }
 .wf-top{ display:flex; align-items:center; justify-content:space-between; width:100%; }
 .wf-node{
   width:42px;height:42px;border-radius:11px;
@@ -415,17 +416,17 @@ header::after{
   -webkit-mask-composite:xor; mask-composite:exclude; pointer-events:none;
 }
 .dash-stats-row{ display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin-bottom:12px;}
-.dstat{ border:1px solid var(--border); border-radius:12px; padding:14px; background:rgba(255,255,255,0.015); position:relative;}
+.dstat{ border:1px solid var(--border); border-radius:12px; padding:14px; background:rgba(15,23,42,0.015); position:relative;}
 .dstat .dicon{ width:28px;height:28px;border-radius:7px; display:flex; align-items:center; justify-content:center; margin-bottom:12px;}
 .dstat .dnum{ font-family:var(--font-mono); font-weight:600; font-size:20px;}
 .dstat .dlbl{ font-size:10.5px; color:var(--text-2); margin-top:3px;}
 .dstat .ddelta{ font-size:10px; color:var(--green); margin-top:5px; font-family:var(--font-mono);}
 .dash-lower{ display:grid; grid-template-columns:1.3fr 1fr; gap:12px; margin-top:12px;}
-.funnel-card, .dist-card{ border:1px solid var(--border); border-radius:12px; padding:18px; background:rgba(255,255,255,0.015);}
+.funnel-card, .dist-card{ border:1px solid var(--border); border-radius:12px; padding:18px; background:rgba(15,23,42,0.015);}
 .funnel-card h5, .dist-card h5{ font-size:13px; margin-bottom:16px; color:var(--text-0); font-weight:600;}
 .frow{ margin-bottom:12px;}
 .frow-top{ display:flex; justify-content:space-between; font-size:11.5px; color:var(--text-1); margin-bottom:6px;}
-.fbar{ height:6px; border-radius:4px; background:rgba(255,255,255,0.05); overflow:hidden;}
+.fbar{ height:6px; border-radius:4px; background:rgba(15,23,42,0.05); overflow:hidden;}
 .fbar i{ display:block; height:100%; border-radius:4px;}
 .dist-donut{ width:110px;height:110px;border-radius:50%; margin:0 auto 16px; display:flex; align-items:center; justify-content:center;
   background:conic-gradient(var(--rose) 0 6%, var(--amber) 6% 80%, var(--border-strong) 80% 100%);}
@@ -437,7 +438,7 @@ header::after{
 /* ============ WHY CHOOSE ============ */
 .why-sec{ padding:104px 0;}
 .why-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:18px;}
-.why-card{ border:1px solid var(--border); border-radius:var(--radius-md); padding:26px; background:rgba(255,255,255,0.015); transition:.25s; position:relative;}
+.why-card{ border:1px solid var(--border); border-radius:var(--radius-md); padding:26px; background:rgba(15,23,42,0.015); transition:.25s; position:relative;}
 .why-card:hover{ border-color:var(--border-strong); transform:translateY(-4px);}
 .why-icon{ width:42px;height:42px;border-radius:11px; display:flex; align-items:center; justify-content:center; margin-bottom:18px;}
 .why-card h4{ font-size:16px; margin-bottom:8px;}
@@ -456,7 +457,7 @@ header::after{
 /* ============ PRICING ============ */
 .pricing-sec{ padding:104px 0;}
 .pricing-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:20px; align-items:stretch;}
-.price-card{ border:1px solid var(--border); border-radius:var(--radius-lg); padding:32px 28px; background:rgba(255,255,255,0.015); display:flex; flex-direction:column; transition:transform .25s ease, border-color .25s ease;}
+.price-card{ border:1px solid var(--border); border-radius:var(--radius-lg); padding:32px 28px; background:rgba(15,23,42,0.015); display:flex; flex-direction:column; transition:transform .25s ease, border-color .25s ease;}
 .price-card:hover{ transform:translateY(-5px); border-color:var(--border-strong); }
 .price-card.hi{ border-color:var(--blue-soft); background:linear-gradient(160deg, rgba(59,130,246,0.08), var(--surface)); position:relative; box-shadow:0 30px 70px -30px rgba(59,130,246,0.3); overflow:hidden;}
 .price-card.hi::before{
@@ -538,7 +539,7 @@ footer{ border-top:1px solid var(--border); padding:64px 0 32px;}
     top: 70px;
     left: 0;
     right: 0;
-    background: rgba(8, 12, 22, 0.98);
+    background: rgba(255, 255, 255, 0.98);
     backdrop-filter: blur(14px);
     border-bottom: 1px solid var(--border);
     padding: 24px;
@@ -560,6 +561,7 @@ footer{ border-top:1px solid var(--border); padding:64px 0 32px;}
 }
 
 </style>
+<script src="/assets/branding.js"></script>
 </head>
 <body>
 
@@ -567,7 +569,7 @@ footer{ border-top:1px solid var(--border); padding:64px 0 32px;}
 <header>
   <div class="nav">
     <a href="/" class="logo">
-      <img src="/assets/hg_logo1.png" alt="Test Prep Pundits" class="logo-img">
+      <img src="/assets/hg_logo1.png" alt="Test Prep Pundits" class="logo-img" data-brand-logo>
     </a>
     <nav class="navlinks">
       <a href="#features">Features</a>
@@ -773,7 +775,7 @@ footer{ border-top:1px solid var(--border); padding:64px 0 32px;}
     <div class="foot-grid">
       <div class="foot-brand">
         <a href="/" class="logo">
-          <img src="/assets/hg_logo1.png" alt="Test Prep Pundits" class="logo-img">
+          <img src="/assets/hg_logo1.png" alt="Test Prep Pundits" class="logo-img" data-brand-logo>
         </a>
         <p>AI voice calling, CRM, and analytics for admissions teams that don't want a lead to go quiet.</p>
       </div>

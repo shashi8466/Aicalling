@@ -6,6 +6,7 @@ const express  = require('express');
 const router   = express.Router();
 const supabase = require('../db/supabase');
 const logger   = require('../logger');
+const { invalidateAuthCache } = require('../middleware/auth');
 
 // ── GET /api/counselors ── list all counselors (+ admin)
 router.get('/', async (req, res) => {
@@ -147,6 +148,7 @@ router.patch('/:id', async (req, res) => {
 
     if (error || !data) return res.status(404).json({ error: 'Counselor not found' });
 
+    invalidateAuthCache(data.id); // role / active changes apply immediately
     logger.info(`Counselor updated: ${data.email}`);
     res.json({ id: data.id, fullName: data.full_name, email: data.email,
                role: data.role, phone: data.phone, isActive: data.is_active });
@@ -166,6 +168,7 @@ router.delete('/:id', async (req, res) => {
     const { error } = await supabase.auth.admin.deleteUser(req.params.id);
     if (error) return res.status(500).json({ error: error.message });
 
+    invalidateAuthCache(req.params.id);
     logger.info(`Counselor deleted: ${req.params.id}`);
     res.json({ ok: true, message: 'Counselor deleted' });
   } catch (e) {
