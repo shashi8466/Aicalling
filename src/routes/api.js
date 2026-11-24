@@ -1558,22 +1558,42 @@ const PREP365_REASON_MAP = {
  * 1. GET /api/prep365/checkins & /api/prep365/candidates
  * Returns all students who need attention, byReason breakdown, callable count, testMode.
  */
+// One Prep365 fetch at a time; concurrent page loads share it.
+let _prep365RefreshInflight = null;
+function prep365RefreshOnce(prep365Svc) {
+  if (!_prep365RefreshInflight) {
+    _prep365RefreshInflight = prep365Svc.fetchCandidates().finally(() => { _prep365RefreshInflight = null; });
+  }
+  return _prep365RefreshInflight;
+}
+
 router.get(['/prep365/checkins', '/prep365/candidates'], async (req, res) => {
   try {
     const prep365Svc = require('../services/prep365Service');
     const prep365Store = require('../services/prep365StudentStore');
     const prep365Sheet = require('../services/prep365SheetService');
 
-    // ?refresh=1 (Refresh button) or an empty store -> load the list from Prep365
-    // GET /candidates. This is read-only: it never claims students or places calls.
+    // Load the list from Prep365 GET /candidates (read-only: never claims or calls):
+    //  - ?refresh=1 (Refresh / Sync buttons) -> always fetch now
+    //  - empty store, or not synced since this server started (Render restarts
+    //    wipe/reset the disk) -> fetch now, fall back to the saved copy on error
+    //  - saved copy older than 30 min -> serve it, refresh in the background
     let storeData = null;
     if (req.query.refresh === '1' || req.query.refresh === 'true') {
       storeData = await prep365Svc.fetchCandidates();
     } else {
       storeData = await prep365Store.getStudents();
-      if (!storeData || !storeData.students || storeData.students.length === 0) {
-        logger.info('[Prep365] Store empty on request, fetching fresh candidates...');
-        storeData = await prep365Svc.fetchCandidates().catch(() => storeData);
+      const empty = !storeData || !storeData.students || storeData.students.length === 0;
+      const neverSynced = !prep365Svc.getLastSync().timestamp;
+      const savedAt = Date.parse(storeData?.updatedAt || storeData?.syncedAt || 0) || 0;
+      if (empty || neverSynced) {
+        logger.info(`[Prep365] ${empty ? 'Store empty' : 'First load since restart'} — fetching fresh candidates…`);
+        storeData = await prep365RefreshOnce(prep365Svc).catch(err => {
+          logger.warn('[Prep365] Fresh fetch failed, using saved copy: ' + err.message);
+          return storeData;
+        });
+      } else if (Date.now() - savedAt > 30 * 60 * 1000) {
+        prep365RefreshOnce(prep365Svc).catch(err => logger.warn('[Prep365] Background refresh failed: ' + err.message));
       }
     }
 

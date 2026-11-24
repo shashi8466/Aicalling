@@ -6,3 +6,8 @@ logs/
 dist/
 build/
 .vscode/
+
+# Runtime data written by the server (contains student names/phones) — never commit
+data/prep365_students_cache.json
+dashboard/assets/branding/
+
